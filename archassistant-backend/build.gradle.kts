@@ -25,16 +25,23 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
 
-    // Database (можно закомментировать для этапа 1, если не нужна)
+    // Database (для будущих этапов, на этапе 2 не используется)
     runtimeOnly("org.postgresql:postgresql:42.6.0")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+
+    // ArchUnit (актуальная версия)
+    implementation("com.tngtech.archunit:archunit:1.4.2")
+
+    // Компиляция Java + Kotlin
+    implementation("org.jetbrains.kotlin:kotlin-compiler-embeddable:1.9.20")
+
+    // Jackson для JSON
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
 
     // Testing
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
-
-    // Jacoco (опционально, для отчётов)
-    // testImplementation("org.jacoco:org.jacoco.core:0.8.11")
+    testImplementation("com.tngtech.archunit:archunit-junit5:1.4.2") // только для тестов
 }
 
 tasks.withType<KotlinCompile> {
@@ -47,11 +54,3 @@ tasks.withType<KotlinCompile> {
 tasks.withType<Test> {
     useJUnitPlatform()
 }
-
-// Jacoco plugin (раскомментируй если нужны отчёты)
-// tasks.jacocoTestReport {
-//     reports {
-//         xml.required.set(true)
-//         html.required.set(true)
-//     }
-// }
