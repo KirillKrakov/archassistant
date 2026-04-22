@@ -25,23 +25,23 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
 
-    // Database (для будущих этапов, на этапе 2 не используется)
+    // Database
     runtimeOnly("org.postgresql:postgresql:42.6.0")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 
-    // ArchUnit (актуальная версия)
+    // ArchUnit
     implementation("com.tngtech.archunit:archunit:1.4.2")
 
-    // Компиляция Java + Kotlin
+    // Kotlin compiler (для компиляции сгенерированного кода)
     implementation("org.jetbrains.kotlin:kotlin-compiler-embeddable:1.9.20")
 
-    // Jackson для JSON
+    // Jackson Kotlin module — для корректной сериализации data class
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
 
     // Testing
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
-    testImplementation("com.tngtech.archunit:archunit-junit5:1.4.2") // только для тестов
+    testImplementation("com.tngtech.archunit:archunit-junit5:1.4.2")
 }
 
 tasks.withType<KotlinCompile> {
