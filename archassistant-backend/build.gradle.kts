@@ -38,6 +38,9 @@ dependencies {
     // Jackson Kotlin module — для корректной сериализации data class
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
 
+    // YAML support
+    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.15.3")
+
     // Testing
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")

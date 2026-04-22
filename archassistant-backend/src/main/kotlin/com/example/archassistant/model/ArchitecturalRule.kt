@@ -1,6 +1,7 @@
 package com.example.archassistant.model
 
 import com.fasterxml.jackson.annotation.JsonCreator
+import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.annotation.JsonValue
 
 /**
@@ -8,20 +9,47 @@ import com.fasterxml.jackson.annotation.JsonValue
  * Хранится в YAML-конфиге и используется для валидации через ArchUnit
  */
 data class ArchitecturalRule(
+    @JsonProperty("id")
     val id: String,
+
+    @JsonProperty("name")
     val name: String,
+
+    @JsonProperty("description")
     val description: String? = null,
+
+    @JsonProperty("type")
     val type: RuleType,
+
+    @JsonProperty("from_package")
     val fromPackage: String,
+
+    @JsonProperty("to_package")
     val toPackage: String? = null,
+
+    @JsonProperty("to_packages")
     val toPackages: List<String>? = null,
+
+    @JsonProperty("constraint")
     val constraint: ConstraintType,
-    val pattern: String? = null,           // Для naming_convention
-    val annotation: String? = null,        // Для annotation_check
+
+    @JsonProperty("pattern")
+    val pattern: String? = null,
+
+    @JsonProperty("annotation")
+    val annotation: String? = null,
+
+    @JsonProperty("severity")
     val severity: Severity = Severity.WARNING,
-    val weight: Double = 1.0,              // Вес для расчёта ComplianceScore
+
+    @JsonProperty("weight")
+    val weight: Double = 1.0,
+
+    @JsonProperty("enabled")
     val enabled: Boolean = true,
-    val suggested: Boolean = false         // Помечает правила, предложенные системой
+
+    @JsonProperty("suggested")
+    val suggested: Boolean = false
 ) {
     /**
      * Проверка, применимо ли правило к данному пакету
