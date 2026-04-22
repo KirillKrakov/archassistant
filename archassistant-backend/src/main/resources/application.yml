@@ -1,0 +1,47 @@
+spring:
+  application:
+    name: archassistant-backend
+
+  # Database Configuration (можно закомментировать для этапа 1)
+  datasource:
+    url: jdbc:postgresql://localhost:5432/archassistant
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  # Отключаем JPA автоконфигурацию если БД не нужна на этапе 1
+  # autoconfigure:
+  #   exclude:
+  #     - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+  #     - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+
+# ← ИСПРАВЛЕНО: Actuator использует префикс management, а не spring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+# Application Configuration
+server:
+  port: 8080
+
+# Logging Configuration
+logging:
+  level:
+    root: INFO
+    com.example.archassistant: DEBUG
+    org.springframework.web: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
