@@ -85,18 +85,6 @@ data class ProjectStructure(
 }
 
 /**
- * Распознанный архитектурный паттерн
- */
-enum class ArchitecturePattern {
-    CLEAN_ARCHITECTURE,
-    LAYERED,
-    MVVM,
-    HEXAGONAL,
-    MODULAR,
-    UNKNOWN
-}
-
-/**
  * Структура слоёв проекта
  */
 data class LayerStructure(
