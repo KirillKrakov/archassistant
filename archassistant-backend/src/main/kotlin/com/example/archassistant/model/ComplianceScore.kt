@@ -76,14 +76,3 @@ data class ScoreWeights(
         }
     }
 }
-
-/**
- * Градация качества архитектурного соответствия
- */
-enum class ScoreGrade {
-    EXCELLENT,        // 90-100%
-    GOOD,             // 80-89%
-    ACCEPTABLE,       // 70-79%
-    NEEDS_IMPROVEMENT,// 50-69%
-    FAIL              // 0-49%
-}
