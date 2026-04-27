@@ -135,7 +135,7 @@ class LlmOrchestrator(
         )
     }
 
-    private fun extractModelName(): String? {
+    fun extractModelName(): String? {
         return System.getenv("SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL")
             ?: System.getProperty("spring.ai.openai.chat.options.model")
     }
@@ -150,6 +150,18 @@ class LlmOrchestrator(
         // Для PRE-стратегии: просто генерируем с правилами в промпте
         // POST/HYBRID обрабатываются на уровне StrategyOrchestrator
         return generateCode(prompt, projectId, rules, codeContext)
+    }
+
+    /**
+     * Сырая генерация кода через LLM (без обёртки в CodeGenerationResponse)
+     * Используется стратегиями для интеграции с их логикой валидации
+     */
+    fun generateCodeRaw(
+        systemPrompt: String,
+        userPrompt: String,
+        maxRetries: Int = 3
+    ): String {
+        return callLlmWithRetry(systemPrompt, userPrompt, maxRetries)
     }
 }
 
