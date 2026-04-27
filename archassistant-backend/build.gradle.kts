@@ -16,6 +16,8 @@ java {
 
 repositories {
     mavenCentral()
+    maven { url = uri("https://repo.spring.io/milestone") }
+    maven { url = uri("https://repo.spring.io/snapshot") }
 }
 
 dependencies {
@@ -41,10 +43,19 @@ dependencies {
     // YAML support
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.15.3")
 
+    // Spring AI (через BOM)
+    // Импорт BOM для управления версиями всех компонентов Spring AI
+    implementation(platform("org.springframework.ai:spring-ai-bom:1.0.0-M4"))
+    // Стартеры без явной версии — версия подхватится из BOM
+    implementation("org.springframework.ai:spring-ai-openai-spring-boot-starter")
+    // Для локальных моделей (опционально):
+    // implementation("org.springframework.ai:spring-ai-ollama-spring-boot-starter")
+
     // Testing
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
     testImplementation("com.tngtech.archunit:archunit-junit5:1.4.2")
+    testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
 }
 
 tasks.withType<KotlinCompile> {

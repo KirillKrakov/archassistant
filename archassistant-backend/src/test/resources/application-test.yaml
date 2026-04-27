@@ -1,0 +1,14 @@
+spring:
+  ai:
+    openai:
+      api-key: test-key  # Фиктивный ключ для тестов
+      chat:
+        options:
+          model: gpt-4-test
+          temperature: 0.0  # Детерминированные ответы для тестов
+
+# Отключаем реальные вызовы в тестовом профиле
+logging:
+  level:
+    org.springframework.ai: WARN
+    com.example.archassistant: DEBUG

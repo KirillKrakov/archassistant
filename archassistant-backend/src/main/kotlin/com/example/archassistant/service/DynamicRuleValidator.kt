@@ -3,10 +3,8 @@ package com.example.archassistant.service
 import com.example.archassistant.model.*
 import com.example.archassistant.util.ArchUnitRuleBuilder
 import com.example.archassistant.util.CodeCompiler
-import com.example.archassistant.util.PackagePatternBuilder
 import com.tngtech.archunit.core.domain.JavaClasses
 import com.tngtech.archunit.core.importer.ClassFileImporter
-import com.tngtech.archunit.lang.ArchRule
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.nio.file.Path
@@ -67,6 +65,8 @@ class DynamicRuleValidator(
                         )
                     )
                 )
+            } finally {
+                tempRoot?.let { codeCompiler.cleanup(it) }
             }
         }
         return result.copy(executionTimeMs = executionTime)

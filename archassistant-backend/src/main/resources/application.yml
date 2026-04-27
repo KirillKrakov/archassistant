@@ -17,6 +17,19 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY:your-key-here}
+      chat:
+        options:
+          model: gpt-4-turbo-preview
+          temperature: 0.2
+          max-tokens: 4096
+      embedding:
+        options:
+          model: text-embedding-3-small
+          dimensions: 1536
+
   # Отключаем JPA автоконфигурацию если БД не нужна на этапе 1
   # autoconfigure:
   #   exclude:
@@ -44,5 +57,6 @@ logging:
     com.example.archassistant: DEBUG
     com.tngtech.archunit: WARN
     org.springframework.web: DEBUG
+    org.springframework.ai: DEBUG
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
