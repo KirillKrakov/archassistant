@@ -16,13 +16,13 @@ class StrategyConfig {
     @Bean
     fun strategyMap(
         preStrategy: PreGenerationStrategy,
-        // postStrategy: PostGenerationStrategy, будет добавлено на Этапе 10
-        // hybridStrategy: HybridGenerationStrategy, будет добавлено на Этапе 11
+        postStrategy: PostGenerationStrategy,
+        hybridStrategy: HybridGenerationStrategy
     ): Map<StrategyType, CodeGenerationStrategy> {
         return mapOf(
-            StrategyType.PRE to preStrategy
-            // StrategyType.POST to postStrategy,
-            // StrategyType.HYBRID to hybridStrategy
+            StrategyType.PRE to preStrategy,
+            StrategyType.POST to postStrategy,
+            StrategyType.HYBRID to hybridStrategy
         )
     }
 }
