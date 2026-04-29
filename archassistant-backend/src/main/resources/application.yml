@@ -30,6 +30,13 @@ spring:
           model: text-embedding-3-small
           dimensions: 1536
 
+  web:
+    cors:
+      allowed-origins: "*"
+      allowed-methods: "*"
+      allowed-headers: "*"
+      allow-credentials: false
+
   # Отключаем JPA автоконфигурацию если БД не нужна на этапе 1
   # autoconfigure:
   #   exclude:

@@ -23,6 +23,9 @@ data class RulesConfig(
     @JsonProperty("settings")
     val settings: RuleSettings = RuleSettings(),
 
+    @JsonProperty("project_path")
+    val projectPath: String? = null,
+
     @JsonProperty("created_at")
     val createdAt: String = LocalDateTime.now().toString(),
 

@@ -51,11 +51,15 @@ dependencies {
     // Для локальных моделей (опционально):
     // implementation("org.springframework.ai:spring-ai-ollama-spring-boot-starter")
 
+    // SpringDoc документация
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0")
+
     // Testing
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
     testImplementation("com.tngtech.archunit:archunit-junit5:1.4.2")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
+    testImplementation("com.h2database:h2:2.2.224")
 }
 
 tasks.withType<KotlinCompile> {

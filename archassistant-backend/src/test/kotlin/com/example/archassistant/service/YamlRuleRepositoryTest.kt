@@ -1,27 +1,35 @@
 package com.example.archassistant.service
 
-import com.example.archassistant.TestYamlConfig
 import com.example.archassistant.model.*
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
+import com.fasterxml.jackson.module.kotlin.KotlinModule
 import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.beans.factory.annotation.Qualifier
-import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.context.annotation.Import
+import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Path
 
-@SpringBootTest
-@Import(TestYamlConfig::class)
+// ← УБРАТЬ @SpringBootTest, @Import, @Autowired
 class YamlRuleRepositoryTest {
 
-    @Autowired
+    @TempDir
+    lateinit var tempDir: Path
+
+    private lateinit var yamlMapper: ObjectMapper
     private lateinit var repository: YamlRuleRepository
 
-    @Autowired
-    @Qualifier("yamlObjectMapper")  // FIXED: явный квалифайер
-    private lateinit var yamlMapper: ObjectMapper
-
     private val testProjectId = "com.example.test"
+
+    @BeforeEach
+    fun setUp() {
+        // Создаём зависимости вручную — без Spring контекста
+        yamlMapper = ObjectMapper(YAMLFactory())
+            .registerModule(KotlinModule.Builder().build())
+
+        // Передаём временную директорию в репозиторий
+        repository = YamlRuleRepository(yamlMapper, tempDir.toString())
+    }
 
     @Test
     fun `create and save default config`() {
