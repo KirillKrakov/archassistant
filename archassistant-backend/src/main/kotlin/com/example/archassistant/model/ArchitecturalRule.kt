@@ -5,9 +5,6 @@ import com.fasterxml.jackson.annotation.JsonCreator
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.annotation.JsonValue
 
-/**
- * Режим выбора классов/пакетов для правила
- */
 enum class SelectorMode {
     PACKAGE,
     CLASS_TYPE,
@@ -15,10 +12,6 @@ enum class SelectorMode {
     ANNOTATION
 }
 
-/**
- * Декларативное описание архитектурного правила
- * Хранится в YAML-конфиге и используется для валидации через ArchUnit
- */
 data class ArchitecturalRule(
     @JsonProperty("id")
     val id: String,
@@ -80,22 +73,13 @@ data class ArchitecturalRule(
     @JsonProperty("suggested")
     val suggested: Boolean = false
 ) {
-    /**
-     * Проверка, применимо ли правило к данному пакету.
-     * Для class-level / layer-level / annotation-level правил возвращаем true,
-     * потому что они не завязаны на package selector.
-     */
     fun appliesToPackage(packageName: String): Boolean {
         if (fromSelectorMode != SelectorMode.PACKAGE) return true
         if (fromPackage.isBlank()) return false
-
         return PackagePatternBuilder.matches(fromPackage, packageName)
     }
 }
 
-/**
- * Тип архитектурного правила
- */
 enum class RuleType {
     DEPENDENCY,
     NAMING_CONVENTION,
@@ -107,8 +91,7 @@ enum class RuleType {
         @JvmStatic
         @JsonCreator
         fun fromValue(value: String): RuleType {
-            return entries.find { it.name.equals(value, ignoreCase = true) }
-                ?: DEPENDENCY
+            return entries.find { it.name.equals(value, ignoreCase = true) } ?: DEPENDENCY
         }
     }
 
@@ -116,9 +99,6 @@ enum class RuleType {
     fun toValue(): String = name
 }
 
-/**
- * Тип ограничения в правиле
- */
 enum class ConstraintType {
     NO_DEPENDENCY,
     MUST_DEPEND,
@@ -132,8 +112,7 @@ enum class ConstraintType {
         @JvmStatic
         @JsonCreator
         fun fromValue(value: String): ConstraintType {
-            return entries.find { it.name.equals(value, ignoreCase = true) }
-                ?: NO_DEPENDENCY
+            return entries.find { it.name.equals(value, ignoreCase = true) } ?: NO_DEPENDENCY
         }
     }
 

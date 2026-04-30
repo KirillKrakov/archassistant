@@ -2,10 +2,6 @@ package com.example.archassistant.service.templates
 
 import com.example.archassistant.model.*
 
-/**
- * Базовые Spring-правила, которые работают даже при feature-based структуре
- * и не зависят от точного распознавания архитектурного паттерна.
- */
 object SpringBaselineRules {
 
     object ControllerShouldDependOnService : ClassDependencyTemplate(

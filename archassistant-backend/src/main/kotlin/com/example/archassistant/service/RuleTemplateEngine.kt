@@ -6,9 +6,6 @@ import com.example.archassistant.util.PackagePatternBuilder
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
-/**
- * Движок генерации предложений правил на основе шаблонов
- */
 @Service
 class RuleTemplateEngine(
     private val architectureDetector: ArchitectureDetector,
@@ -17,9 +14,6 @@ class RuleTemplateEngine(
 
     private val logger = LoggerFactory.getLogger(RuleTemplateEngine::class.java)
 
-    /**
-     * Генерация предложений правил для проекта
-     */
     fun suggestRules(structure: ProjectStructure): List<ArchitecturalRule> {
         logger.debug("Generating rule suggestions for project: ${structure.projectId}")
 
@@ -33,9 +27,16 @@ class RuleTemplateEngine(
         val context = buildTemplateContext(structure, detection)
         val baselineIds = SpringBaselineRules.all().map { it.id }.toSet()
 
-        val primarySuggestions = templates
+        val activePatterns = if (detection.isConfident) {
+            listOf(detection.primaryPattern)
+        } else {
+            detection.candidatePatterns.filterNot { it == ArchitecturePattern.UNKNOWN }
+                .ifEmpty { listOf(detection.primaryPattern) }
+        }
+
+        val patternSuggestions = templates
             .filter { it.id !in baselineIds }
-            .filter { it.applicablePatterns.contains(detection.primaryPattern) }
+            .filter { template -> template.applicablePatterns.any { it in activePatterns } }
             .filter { it.isApplicable(context) }
             .sortedByDescending { it.priority }
             .flatMap { template ->
@@ -47,8 +48,15 @@ class RuleTemplateEngine(
                 }
             }
 
+        val springFeatureSuggestions =
+            if (structure.isSpringLike() && activePatterns.contains(ArchitecturePattern.LAYERED)) {
+                SpringFeatureRules.generate(structure, context.basePackage)
+            } else {
+                emptyList()
+            }
+
         val fallbackSuggestions =
-            if (detection.primaryPattern == ArchitecturePattern.UNKNOWN || detection.confidence < 0.55) {
+            if (!detection.isConfident || detection.primaryPattern == ArchitecturePattern.UNKNOWN) {
                 templates
                     .filter { it.id in baselineIds }
                     .filter { it.isApplicable(context) }
@@ -65,10 +73,11 @@ class RuleTemplateEngine(
                 emptyList()
             }
 
-        val suggestions = (primarySuggestions + fallbackSuggestions)
-            .distinctBy { it.id }
+        val suggestions = (patternSuggestions + springFeatureSuggestions + fallbackSuggestions)
+            .distinctBy { semanticKey(it) }
             .sortedWith(
-                compareByDescending<ArchitecturalRule> { it.severity.ordinal }
+                compareByDescending<ArchitecturalRule> { severityRank(it.severity) }
+                    .thenByDescending { specificityScore(it) }
                     .thenByDescending { it.weight }
                     .thenBy { it.id }
             )
@@ -77,9 +86,6 @@ class RuleTemplateEngine(
         return suggestions
     }
 
-    /**
-     * Построение контекста для применения шаблонов
-     */
     private fun buildTemplateContext(
         structure: ProjectStructure,
         detection: ArchitectureDetectionResult
@@ -130,9 +136,6 @@ class RuleTemplateEngine(
             .sortedBy { it.packageName }
     }
 
-    /**
-     * Поиск базового пакета (общий префикс всех пакетов)
-     */
     private fun findBasePackage(packages: List<String>): String {
         val normalized = packages
             .map { it.trim().trim('.') }
@@ -142,8 +145,47 @@ class RuleTemplateEngine(
         if (normalized.isEmpty()) return ""
         if (normalized.size == 1) return normalized.first().substringBeforeLast('.', "")
 
-        val prefix = PackagePatternBuilder.commonPackagePrefix(normalized)
-        return prefix
+        return PackagePatternBuilder.commonPackagePrefix(normalized)
+    }
+
+    private fun semanticKey(rule: ArchitecturalRule): String {
+        return listOf(
+            rule.type.name,
+            rule.constraint.name,
+            rule.fromSelectorMode.name,
+            rule.toSelectorMode.name,
+            rule.fromPackage,
+            rule.toPackage.orEmpty(),
+            rule.toPackages?.joinToString(",").orEmpty(),
+            rule.pattern.orEmpty(),
+            rule.annotation.orEmpty(),
+            rule.fromClassType?.name.orEmpty(),
+            rule.toClassType?.name.orEmpty(),
+            rule.fromLayerType?.name.orEmpty(),
+            rule.toLayerType?.name.orEmpty()
+        ).joinToString("|")
+    }
+
+    private fun severityRank(severity: Severity): Int {
+        return when (severity) {
+            Severity.CRITICAL -> 4
+            Severity.ERROR -> 3
+            Severity.WARNING -> 2
+            Severity.INFO -> 1
+        }
+    }
+
+    private fun specificityScore(rule: ArchitecturalRule): Int {
+        var score = 0
+        if (rule.fromClassType != null) score += 4
+        if (rule.toClassType != null) score += 4
+        if (rule.fromLayerType != null) score += 3
+        if (rule.toLayerType != null) score += 3
+        if (rule.annotation != null) score += 2
+        if (rule.pattern != null) score += 2
+        if (rule.fromPackage.count { it == '.' } > 2) score += 1
+        if (rule.toPackage?.count { it == '.' } ?: 0 > 2) score += 1
+        return score
     }
 
     companion object {

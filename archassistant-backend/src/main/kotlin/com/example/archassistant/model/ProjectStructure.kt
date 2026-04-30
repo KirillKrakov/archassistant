@@ -2,13 +2,9 @@ package com.example.archassistant.model
 
 import java.time.LocalDateTime
 
-/**
- * Структура проекта, извлечённая при сканировании
- * Используется для предложения правил и анализа архитектуры
- */
 data class ProjectStructure(
     val projectId: String,
-    val architecturePattern: ArchitecturePattern? = null,
+    val architecturePattern: ArchitecturePattern? = null, // только для совместимости
     val detection: ArchitectureDetectionResult? = null,
     val packages: List<String> = emptyList(),
     val classes: List<ClassInfo> = emptyList(),
@@ -52,75 +48,6 @@ data class ProjectStructure(
     fun getPackagesForLayer(layerType: LayerType): List<String> =
         getClassesForLayer(layerType).map { it.packageName }.distinct()
 
-    /**
-     * Определение типа класса по аннотациям и расположению
-     */
-    fun determineClassType(className: String, packageName: String): ClassType {
-        val pkg = packageName.lowercase()
-        val simple = className.lowercase()
-
-        return when {
-            pkg.contains("controller") ||
-                    simple.endsWith("controller") ->
-                ClassType.CONTROLLER
-
-            pkg.contains("service") ||
-                    simple.endsWith("service") ||
-                    simple.endsWith("usecase") ||
-                    simple.endsWith("interactor") ->
-                ClassType.SERVICE
-
-            pkg.contains("repository") ||
-                    pkg.contains("dao") ||
-                    simple.endsWith("repository") ||
-                    simple.endsWith("dao") ->
-                ClassType.REPOSITORY
-
-            pkg.contains("entity") ||
-                    pkg.contains("model") ||
-                    simple.endsWith("entity") ->
-                ClassType.ENTITY
-
-            pkg.contains("dto") ||
-                    pkg.contains("vo") ||
-                    pkg.contains("request") ||
-                    pkg.contains("response") ||
-                    simple.endsWith("dto") ->
-                ClassType.DTO
-
-            else -> ClassType.OTHER
-        }
-    }
-
-    /**
-     * Определение типа класса с учётом его аннотаций
-     */
-    fun determineClassType(
-        className: String,
-        packageName: String,
-        classAnnotations: List<String> = emptyList()
-    ): ClassType {
-        val annotations = classAnnotations.map { it.removePrefix("@").lowercase() }
-
-        if (annotations.any { it == "restcontroller" || it == "controller" }) {
-            return ClassType.CONTROLLER
-        }
-        if (annotations.any { it == "service" }) {
-            return ClassType.SERVICE
-        }
-        if (annotations.any { it == "repository" }) {
-            return ClassType.REPOSITORY
-        }
-        if (annotations.any { it == "entity" || it == "table" }) {
-            return ClassType.ENTITY
-        }
-
-        return determineClassType(className, packageName)
-    }
-
-    /**
-     * Проверка, использует ли проект определённую аннотацию
-     */
     fun usesAnnotation(annotation: String): Boolean {
         val normalized = annotation.removePrefix("@")
         return annotations.entries.any { (key, value) ->
@@ -128,24 +55,46 @@ data class ProjectStructure(
         }
     }
 
-    /**
-     * Получение ожидаемого суффикса для типа класса
-     */
-    fun getExpectedSuffix(classType: ClassType): String {
-        return when (classType) {
-            ClassType.CONTROLLER -> "Controller"
-            ClassType.SERVICE -> "Service"
-            ClassType.REPOSITORY -> "Repository"
-            ClassType.ENTITY -> ""
-            ClassType.DTO -> "Dto"
-            ClassType.OTHER -> ""
+    fun getExpectedSuffix(layerType: LayerType): String {
+        return when (layerType) {
+            LayerType.CONTROLLER -> "Controller"
+            LayerType.SERVICE -> "Service"
+            LayerType.REPOSITORY -> "Repository"
+            LayerType.ENTITY -> ""
+            LayerType.DTO -> "Dto"
+            else -> ""
         }
+    }
+
+    fun isSpringLike(): Boolean {
+        return getClassesForLayer(LayerType.CONTROLLER).isNotEmpty() ||
+                getClassesForLayer(LayerType.SERVICE).isNotEmpty() ||
+                getClassesForLayer(LayerType.REPOSITORY).isNotEmpty() ||
+                annotations.keys.any { key ->
+                    val k = key.removePrefix("@").lowercase()
+                    k == "controller" || k == "restcontroller" || k == "service" || k == "repository"
+                }
+    }
+
+    fun featureRoots(basePackage: String): List<String> {
+        val normalizedBase = basePackage.trim().trim('.')
+        if (normalizedBase.isBlank()) return emptyList()
+
+        val technicalRoots = setOf(
+            "controller", "service", "repository", "entity", "dto", "model",
+            "domain", "application", "infrastructure", "interface", "view",
+            "viewmodel", "port", "adapter", "api", "impl", "common", "shared",
+            "config", "util", "web", "rest"
+        )
+
+        return packages.mapNotNull { pkg ->
+            val rel = pkg.removePrefix(normalizedBase).trim('.')
+            val root = rel.split('.').firstOrNull().orEmpty()
+            root.takeIf { it.isNotBlank() && it.lowercase() !in technicalRoots }
+        }.distinct()
     }
 }
 
-/**
- * Структура слоёв проекта
- */
 data class LayerStructure(
     val controllers: List<ClassInfo> = emptyList(),
     val services: List<ClassInfo> = emptyList(),
@@ -155,9 +104,6 @@ data class LayerStructure(
     val other: List<ClassInfo> = emptyList()
 )
 
-/**
- * Информация о классе
- */
 data class ClassInfo(
     val fullName: String,
     val simpleName: String,
@@ -167,9 +113,6 @@ data class ClassInfo(
     val modifiers: List<String> = emptyList()
 )
 
-/**
- * Тип класса в архитектуре
- */
 enum class ClassType {
     CONTROLLER,
     SERVICE,
@@ -179,9 +122,6 @@ enum class ClassType {
     OTHER
 }
 
-/**
- * Тип слоя в архитектуре
- */
 enum class LayerType {
     CONTROLLER,
     SERVICE,
@@ -203,9 +143,6 @@ enum class LayerType {
     OTHER
 }
 
-/**
- * Зависимость между классами
- */
 data class Dependency(
     val from: String,
     val to: String,
@@ -220,9 +157,6 @@ enum class DependencyType {
     INHERITANCE
 }
 
-/**
- * Соглашения по именованию в проекте
- */
 data class NamingConventions(
     val serviceSuffix: String = "Service",
     val repositorySuffix: String = "Repository",

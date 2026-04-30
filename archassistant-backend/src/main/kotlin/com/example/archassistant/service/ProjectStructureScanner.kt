@@ -45,15 +45,14 @@ class ProjectStructureScanner(
         )
 
         val detection = architectureDetector.detect(provisional)
-        val architecturePattern = detection.primaryPattern
 
         logger.info(
             "Project scanned: {} packages, {} annotations, pattern={}",
-            packages.size, annotations.size, architecturePattern
+            packages.size, annotations.size, detection.primaryPattern
         )
 
         return provisional.copy(
-            architecturePattern = architecturePattern,
+            architecturePattern = detection.primaryPattern,
             detection = detection
         )
     }
@@ -151,12 +150,8 @@ class ProjectStructureScanner(
     }
 
     private fun extractLegacyLayerStructure(classInfos: List<ClassInfo>): LayerStructure {
-        val projectProbe = ProjectStructure(projectId = "probe")
-
         fun byType(type: ClassType): List<ClassInfo> {
-            return classInfos.filter { info ->
-                projectProbe.determineClassType(info.simpleName, info.packageName, info.annotations) == type
-            }
+            return classInfos.filter { info -> ProjectLayerClassifier.matchesClassType(info, type) }
         }
 
         return LayerStructure(
@@ -165,20 +160,16 @@ class ProjectStructureScanner(
             repositories = byType(ClassType.REPOSITORY),
             entities = byType(ClassType.ENTITY),
             dtos = byType(ClassType.DTO),
-            other = classInfos.filter { info ->
-                projectProbe.determineClassType(info.simpleName, info.packageName, info.annotations) == ClassType.OTHER
-            }
+            other = classInfos.filter { info -> ProjectLayerClassifier.classify(info) == LayerType.OTHER }
         )
     }
 
     private fun extractLayerMap(classInfos: List<ClassInfo>): Map<LayerType, List<ClassInfo>> {
         val buckets = LayerType.entries.associateWith { mutableListOf<ClassInfo>() }.toMutableMap()
-
         classInfos.forEach { info ->
             val layer = ProjectLayerClassifier.classify(info)
             buckets.getValue(layer).add(info)
         }
-
         return buckets.mapValues { it.value.toList() }
     }
 

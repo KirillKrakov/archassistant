@@ -228,6 +228,10 @@ class YamlRuleRepository(
         violations: MutableList<Violation>,
         ruleNo: Int
     ) {
+        if (side == "to" && rule.type in setOf(RuleType.NAMING_CONVENTION, RuleType.ANNOTATION_CHECK)) {
+            return
+        }
+
         when (mode) {
             SelectorMode.PACKAGE -> {
                 if (packageValue.isBlank()) {

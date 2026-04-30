@@ -43,7 +43,9 @@ services:
       retries: 3
     volumes:
       - C:/Users/Krako/archassistant-tests/spring-petclinic:/test-projects/petclinic:ro
-      - C:/Users/Krako/archassistant-tests/violation-example:/test-projects/violation:ro
+      - C:/Users/Krako/archassistant-tests/buckpal:/test-projects/buckpal:ro
+      - C:/Users/Krako/archassistant-tests/clean-architecture-example/core:/test-projects/cleanarch:ro
+      - C:/Users/Krako/archassistant-tests/springmonolith:/test-projects/springmonolith:ro
 
 volumes:
   postgres_data:

@@ -19,32 +19,31 @@ class ArchitectureDetector {
                 primaryPattern = ArchitecturePattern.UNKNOWN,
                 confidence = 0.0,
                 scores = scores,
-                reasons = listOf("No strong architectural signals found")
+                reasons = listOf("No strong architectural signals found"),
+                candidatePatterns = emptyList(),
+                isConfident = false
             )
         }
 
         val second = sorted.getOrNull(1)?.value ?: 0.0
         val total = scores.values.sum().coerceAtLeast(1.0)
         val confidence = (top.value / total).coerceIn(0.0, 1.0)
-
-        val primary = if (top.value >= 4.0 && (top.value - second) >= 1.0) {
-            top.key
-        } else {
-            ArchitecturePattern.UNKNOWN
-        }
+        val confident = top.value >= 4.0 && (top.value - second) >= 1.0
 
         return ArchitectureDetectionResult(
-            primaryPattern = primary,
+            primaryPattern = top.key,
             confidence = confidence,
             scores = scores,
-            reasons = buildReasons(primary, structure)
+            reasons = buildReasons(top.key, structure),
+            candidatePatterns = sorted.take(3).map { it.key },
+            isConfident = confident
         )
     }
 
     private fun scorePattern(pattern: ArchitecturePattern, structure: ProjectStructure): Double {
         val packageNames = structure.packages.map { it.lowercase() }.toSet()
         val annotationNames = structure.annotations.keys.map { it.removePrefix("@").lowercase() }.toSet()
-        val effectiveLayers = structure.effectiveLayerMap()
+        val layerMap = structure.effectiveLayerMap()
 
         fun packageHits(keywords: List<String>): Int {
             return keywords.count { keyword ->
@@ -59,7 +58,7 @@ class ArchitectureDetector {
             }
         }
 
-        fun layerCount(type: LayerType): Int = effectiveLayers[type].orEmpty().size
+        fun layerCount(type: LayerType): Int = layerMap[type].orEmpty().size
 
         val pkgScore = packageHits(pattern.keyLayers) * when (pattern) {
             ArchitecturePattern.LAYERED -> 2.4
@@ -73,42 +72,37 @@ class ArchitectureDetector {
         val annScore = annotationHits(pattern.typicalAnnotations) * 1.3
 
         val classScore = when (pattern) {
-            ArchitecturePattern.LAYERED ->
-                layerCount(LayerType.CONTROLLER) +
-                        layerCount(LayerType.SERVICE) +
-                        layerCount(LayerType.REPOSITORY) +
-                        layerCount(LayerType.ENTITY)
+            ArchitecturePattern.LAYERED -> layerCount(LayerType.CONTROLLER) +
+                    layerCount(LayerType.SERVICE) +
+                    layerCount(LayerType.REPOSITORY) +
+                    layerCount(LayerType.ENTITY)
 
-            ArchitecturePattern.CLEAN_ARCHITECTURE ->
-                layerCount(LayerType.DOMAIN) +
-                        layerCount(LayerType.APPLICATION) +
-                        layerCount(LayerType.INFRASTRUCTURE) +
-                        layerCount(LayerType.INTERFACE)
+            ArchitecturePattern.CLEAN_ARCHITECTURE -> layerCount(LayerType.DOMAIN) +
+                    layerCount(LayerType.APPLICATION) +
+                    layerCount(LayerType.INFRASTRUCTURE) +
+                    layerCount(LayerType.INTERFACE)
 
-            ArchitecturePattern.HEXAGONAL ->
-                layerCount(LayerType.DOMAIN) +
-                        layerCount(LayerType.APPLICATION) +
-                        layerCount(LayerType.PORT) +
-                        layerCount(LayerType.ADAPTER)
+            ArchitecturePattern.HEXAGONAL -> layerCount(LayerType.DOMAIN) +
+                    layerCount(LayerType.APPLICATION) +
+                    layerCount(LayerType.PORT) +
+                    layerCount(LayerType.ADAPTER)
 
-            ArchitecturePattern.MVVM ->
-                layerCount(LayerType.VIEW) +
-                        layerCount(LayerType.VIEWMODEL)
+            ArchitecturePattern.MVVM -> layerCount(LayerType.VIEW) +
+                    layerCount(LayerType.VIEWMODEL)
 
-            ArchitecturePattern.MODULAR ->
-                layerCount(LayerType.API) +
-                        layerCount(LayerType.IMPL) +
-                        layerCount(LayerType.COMMON) +
-                        layerCount(LayerType.FEATURE)
+            ArchitecturePattern.MODULAR -> layerCount(LayerType.API) +
+                    layerCount(LayerType.IMPL) +
+                    layerCount(LayerType.COMMON) +
+                    layerCount(LayerType.FEATURE)
 
             ArchitecturePattern.UNKNOWN -> 0
         }.toDouble() * 1.1
 
         val dependencyBonus = when (pattern) {
             ArchitecturePattern.LAYERED -> {
-                val controllers = effectiveLayers[LayerType.CONTROLLER].orEmpty().map { it.fullName }.toSet()
-                val services = effectiveLayers[LayerType.SERVICE].orEmpty().map { it.fullName }.toSet()
-                val repositories = effectiveLayers[LayerType.REPOSITORY].orEmpty().map { it.fullName }.toSet()
+                val controllers = layerMap[LayerType.CONTROLLER].orEmpty().map { it.fullName }.toSet()
+                val services = layerMap[LayerType.SERVICE].orEmpty().map { it.fullName }.toSet()
+                val repositories = layerMap[LayerType.REPOSITORY].orEmpty().map { it.fullName }.toSet()
 
                 val hasControllerToService = structure.dependencies.any { dep ->
                     dep.from in controllers && dep.to in services
@@ -160,66 +154,39 @@ class ArchitectureDetector {
 
     private fun buildReasons(pattern: ArchitecturePattern, structure: ProjectStructure): List<String> {
         val reasons = mutableListOf<String>()
-        val effectiveLayers = structure.effectiveLayerMap()
+        val layerMap = structure.effectiveLayerMap()
 
         when (pattern) {
             ArchitecturePattern.LAYERED -> {
-                if (effectiveLayers[LayerType.CONTROLLER].orEmpty().isNotEmpty()) {
-                    reasons += "Found controller classes"
-                }
-                if (effectiveLayers[LayerType.SERVICE].orEmpty().isNotEmpty()) {
-                    reasons += "Found service classes"
-                }
-                if (effectiveLayers[LayerType.REPOSITORY].orEmpty().isNotEmpty()) {
-                    reasons += "Found repository classes"
-                }
+                if (layerMap[LayerType.CONTROLLER].orEmpty().isNotEmpty()) reasons += "Found controller classes"
+                if (layerMap[LayerType.SERVICE].orEmpty().isNotEmpty()) reasons += "Found service classes"
+                if (layerMap[LayerType.REPOSITORY].orEmpty().isNotEmpty()) reasons += "Found repository classes"
             }
 
             ArchitecturePattern.CLEAN_ARCHITECTURE -> {
-                if (structure.packages.any { it.contains("domain", ignoreCase = true) }) {
-                    reasons += "Found domain packages"
-                }
-                if (structure.packages.any { it.contains("application", ignoreCase = true) }) {
-                    reasons += "Found application packages"
-                }
+                if (structure.packages.any { it.contains("domain", ignoreCase = true) }) reasons += "Found domain packages"
+                if (structure.packages.any { it.contains("application", ignoreCase = true) }) reasons += "Found application packages"
             }
 
             ArchitecturePattern.HEXAGONAL -> {
-                if (structure.packages.any { it.contains("port", ignoreCase = true) }) {
-                    reasons += "Found port packages"
-                }
-                if (structure.packages.any { it.contains("adapter", ignoreCase = true) }) {
-                    reasons += "Found adapter packages"
-                }
+                if (structure.packages.any { it.contains("port", ignoreCase = true) }) reasons += "Found port packages"
+                if (structure.packages.any { it.contains("adapter", ignoreCase = true) }) reasons += "Found adapter packages"
             }
 
             ArchitecturePattern.MVVM -> {
-                if (structure.packages.any { it.contains("viewmodel", ignoreCase = true) }) {
-                    reasons += "Found viewmodel packages"
-                }
-                if (structure.packages.any { it.contains("view", ignoreCase = true) || it.contains("ui", ignoreCase = true) }) {
-                    reasons += "Found view/ui packages"
-                }
+                if (structure.packages.any { it.contains("viewmodel", ignoreCase = true) }) reasons += "Found viewmodel packages"
+                if (structure.packages.any { it.contains("view", ignoreCase = true) || it.contains("ui", ignoreCase = true) }) reasons += "Found view/ui packages"
             }
 
             ArchitecturePattern.MODULAR -> {
-                if (structure.packages.any { it.contains("feature", ignoreCase = true) }) {
-                    reasons += "Found feature packages"
-                }
-                if (structure.packages.any { it.contains("api", ignoreCase = true) }) {
-                    reasons += "Found api packages"
-                }
+                if (structure.packages.any { it.contains("feature", ignoreCase = true) }) reasons += "Found feature packages"
+                if (structure.packages.any { it.contains("api", ignoreCase = true) }) reasons += "Found api packages"
             }
 
-            ArchitecturePattern.UNKNOWN -> {
-                reasons += "No confident pattern evidence"
-            }
+            ArchitecturePattern.UNKNOWN -> reasons += "No confident pattern evidence"
         }
 
-        if (reasons.isEmpty()) {
-            reasons += "Pattern detected by aggregated package/annotation/class signals"
-        }
-
+        if (reasons.isEmpty()) reasons += "Pattern detected by aggregated package/annotation/class signals"
         return reasons
     }
 }
