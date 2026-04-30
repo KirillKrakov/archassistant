@@ -1,5 +1,7 @@
 package com.example.archassistant.model
 
+import java.time.LocalDateTime
+
 /**
  * Структура проекта, извлечённая при сканировании
  * Используется для предложения правил и анализа архитектуры
@@ -7,15 +9,49 @@ package com.example.archassistant.model
 data class ProjectStructure(
     val projectId: String,
     val architecturePattern: ArchitecturePattern? = null,
+    val detection: ArchitectureDetectionResult? = null,
     val packages: List<String> = emptyList(),
     val classes: List<ClassInfo> = emptyList(),
     val layers: LayerStructure = LayerStructure(),
+    val layerMap: Map<LayerType, List<ClassInfo>> = emptyMap(),
     val annotations: Map<String, Int> = emptyMap(),
     val dependencies: List<Dependency> = emptyList(),
     val namingConventions: NamingConventions = NamingConventions(),
     val violations: List<Violation> = emptyList(),
-    val scannedAt: String = java.time.LocalDateTime.now().toString()
+    val scannedAt: String = LocalDateTime.now().toString()
 ) {
+    fun effectiveLayerMap(): Map<LayerType, List<ClassInfo>> {
+        return if (layerMap.isNotEmpty()) {
+            LayerType.entries.associateWith { layerMap[it].orEmpty() }
+        } else {
+            mapOf(
+                LayerType.CONTROLLER to layers.controllers,
+                LayerType.SERVICE to layers.services,
+                LayerType.REPOSITORY to layers.repositories,
+                LayerType.ENTITY to layers.entities,
+                LayerType.DTO to layers.dtos,
+                LayerType.DOMAIN to emptyList(),
+                LayerType.APPLICATION to emptyList(),
+                LayerType.INFRASTRUCTURE to emptyList(),
+                LayerType.INTERFACE to emptyList(),
+                LayerType.VIEW to emptyList(),
+                LayerType.VIEWMODEL to emptyList(),
+                LayerType.PORT to emptyList(),
+                LayerType.ADAPTER to emptyList(),
+                LayerType.API to emptyList(),
+                LayerType.IMPL to emptyList(),
+                LayerType.FEATURE to emptyList(),
+                LayerType.COMMON to emptyList(),
+                LayerType.OTHER to layers.other
+            )
+        }
+    }
+
+    fun getClassesForLayer(layerType: LayerType): List<ClassInfo> = effectiveLayerMap()[layerType].orEmpty()
+
+    fun getPackagesForLayer(layerType: LayerType): List<String> =
+        getClassesForLayer(layerType).map { it.packageName }.distinct()
+
     /**
      * Определение типа класса по аннотациям и расположению
      */
@@ -140,6 +176,30 @@ enum class ClassType {
     REPOSITORY,
     ENTITY,
     DTO,
+    OTHER
+}
+
+/**
+ * Тип слоя в архитектуре
+ */
+enum class LayerType {
+    CONTROLLER,
+    SERVICE,
+    REPOSITORY,
+    ENTITY,
+    DTO,
+    DOMAIN,
+    APPLICATION,
+    INFRASTRUCTURE,
+    INTERFACE,
+    VIEW,
+    VIEWMODEL,
+    PORT,
+    ADAPTER,
+    API,
+    IMPL,
+    FEATURE,
+    COMMON,
     OTHER
 }
 

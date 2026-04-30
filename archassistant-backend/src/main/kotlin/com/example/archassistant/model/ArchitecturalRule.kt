@@ -1,5 +1,6 @@
 package com.example.archassistant.model
 
+import com.example.archassistant.util.PackagePatternBuilder
 import com.fasterxml.jackson.annotation.JsonCreator
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.annotation.JsonValue
@@ -10,6 +11,7 @@ import com.fasterxml.jackson.annotation.JsonValue
 enum class SelectorMode {
     PACKAGE,
     CLASS_TYPE,
+    LAYER,
     ANNOTATION
 }
 
@@ -60,6 +62,12 @@ data class ArchitecturalRule(
     @JsonProperty("to_class_type")
     val toClassType: ClassType? = null,
 
+    @JsonProperty("from_layer_type")
+    val fromLayerType: LayerType? = null,
+
+    @JsonProperty("to_layer_type")
+    val toLayerType: LayerType? = null,
+
     @JsonProperty("severity")
     val severity: Severity = Severity.WARNING,
 
@@ -74,27 +82,14 @@ data class ArchitecturalRule(
 ) {
     /**
      * Проверка, применимо ли правило к данному пакету.
-     * Для class-level / annotation-level правил возвращаем true,
+     * Для class-level / layer-level / annotation-level правил возвращаем true,
      * потому что они не завязаны на package selector.
      */
     fun appliesToPackage(packageName: String): Boolean {
         if (fromSelectorMode != SelectorMode.PACKAGE) return true
+        if (fromPackage.isBlank()) return false
 
-        val regex = fromPackage.toRegexPattern().toRegex()
-        return regex.matches(packageName)
-    }
-
-    /**
-     * Конвертация wildcard-паттерна в regex
-     */
-    private fun String.toRegexPattern(): String {
-        val subpackageWildcard = "__SUBPKG_WILDCARD__"
-        return this
-            .replace("**", ".*")
-            .replace("..*", subpackageWildcard)
-            .replace("*", "[^.]*")
-            .replace(".", "\\.")
-            .replace(subpackageWildcard, "(\\..*)?")
+        return PackagePatternBuilder.matches(fromPackage, packageName)
     }
 }
 

@@ -58,21 +58,21 @@ class RulesController(
     ): ResponseEntity<Map<String, Any>> {
         logger.info("Saving rules config for project: {}", projectId)
 
-        // Валидация: projectId в теле должен совпадать с путём
         if (config.projectId != projectId) {
             return ResponseEntity.badRequest()
                 .body(mapOf("success" to false, "error" to "projectId mismatch"))
         }
 
-        // Валидация конфигурации
         val validationResult = ruleRepository.validate(config)
         if (!validationResult.passed) {
             return ResponseEntity.badRequest()
-                .body(mapOf(
-                    "success" to false,
-                    "error" to "Invalid configuration",
-                    "violations" to validationResult.violations
-                ))
+                .body(
+                    mapOf(
+                        "success" to false,
+                        "error" to "Invalid configuration",
+                        "violations" to validationResult.violations
+                    )
+                )
         }
 
         val success = ruleRepository.save(config)
@@ -89,10 +89,6 @@ class RulesController(
 
     /**
      * Получить предложения правил на основе АНАЛИЗА РЕАЛЬНОЙ структуры проекта
-     *
-     * @param projectId ID проекта
-     * @param projectPath Путь к директории проекта (опционально, если не указан - ищем в конфиге)
-     * @return Список предложенных правил
      */
     @GetMapping("/{projectId}/suggest")
     fun suggestRules(
@@ -102,42 +98,37 @@ class RulesController(
         logger.info("Generating rule suggestions for project: {}, path: {}", projectId, projectPath ?: "from config")
 
         return try {
-            // Шаг 1: Получить структуру проекта (сканирование или из конфига)
             val structure = if (!projectPath.isNullOrBlank()) {
-                // Явно указан путь - сканируем
                 projectScanner.scanProject(projectPath, projectId)
             } else {
-                // Путь не указан - пробуем из конфига
                 projectScanner.scanProjectFromConfig(projectId, ruleRepository)
             }
 
-            // Шаг 2: Если структура не получена - вернуть пустой список с предупреждением
             if (structure == null) {
                 logger.warn("Could not scan project structure for {}", projectId)
                 return ResponseEntity.ok(emptyList())
             }
 
-            // Шаг 3: Использовать RuleTemplateEngine для предложения правил (Этап 5!)
             val suggestions = templateEngine.suggestRules(structure)
 
-            logger.info("Generated {} rule suggestions for pattern: {}",
-                suggestions.size, structure.architecturePattern)
+            logger.info(
+                "Generated {} rule suggestions for pattern: {}",
+                suggestions.size,
+                structure.detection?.primaryPattern ?: structure.architecturePattern
+            )
 
             ResponseEntity.ok(suggestions)
-
         } catch (e: IllegalArgumentException) {
             logger.error("Invalid project path: ${e.message}")
-            ResponseEntity.badRequest()
-                .body(emptyList())
+            ResponseEntity.badRequest().body(emptyList())
         } catch (e: Exception) {
             logger.error("Failed to generate rule suggestions: ${e.message}", e)
-            ResponseEntity.internalServerError()
-                .body(emptyList())
+            ResponseEntity.internalServerError().body(emptyList())
         }
     }
 
     /**
-     * Сохранить путь к проекту в конфигурацию (для будущего сканирования)
+     * Сохранить путь к проекту в конфигурацию
      */
     @PostMapping("/{projectId}/path")
     fun saveProjectPath(
@@ -151,12 +142,7 @@ class RulesController(
         val config = ruleRepository.load(projectId)
             ?: RulesConfig(projectId = projectId, rules = emptyList())
 
-        // Сохранить путь в settings (нужно расширить RulesConfig или использовать доп. поле)
-        // Для простоты - создаём новую конфигурацию с путём
-        val updatedConfig = config.copy(
-            projectPath = projectPath
-        )
-
+        val updatedConfig = config.copy(projectPath = projectPath)
         val success = ruleRepository.save(updatedConfig)
 
         return if (success) {

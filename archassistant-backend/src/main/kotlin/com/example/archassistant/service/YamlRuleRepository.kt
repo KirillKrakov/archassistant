@@ -1,15 +1,19 @@
 package com.example.archassistant.service
 
-import com.example.archassistant.config.YamlConfig
 import com.example.archassistant.model.ArchitecturalRule
+import com.example.archassistant.model.ConstraintType
 import com.example.archassistant.model.RuleSettings
+import com.example.archassistant.model.RuleType
 import com.example.archassistant.model.RulesConfig
 import com.example.archassistant.model.SelectorMode
 import com.example.archassistant.model.ValidationResult
 import com.example.archassistant.model.Violation
 import com.example.archassistant.model.Severity
+import com.example.archassistant.model.ProjectType
+import com.example.archassistant.util.PackagePatternBuilder
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Service
 import java.io.File
 import java.nio.file.Paths
@@ -20,6 +24,7 @@ import java.nio.file.Paths
  */
 @Service
 class YamlRuleRepository(
+    @Qualifier("yamlObjectMapper")
     private val objectMapper: ObjectMapper,
     private val configRootPath: String = ".archassistant"
 ) {
@@ -68,9 +73,12 @@ class YamlRuleRepository(
      * Создание конфигурации по умолчанию для проекта
      */
     fun createDefault(projectId: String, projectType: String = "SPRING_BOOT"): RulesConfig {
+        val resolvedType = runCatching { ProjectType.valueOf(projectType) }
+            .getOrDefault(ProjectType.SPRING_BOOT)
+
         return RulesConfig(
             projectId = projectId,
-            projectType = com.example.archassistant.model.ProjectType.valueOf(projectType),
+            projectType = resolvedType,
             rules = emptyList(),
             settings = RuleSettings()
         )
@@ -81,6 +89,7 @@ class YamlRuleRepository(
      */
     fun validate(config: RulesConfig): ValidationResult {
         val violations = mutableListOf<Violation>()
+        val ids = mutableSetOf<String>()
 
         if (config.projectId.isBlank()) {
             violations.add(
@@ -94,47 +103,111 @@ class YamlRuleRepository(
         }
 
         config.rules.forEachIndexed { index, rule ->
+            val ruleNo = index + 1
+
             if (rule.id.isBlank()) {
                 violations.add(
                     Violation(
-                        ruleId = "rule_${index + 1}",
+                        ruleId = "rule_$ruleNo",
                         description = "Rule ID cannot be empty",
+                        className = "ArchitecturalRule",
+                        severity = Severity.ERROR
+                    )
+                )
+            } else if (!ids.add(rule.id)) {
+                violations.add(
+                    Violation(
+                        ruleId = rule.id,
+                        description = "Duplicate rule ID: ${rule.id}",
                         className = "ArchitecturalRule",
                         severity = Severity.ERROR
                     )
                 )
             }
 
-            if (rule.fromSelectorMode == SelectorMode.PACKAGE && !isValidWildcardPattern(rule.fromPackage)) {
-                violations.add(
-                    Violation(
-                        ruleId = "rule_${index + 1}",
-                        description = "Invalid wildcard pattern in fromPackage: ${rule.fromPackage}",
-                        className = "ArchitecturalRule",
-                        severity = Severity.WARNING
-                    )
-                )
-            }
+            validateSelector(
+                rule = rule,
+                side = "from",
+                mode = rule.fromSelectorMode,
+                packageValue = rule.fromPackage,
+                classTypeValue = rule.fromClassType,
+                layerTypeValue = rule.fromLayerType,
+                violations = violations,
+                ruleNo = ruleNo
+            )
 
-            if (rule.toSelectorMode == SelectorMode.PACKAGE) {
-                val targets = when {
-                    !rule.toPackages.isNullOrEmpty() -> rule.toPackages
-                    !rule.toPackage.isNullOrBlank() -> listOf(rule.toPackage)
-                    else -> emptyList()
-                }
+            validateSelector(
+                rule = rule,
+                side = "to",
+                mode = rule.toSelectorMode,
+                packageValue = rule.toPackage ?: rule.toPackages?.firstOrNull() ?: "",
+                classTypeValue = rule.toClassType,
+                layerTypeValue = rule.toLayerType,
+                violations = violations,
+                ruleNo = ruleNo
+            )
 
-                targets.forEach { target ->
-                    if (!isValidWildcardPattern(target)) {
+            when (rule.type) {
+                RuleType.DEPENDENCY, RuleType.LAYER_ISOLATION -> {
+                    if (rule.constraint !in setOf(ConstraintType.NO_DEPENDENCY, ConstraintType.MUST_DEPEND)) {
                         violations.add(
                             Violation(
-                                ruleId = "rule_${index + 1}",
-                                description = "Invalid wildcard pattern in target package: $target",
+                                ruleId = rule.id.ifBlank { "rule_$ruleNo" },
+                                description = "Invalid constraint for dependency rule: ${rule.constraint}",
                                 className = "ArchitecturalRule",
                                 severity = Severity.WARNING
                             )
                         )
                     }
                 }
+
+                RuleType.NAMING_CONVENTION -> {
+                    if (rule.constraint !in setOf(ConstraintType.NAMING_SUFFIX, ConstraintType.NAMING_PREFIX)) {
+                        violations.add(
+                            Violation(
+                                ruleId = rule.id.ifBlank { "rule_$ruleNo" },
+                                description = "Invalid constraint for naming rule: ${rule.constraint}",
+                                className = "ArchitecturalRule",
+                                severity = Severity.WARNING
+                            )
+                        )
+                    }
+                    if (rule.pattern.isNullOrBlank()) {
+                        violations.add(
+                            Violation(
+                                ruleId = rule.id.ifBlank { "rule_$ruleNo" },
+                                description = "Naming rule pattern cannot be empty",
+                                className = "ArchitecturalRule",
+                                severity = Severity.ERROR
+                            )
+                        )
+                    }
+                }
+
+                RuleType.ANNOTATION_CHECK -> {
+                    if (rule.constraint !in setOf(ConstraintType.HAS_ANNOTATION, ConstraintType.NO_ANNOTATION)) {
+                        violations.add(
+                            Violation(
+                                ruleId = rule.id.ifBlank { "rule_$ruleNo" },
+                                description = "Invalid constraint for annotation rule: ${rule.constraint}",
+                                className = "ArchitecturalRule",
+                                severity = Severity.WARNING
+                            )
+                        )
+                    }
+                    if (rule.annotation.isNullOrBlank()) {
+                        violations.add(
+                            Violation(
+                                ruleId = rule.id.ifBlank { "rule_$ruleNo" },
+                                description = "Annotation rule annotation cannot be empty",
+                                className = "ArchitecturalRule",
+                                severity = Severity.ERROR
+                            )
+                        )
+                    }
+                }
+
+                RuleType.CUSTOM -> Unit
             }
         }
 
@@ -145,29 +218,90 @@ class YamlRuleRepository(
         }
     }
 
+    private fun validateSelector(
+        rule: ArchitecturalRule,
+        side: String,
+        mode: SelectorMode,
+        packageValue: String,
+        classTypeValue: Any?,
+        layerTypeValue: Any?,
+        violations: MutableList<Violation>,
+        ruleNo: Int
+    ) {
+        when (mode) {
+            SelectorMode.PACKAGE -> {
+                if (packageValue.isBlank()) {
+                    violations.add(
+                        Violation(
+                            ruleId = rule.id.ifBlank { "rule_$ruleNo" },
+                            description = "$side package cannot be empty for PACKAGE selector",
+                            className = "ArchitecturalRule",
+                            severity = Severity.ERROR
+                        )
+                    )
+                } else if (!isValidWildcardPattern(packageValue)) {
+                    violations.add(
+                        Violation(
+                            ruleId = rule.id.ifBlank { "rule_$ruleNo" },
+                            description = "Invalid wildcard pattern in $side package: $packageValue",
+                            className = "ArchitecturalRule",
+                            severity = Severity.WARNING
+                        )
+                    )
+                }
+            }
+
+            SelectorMode.CLASS_TYPE -> {
+                if (classTypeValue == null) {
+                    violations.add(
+                        Violation(
+                            ruleId = rule.id.ifBlank { "rule_$ruleNo" },
+                            description = "$side class type cannot be empty for CLASS_TYPE selector",
+                            className = "ArchitecturalRule",
+                            severity = Severity.ERROR
+                        )
+                    )
+                }
+            }
+
+            SelectorMode.LAYER -> {
+                if (layerTypeValue == null) {
+                    violations.add(
+                        Violation(
+                            ruleId = rule.id.ifBlank { "rule_$ruleNo" },
+                            description = "$side layer type cannot be empty for LAYER selector",
+                            className = "ArchitecturalRule",
+                            severity = Severity.ERROR
+                        )
+                    )
+                }
+            }
+
+            SelectorMode.ANNOTATION -> {
+                if (rule.annotation.isNullOrBlank()) {
+                    violations.add(
+                        Violation(
+                            ruleId = rule.id.ifBlank { "rule_$ruleNo" },
+                            description = "Annotation cannot be empty for ANNOTATION selector",
+                            className = "ArchitecturalRule",
+                            severity = Severity.ERROR
+                        )
+                    )
+                }
+            }
+        }
+    }
+
     /**
      * Проверка валидности wildcard-паттерна
      */
     private fun isValidWildcardPattern(pattern: String): Boolean {
         return try {
-            pattern.toRegexPatternForValidation().toRegex()
+            PackagePatternBuilder.wildcardToRegex(pattern)
             true
         } catch (e: Exception) {
             false
         }
-    }
-
-    /**
-     * Упрощённая версия toRegexPattern для валидации
-     */
-    private fun String.toRegexPatternForValidation(): String {
-        val subpackageWildcard = "__SUBPKG__"
-        return this
-            .replace("**", ".*")
-            .replace("..*", subpackageWildcard)
-            .replace("*", "[^.]*")
-            .replace(".", "\\.")
-            .replace(subpackageWildcard, "(\\..*)?")
     }
 
     /**

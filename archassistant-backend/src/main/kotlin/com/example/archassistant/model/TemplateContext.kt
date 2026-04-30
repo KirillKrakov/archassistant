@@ -49,32 +49,10 @@ data class TemplateContext(
             LayerType.REPOSITORY -> namingConventions.repositorySuffix
             LayerType.ENTITY -> ""
             LayerType.DTO -> namingConventions.dtoSuffix
-            LayerType.OTHER -> ""
+            LayerType.VIEWMODEL -> "ViewModel"
             else -> ""
         }
     }
-}
-
-/**
- * Тип слоя в архитектуре
- */
-enum class LayerType {
-    CONTROLLER,
-    SERVICE,
-    REPOSITORY,
-    ENTITY,
-    DTO,
-    DOMAIN,
-    APPLICATION,
-    INFRASTRUCTURE,
-    INTERFACE,
-    VIEW,
-    VIEWMODEL,
-    PORT,
-    ADAPTER,
-    API,
-    IMPL,
-    OTHER
 }
 
 /**

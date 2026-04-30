@@ -17,7 +17,20 @@ object MvvmArchitectureRules {
         priority = 100
     )
 
+    object ViewModelNaming : ClassNamingConventionTemplate(
+        id = "mvvm_viewmodel_naming",
+        name = "ViewModels should have 'ViewModel' suffix",
+        description = "ViewModel-классы должны иметь суффикс ViewModel",
+        applicablePatterns = setOf(ArchitecturePattern.MVVM),
+        targetLayer = LayerType.VIEWMODEL,
+        expectedSuffix = "ViewModel",
+        severity = Severity.INFO,
+        weight = 0.5,
+        priority = 40
+    )
+
     fun all(): List<RuleTemplate> = listOf(
-        ViewModelViewDependency
+        ViewModelViewDependency,
+        ViewModelNaming
     )
 }

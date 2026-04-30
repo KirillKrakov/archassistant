@@ -19,7 +19,7 @@ sealed interface RuleTemplate {
 }
 
 /**
- * Базовая реализация для зависимостей между слоями на уровне пакетов
+ * Базовая реализация для зависимостей между слоями на уровне пакетов/классов/слоёв
  */
 abstract class LayerDependencyTemplate(
     override val id: String,
@@ -43,27 +43,58 @@ abstract class LayerDependencyTemplate(
     override fun generate(context: TemplateContext): List<ArchitecturalRule> {
         if (!isApplicable(context)) return emptyList()
 
+        val fromClassType = fromLayer.toClassType()
+        val toClassType = toLayer.toClassType()
         val fromPackages = context.getPackagesForLayer(fromLayer)
         val toPackages = context.getPackagesForLayer(toLayer)
 
-        val fromPatterns = PackagePatternBuilder.buildWildcardPatterns(fromPackages)
-        val toPatterns = PackagePatternBuilder.buildWildcardPatterns(toPackages)
-
-        return fromPatterns.flatMap { fromPat ->
-            toPatterns.map { toPat ->
+        return if (fromClassType != null && toClassType != null) {
+            val basePackage = context.basePackage.takeIf { it.isNotBlank() } ?: "..*"
+            listOf(
                 ArchitecturalRule(
-                    id = "${id}_${context.projectId}_${fromPat.hashCode()}_${toPat.hashCode()}",
+                    id = "${id}_${context.projectId}_${fromClassType.name}_${toClassType.name}",
                     name = name,
                     description = description,
                     type = RuleType.DEPENDENCY,
-                    fromPackage = fromPat,
-                    toPackage = toPat,
+                    fromPackage = "$basePackage..*",
+                    toPackage = "$basePackage..*",
                     constraint = constraint,
                     severity = severity,
                     weight = weight,
                     enabled = true,
-                    suggested = true
+                    suggested = true,
+                    fromSelectorMode = SelectorMode.CLASS_TYPE,
+                    toSelectorMode = SelectorMode.CLASS_TYPE,
+                    fromClassType = fromClassType,
+                    toClassType = toClassType
                 )
+            )
+        } else {
+            val fromPatterns = PackagePatternBuilder.buildWildcardPatterns(fromPackages)
+            val toPatterns = PackagePatternBuilder.buildWildcardPatterns(toPackages)
+
+            if (fromPatterns.isEmpty() || toPatterns.isEmpty()) return emptyList()
+
+            fromPatterns.flatMap { fromPat ->
+                toPatterns.map { toPat ->
+                    ArchitecturalRule(
+                        id = "${id}_${context.projectId}_${fromPat.hashCode()}_${toPat.hashCode()}",
+                        name = name,
+                        description = description,
+                        type = RuleType.DEPENDENCY,
+                        fromPackage = fromPat,
+                        toPackage = toPat,
+                        constraint = constraint,
+                        severity = severity,
+                        weight = weight,
+                        enabled = true,
+                        suggested = true,
+                        fromSelectorMode = SelectorMode.LAYER,
+                        toSelectorMode = SelectorMode.LAYER,
+                        fromLayerType = fromLayer,
+                        toLayerType = toLayer
+                    )
+                }
             }
         }
     }
@@ -94,29 +125,51 @@ abstract class ClassDependencyTemplate(
     override fun generate(context: TemplateContext): List<ArchitecturalRule> {
         if (!isApplicable(context)) return emptyList()
 
+        val fromClassType = fromLayer.toClassType()
+        val toClassType = toLayer.toClassType()
         val basePackage = context.basePackage.takeIf { it.isNotBlank() } ?: "..*"
-        val fromClassType = fromLayer.toClassType() ?: return emptyList()
-        val toClassType = toLayer.toClassType() ?: return emptyList()
 
-        return listOf(
-            ArchitecturalRule(
-                id = "${id}_${context.projectId}_${fromClassType.name}_${toClassType.name}",
-                name = name,
-                description = description,
-                type = RuleType.DEPENDENCY,
-                fromPackage = "$basePackage..*",
-                toPackage = "$basePackage..*",
-                constraint = constraint,
-                severity = severity,
-                weight = weight,
-                enabled = true,
-                suggested = true,
-                fromSelectorMode = SelectorMode.CLASS_TYPE,
-                toSelectorMode = SelectorMode.CLASS_TYPE,
-                fromClassType = fromClassType,
-                toClassType = toClassType
+        return if (fromClassType != null && toClassType != null) {
+            listOf(
+                ArchitecturalRule(
+                    id = "${id}_${context.projectId}_${fromClassType.name}_${toClassType.name}",
+                    name = name,
+                    description = description,
+                    type = RuleType.DEPENDENCY,
+                    fromPackage = "$basePackage..*",
+                    toPackage = "$basePackage..*",
+                    constraint = constraint,
+                    severity = severity,
+                    weight = weight,
+                    enabled = true,
+                    suggested = true,
+                    fromSelectorMode = SelectorMode.CLASS_TYPE,
+                    toSelectorMode = SelectorMode.CLASS_TYPE,
+                    fromClassType = fromClassType,
+                    toClassType = toClassType
+                )
             )
-        )
+        } else {
+            listOf(
+                ArchitecturalRule(
+                    id = "${id}_${context.projectId}_${fromLayer.name}_${toLayer.name}",
+                    name = name,
+                    description = description,
+                    type = RuleType.DEPENDENCY,
+                    fromPackage = "$basePackage..*",
+                    toPackage = "$basePackage..*",
+                    constraint = constraint,
+                    severity = severity,
+                    weight = weight,
+                    enabled = true,
+                    suggested = true,
+                    fromSelectorMode = SelectorMode.LAYER,
+                    toSelectorMode = SelectorMode.LAYER,
+                    fromLayerType = fromLayer,
+                    toLayerType = toLayer
+                )
+            )
+        }
     }
 }
 
@@ -158,7 +211,10 @@ abstract class NamingConventionTemplate(
                 severity = severity,
                 weight = weight,
                 enabled = true,
-                suggested = true
+                suggested = true,
+                fromSelectorMode = if (targetLayer.toClassType() != null) SelectorMode.CLASS_TYPE else SelectorMode.LAYER,
+                fromClassType = targetLayer.toClassType(),
+                fromLayerType = targetLayer.takeIf { it.toClassType() == null }
             )
         }
     }
@@ -188,11 +244,11 @@ abstract class ClassNamingConventionTemplate(
         if (expectedSuffix.isBlank()) return emptyList()
 
         val basePackage = context.basePackage.takeIf { it.isNotBlank() } ?: "..*"
-        val classType = targetLayer.toClassType() ?: return emptyList()
+        val classType = targetLayer.toClassType()
 
         return listOf(
             ArchitecturalRule(
-                id = "${id}_${context.projectId}_${classType.name}_${expectedSuffix}",
+                id = "${id}_${context.projectId}_${targetLayer.name}_${expectedSuffix}",
                 name = name,
                 description = description,
                 type = RuleType.NAMING_CONVENTION,
@@ -203,8 +259,9 @@ abstract class ClassNamingConventionTemplate(
                 weight = weight,
                 enabled = true,
                 suggested = true,
-                fromSelectorMode = SelectorMode.CLASS_TYPE,
-                fromClassType = classType
+                fromSelectorMode = if (classType != null) SelectorMode.CLASS_TYPE else SelectorMode.LAYER,
+                fromClassType = classType,
+                fromLayerType = if (classType == null) targetLayer else null
             )
         )
     }

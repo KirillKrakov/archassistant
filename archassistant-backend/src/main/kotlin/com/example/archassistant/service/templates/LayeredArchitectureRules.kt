@@ -56,6 +56,21 @@ object LayeredArchitectureRules {
     )
 
     /**
+     * Правило: Контроллеры должны иметь суффикс Controller
+     */
+    object ControllerNaming : NamingConventionTemplate(
+        id = "layered_controller_naming",
+        name = "Controllers should have 'Controller' suffix",
+        description = "Все классы контроллерного слоя должны иметь суффикс Controller",
+        applicablePatterns = setOf(ArchitecturePattern.LAYERED),
+        targetLayer = LayerType.CONTROLLER,
+        expectedSuffix = "Controller",
+        severity = Severity.INFO,
+        weight = 0.5,
+        priority = 40
+    )
+
+    /**
      * Правило: Сервисы должны иметь суффикс Service
      */
     object ServiceNaming : NamingConventionTemplate(
@@ -89,6 +104,7 @@ object LayeredArchitectureRules {
         ServiceControllerDependency,
         RepositoryServiceDependency,
         ControllerRepositoryDependency,
+        ControllerNaming,
         ServiceNaming,
         RepositoryNaming
     )

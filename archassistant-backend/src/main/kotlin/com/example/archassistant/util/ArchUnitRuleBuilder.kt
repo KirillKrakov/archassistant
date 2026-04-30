@@ -28,7 +28,7 @@ object ArchUnitRuleBuilder {
     }
 
     /**
-     * Правило: зависимости между классами/пакетами
+     * Правило: зависимости между классами/пакетами/слоями
      */
     private fun buildDependencyRule(rule: ArchitecturalRule): ArchRule {
         val fromPredicate = predicateFor(rule, isFrom = true)
@@ -117,30 +117,44 @@ object ArchUnitRuleBuilder {
     private fun predicateFor(rule: ArchitecturalRule, isFrom: Boolean): DescribedPredicate<JavaClass> {
         return when (if (isFrom) rule.fromSelectorMode else rule.toSelectorMode) {
             SelectorMode.PACKAGE -> packagePredicate(
-                if (isFrom) rule.fromPackage else targetPackagePattern(rule)
+                if (isFrom) {
+                    listOf(rule.fromPackage)
+                } else {
+                    targetPackagePatterns(rule)
+                }
             )
 
             SelectorMode.CLASS_TYPE -> classTypePredicate(
                 if (isFrom) rule.fromClassType else rule.toClassType
             )
 
+            SelectorMode.LAYER -> layerPredicate(
+                if (isFrom) rule.fromLayerType else rule.toLayerType
+            )
+
             SelectorMode.ANNOTATION -> annotationPredicate(rule.annotation)
         }
     }
 
-    private fun targetPackagePattern(rule: ArchitecturalRule): String {
+    private fun targetPackagePatterns(rule: ArchitecturalRule): List<String> {
         return when {
-            !rule.toPackages.isNullOrEmpty() -> rule.toPackages.joinToString("|")
-            !rule.toPackage.isNullOrBlank() -> rule.toPackage
-            else -> rule.fromPackage
+            !rule.toPackages.isNullOrEmpty() -> rule.toPackages
+            !rule.toPackage.isNullOrBlank() -> listOf(rule.toPackage)
+            else -> listOf(rule.fromPackage)
         }
     }
 
-    private fun packagePredicate(pattern: String): DescribedPredicate<JavaClass> {
-        val regex = wildcardToRegex(pattern).toRegex()
-        return object : DescribedPredicate<JavaClass>("reside in package pattern '$pattern'") {
+    private fun packagePredicate(patterns: List<String>): DescribedPredicate<JavaClass> {
+        val normalizedPatterns = patterns
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+
+        return object : DescribedPredicate<JavaClass>("reside in package pattern '${normalizedPatterns.joinToString(", ")}'") {
             override fun test(item: JavaClass): Boolean {
-                return regex.matches(item.packageName)
+                if (normalizedPatterns.isEmpty()) return false
+                return normalizedPatterns.any { pattern ->
+                    PackagePatternBuilder.matches(pattern, item.packageName)
+                }
             }
         }
     }
@@ -158,68 +172,26 @@ object ArchUnitRuleBuilder {
     }
 
     private fun classTypePredicate(type: ClassType?): DescribedPredicate<JavaClass> {
-        val resolved = type ?: return packagePredicate("..*")
+        val resolved = type ?: return object : DescribedPredicate<JavaClass>("match no class type") {
+            override fun test(item: JavaClass): Boolean = false
+        }
+
         return object : DescribedPredicate<JavaClass>("match class type '$resolved'") {
             override fun test(item: JavaClass): Boolean {
-                val pkg = item.packageName.lowercase()
-                val simple = item.name.substringAfterLast('.').lowercase()
-                val annotations = item.annotations.map { ann ->
-                    ann.type.name.substringAfterLast('.').lowercase()
-                }
-
-                return when (resolved) {
-                    ClassType.CONTROLLER ->
-                        pkg.contains("controller") ||
-                                pkg.contains("web") ||
-                                pkg.contains("api") ||
-                                simple.endsWith("controller") ||
-                                annotations.any { it == "controller" || it == "restcontroller" }
-
-                    ClassType.SERVICE ->
-                        pkg.contains("service") ||
-                                pkg.contains("business") ||
-                                simple.endsWith("service") ||
-                                simple.endsWith("usecase") ||
-                                simple.endsWith("interactor") ||
-                                annotations.any { it == "service" }
-
-                    ClassType.REPOSITORY ->
-                        pkg.contains("repository") ||
-                                pkg.contains("dao") ||
-                                pkg.contains("data") ||
-                                simple.endsWith("repository") ||
-                                simple.endsWith("dao") ||
-                                annotations.any { it == "repository" }
-
-                    ClassType.ENTITY ->
-                        pkg.contains("entity") ||
-                                pkg.contains("model") ||
-                                pkg.contains("domain") ||
-                                simple.endsWith("entity") ||
-                                annotations.any { it == "entity" || it == "table" }
-
-                    ClassType.DTO ->
-                        pkg.contains("dto") ||
-                                pkg.contains("vo") ||
-                                pkg.contains("request") ||
-                                pkg.contains("response") ||
-                                simple.endsWith("dto") ||
-                                simple.endsWith("request") ||
-                                simple.endsWith("response")
-
-                    ClassType.OTHER -> true
-                }
+                return ProjectLayerClassifier.matchesClassType(item, resolved)
             }
         }
     }
 
-    private fun wildcardToRegex(pattern: String): String {
-        val subpackageWildcard = "__SUBPKG_WILDCARD__"
-        return pattern
-            .replace("**", ".*")
-            .replace("..*", subpackageWildcard)
-            .replace("*", "[^.]*")
-            .replace(".", "\\.")
-            .replace(subpackageWildcard, "(\\..*)?")
+    private fun layerPredicate(type: LayerType?): DescribedPredicate<JavaClass> {
+        val resolved = type ?: return object : DescribedPredicate<JavaClass>("match no layer") {
+            override fun test(item: JavaClass): Boolean = false
+        }
+
+        return object : DescribedPredicate<JavaClass>("match layer '$resolved'") {
+            override fun test(item: JavaClass): Boolean {
+                return ProjectLayerClassifier.classify(item) == resolved
+            }
+        }
     }
 }

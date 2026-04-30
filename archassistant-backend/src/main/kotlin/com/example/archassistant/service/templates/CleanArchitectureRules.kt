@@ -7,9 +7,6 @@ import com.example.archassistant.model.*
  */
 object CleanArchitectureRules {
 
-    /**
-     * Правило: Domain слой не должен зависеть от Infrastructure
-     */
     object DomainIsolation : LayerDependencyTemplate(
         id = "clean_domain_isolation",
         name = "Domain layer should not depend on infrastructure",
@@ -23,9 +20,6 @@ object CleanArchitectureRules {
         priority = 100
     )
 
-    /**
-     * Правило: Application слой не должен зависеть от Infrastructure напрямую
-     */
     object ApplicationIsolation : LayerDependencyTemplate(
         id = "clean_application_isolation",
         name = "Application layer should not directly depend on infrastructure",
@@ -35,7 +29,8 @@ object CleanArchitectureRules {
         toLayer = LayerType.INFRASTRUCTURE,
         constraint = ConstraintType.NO_DEPENDENCY,
         severity = Severity.ERROR,
-        weight = 1.5
+        weight = 1.5,
+        priority = 90
     )
 
     fun all(): List<RuleTemplate> = listOf(

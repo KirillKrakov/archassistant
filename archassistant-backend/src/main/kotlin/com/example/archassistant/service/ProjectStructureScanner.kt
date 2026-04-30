@@ -1,7 +1,7 @@
 package com.example.archassistant.service
 
 import com.example.archassistant.model.*
-import com.tngtech.archunit.core.domain.JavaClass
+import com.example.archassistant.util.ProjectLayerClassifier
 import com.tngtech.archunit.core.domain.JavaClasses
 import com.tngtech.archunit.core.importer.ClassFileImporter
 import org.slf4j.LoggerFactory
@@ -11,7 +11,9 @@ import java.nio.file.Path
 import java.nio.file.Paths
 
 @Service
-class ProjectStructureScanner {
+class ProjectStructureScanner(
+    private val architectureDetector: ArchitectureDetector
+) {
 
     private val logger = LoggerFactory.getLogger(ProjectStructureScanner::class.java)
 
@@ -25,34 +27,40 @@ class ProjectStructureScanner {
 
         val classInfos = extractClassInfos(classes)
         val packages = classInfos.map { it.packageName }.distinct()
-
         val annotations = extractAnnotations(classes)
         val dependencies = extractDependencies(classes)
         val namingConventions = extractNamingConventions(classInfos)
-        val layers = extractLayerStructure(classInfos)
-        val architecturePattern = ArchitecturePattern.fromLayers(packages, annotations)
+        val layers = extractLegacyLayerStructure(classInfos)
+        val layerMap = extractLayerMap(classInfos)
+
+        val provisional = ProjectStructure(
+            projectId = projectId,
+            packages = packages,
+            classes = classInfos,
+            layers = layers,
+            layerMap = layerMap,
+            annotations = annotations,
+            dependencies = dependencies,
+            namingConventions = namingConventions
+        )
+
+        val detection = architectureDetector.detect(provisional)
+        val architecturePattern = detection.primaryPattern
 
         logger.info(
             "Project scanned: {} packages, {} annotations, pattern={}",
             packages.size, annotations.size, architecturePattern
         )
 
-        return ProjectStructure(
-            projectId = projectId,
+        return provisional.copy(
             architecturePattern = architecturePattern,
-            packages = packages,
-            classes = classInfos,
-            layers = layers,
-            annotations = annotations,
-            dependencies = dependencies,
-            namingConventions = namingConventions
+            detection = detection
         )
     }
 
     fun scanProjectFromConfig(projectId: String, ruleRepository: YamlRuleRepository): ProjectStructure? {
         val config = ruleRepository.load(projectId)
-        val projectPath = config?.projectPath
-            ?: return null
+        val projectPath = config?.projectPath ?: return null
 
         return if (Files.exists(Paths.get(projectPath))) {
             scanProject(projectPath, projectId)
@@ -85,6 +93,12 @@ class ProjectStructureScanner {
 
             val dependencies = javaClass.directDependenciesFromSelf
                 .map { dep -> dep.targetClass.name }
+                .filterNot { target ->
+                    target.startsWith("java.") ||
+                            target.startsWith("javax.") ||
+                            target.startsWith("kotlin.") ||
+                            target.startsWith("org.springframework.")
+                }
                 .distinct()
 
             ClassInfo(
@@ -112,21 +126,31 @@ class ProjectStructureScanner {
     private fun extractDependencies(classes: JavaClasses): List<Dependency> {
         return classes
             .flatMap { sourceClass ->
-                sourceClass.directDependenciesFromSelf.map { dep ->
-                    Dependency(
-                        from = sourceClass.name,
-                        to = dep.targetClass.name,
-                        type = when {
-                            dep.targetClass.isInterface -> DependencyType.INHERITANCE
-                            else -> DependencyType.IMPORT
-                        }
-                    )
+                sourceClass.directDependenciesFromSelf.mapNotNull { dep ->
+                    val targetName = dep.targetClass.name
+                    if (
+                        targetName.startsWith("java.") ||
+                        targetName.startsWith("javax.") ||
+                        targetName.startsWith("kotlin.") ||
+                        targetName.startsWith("org.springframework.")
+                    ) {
+                        null
+                    } else {
+                        Dependency(
+                            from = sourceClass.name,
+                            to = targetName,
+                            type = when {
+                                dep.targetClass.isInterface -> DependencyType.INHERITANCE
+                                else -> DependencyType.IMPORT
+                            }
+                        )
+                    }
                 }
             }
             .distinctBy { "${it.from}|${it.to}|${it.type}" }
     }
 
-    private fun extractLayerStructure(classInfos: List<ClassInfo>): LayerStructure {
+    private fun extractLegacyLayerStructure(classInfos: List<ClassInfo>): LayerStructure {
         val projectProbe = ProjectStructure(projectId = "probe")
 
         fun byType(type: ClassType): List<ClassInfo> {
@@ -145,6 +169,17 @@ class ProjectStructureScanner {
                 projectProbe.determineClassType(info.simpleName, info.packageName, info.annotations) == ClassType.OTHER
             }
         )
+    }
+
+    private fun extractLayerMap(classInfos: List<ClassInfo>): Map<LayerType, List<ClassInfo>> {
+        val buckets = LayerType.entries.associateWith { mutableListOf<ClassInfo>() }.toMutableMap()
+
+        classInfos.forEach { info ->
+            val layer = ProjectLayerClassifier.classify(info)
+            buckets.getValue(layer).add(info)
+        }
+
+        return buckets.mapValues { it.value.toList() }
     }
 
     private fun extractNamingConventions(classInfos: List<ClassInfo>): NamingConventions {
@@ -187,6 +222,7 @@ class ProjectStructureScanner {
                     name.endsWith("Controller") -> "Controller"
                     name.endsWith("ControllerImpl") -> "ControllerImpl"
                     name.endsWith("Dto") -> "Dto"
+                    name.endsWith("ViewModel") -> "ViewModel"
                     else -> null
                 }
             }

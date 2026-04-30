@@ -2,6 +2,7 @@ package com.example.archassistant.service
 
 import com.example.archassistant.model.*
 import com.example.archassistant.service.templates.*
+import com.example.archassistant.util.PackagePatternBuilder
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
@@ -22,7 +23,7 @@ class RuleTemplateEngine(
     fun suggestRules(structure: ProjectStructure): List<ArchitecturalRule> {
         logger.debug("Generating rule suggestions for project: ${structure.projectId}")
 
-        val detection = architectureDetector.detect(structure)
+        val detection = structure.detection ?: architectureDetector.detect(structure)
         logger.debug(
             "Detected architecture pattern: {}, confidence: {}",
             detection.primaryPattern,
@@ -30,7 +31,6 @@ class RuleTemplateEngine(
         )
 
         val context = buildTemplateContext(structure, detection)
-
         val baselineIds = SpringBaselineRules.all().map { it.id }.toSet()
 
         val primarySuggestions = templates
@@ -48,7 +48,7 @@ class RuleTemplateEngine(
             }
 
         val fallbackSuggestions =
-            if (detection.primaryPattern == ArchitecturePattern.UNKNOWN || detection.confidence < 0.65) {
+            if (detection.primaryPattern == ArchitecturePattern.UNKNOWN || detection.confidence < 0.55) {
                 templates
                     .filter { it.id in baselineIds }
                     .filter { it.isApplicable(context) }
@@ -67,8 +67,11 @@ class RuleTemplateEngine(
 
         val suggestions = (primarySuggestions + fallbackSuggestions)
             .distinctBy { it.id }
-            .sortedByDescending { it.weight }
-            .sortedByDescending { it.severity.ordinal }
+            .sortedWith(
+                compareByDescending<ArchitecturalRule> { it.severity.ordinal }
+                    .thenByDescending { it.weight }
+                    .thenBy { it.id }
+            )
 
         logger.debug("Generated ${suggestions.size} rule suggestions")
         return suggestions
@@ -83,30 +86,14 @@ class RuleTemplateEngine(
     ): TemplateContext {
         val basePackage = findBasePackage(structure.packages)
 
-        val controllerInfos = structure.layers.controllers
-        val serviceInfos = structure.layers.services
-        val repositoryInfos = structure.layers.repositories
-        val entityInfos = structure.layers.entities
-        val dtoInfos = structure.layers.dtos
-        val otherInfos = structure.layers.other
+        val effectiveMap = structure.effectiveLayerMap()
+        val classesByLayer = LayerType.entries.associateWith { layer ->
+            effectiveMap[layer].orEmpty()
+        }
 
-        val classesByLayer = mapOf(
-            LayerType.CONTROLLER to controllerInfos,
-            LayerType.SERVICE to serviceInfos,
-            LayerType.REPOSITORY to repositoryInfos,
-            LayerType.ENTITY to entityInfos,
-            LayerType.DTO to dtoInfos,
-            LayerType.OTHER to otherInfos
-        )
-
-        val layers = mapOf(
-            LayerType.CONTROLLER to buildPackageInfos(controllerInfos),
-            LayerType.SERVICE to buildPackageInfos(serviceInfos),
-            LayerType.REPOSITORY to buildPackageInfos(repositoryInfos),
-            LayerType.ENTITY to buildPackageInfos(entityInfos),
-            LayerType.DTO to buildPackageInfos(dtoInfos),
-            LayerType.OTHER to buildPackageInfos(otherInfos)
-        )
+        val layers = LayerType.entries.associateWith { layer ->
+            buildPackageInfos(effectiveMap[layer].orEmpty())
+        }
 
         val dependencies = structure.dependencies.map { dep ->
             DependencyInfo(
@@ -147,16 +134,16 @@ class RuleTemplateEngine(
      * Поиск базового пакета (общий префикс всех пакетов)
      */
     private fun findBasePackage(packages: List<String>): String {
-        if (packages.isEmpty()) return ""
-        if (packages.size == 1) return packages.first().substringBeforeLast('.', "")
+        val normalized = packages
+            .map { it.trim().trim('.') }
+            .filter { it.isNotBlank() }
+            .distinct()
 
-        var base = packages.first()
-        for (pkg in packages.drop(1)) {
-            while (!pkg.startsWith(base) && base.isNotEmpty()) {
-                base = base.substringBeforeLast('.', "")
-            }
-        }
-        return base
+        if (normalized.isEmpty()) return ""
+        if (normalized.size == 1) return normalized.first().substringBeforeLast('.', "")
+
+        val prefix = PackagePatternBuilder.commonPackagePrefix(normalized)
+        return prefix
     }
 
     companion object {

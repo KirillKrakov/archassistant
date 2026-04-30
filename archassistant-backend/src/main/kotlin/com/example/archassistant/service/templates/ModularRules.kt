@@ -22,8 +22,8 @@ object ModularRules {
         name = "Common module should not depend on feature modules",
         description = "Общий модуль не должен зависеть от функциональных модулей",
         applicablePatterns = setOf(ArchitecturePattern.MODULAR),
-        fromLayer = LayerType.OTHER, // common
-        toLayer = LayerType.OTHER,   // feature
+        fromLayer = LayerType.COMMON,
+        toLayer = LayerType.FEATURE,
         constraint = ConstraintType.NO_DEPENDENCY,
         severity = Severity.ERROR,
         weight = 1.5,
