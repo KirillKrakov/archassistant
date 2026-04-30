@@ -23,14 +23,14 @@ class ProjectStructureScanner {
 
         val classes: JavaClasses = ClassFileImporter().importPath(classesDir)
 
-        val packages = classes
-            .map { it.packageName }
-            .distinct()
+        val classInfos = extractClassInfos(classes)
+        val packages = classInfos.map { it.packageName }.distinct()
 
         val annotations = extractAnnotations(classes)
         val dependencies = extractDependencies(classes)
+        val namingConventions = extractNamingConventions(classInfos)
+        val layers = extractLayerStructure(classInfos)
         val architecturePattern = ArchitecturePattern.fromLayers(packages, annotations)
-        val namingConventions = extractNamingConventions(classes)
 
         logger.info(
             "Project scanned: {} packages, {} annotations, pattern={}",
@@ -41,6 +41,8 @@ class ProjectStructureScanner {
             projectId = projectId,
             architecturePattern = architecturePattern,
             packages = packages,
+            classes = classInfos,
+            layers = layers,
             annotations = annotations,
             dependencies = dependencies,
             namingConventions = namingConventions
@@ -61,20 +63,47 @@ class ProjectStructureScanner {
     }
 
     private fun findClassesDirectory(projectPath: String): Path? {
+        val projectName = Paths.get(projectPath).fileName?.toString()
+            ?: projectPath.substringAfterLast('/')
+
         val possiblePaths = listOf(
             Paths.get(projectPath, "build", "classes", "kotlin", "main"),
             Paths.get(projectPath, "build", "classes", "java", "main"),
             Paths.get(projectPath, "target", "classes"),
-            Paths.get(projectPath, "out", "production", projectPath.substringAfterLast('/'))
+            Paths.get(projectPath, "out", "production", projectName)
         )
 
         return possiblePaths.firstOrNull { Files.exists(it) && Files.isDirectory(it) }
     }
 
+    private fun extractClassInfos(classes: JavaClasses): List<ClassInfo> {
+        return classes.map { javaClass ->
+            val simpleName = javaClass.name.substringAfterLast('.')
+            val annotations = javaClass.annotations
+                .map { annotation -> annotation.type.name.substringAfterLast('.') }
+                .distinct()
+
+            val dependencies = javaClass.directDependenciesFromSelf
+                .map { dep -> dep.targetClass.name }
+                .distinct()
+
+            ClassInfo(
+                fullName = javaClass.name,
+                simpleName = simpleName,
+                packageName = javaClass.packageName,
+                annotations = annotations,
+                dependencies = dependencies,
+                modifiers = emptyList()
+            )
+        }
+    }
+
     private fun extractAnnotations(classes: JavaClasses): Map<String, Int> {
         return classes
             .flatMap { javaClass ->
-                javaClass.annotations.map { annotation -> annotation.type.name }
+                javaClass.annotations.map { annotation ->
+                    annotation.type.name.substringAfterLast('.')
+                }
             }
             .groupingBy { it }
             .eachCount()
@@ -94,22 +123,44 @@ class ProjectStructureScanner {
                     )
                 }
             }
+            .distinctBy { "${it.from}|${it.to}|${it.type}" }
     }
 
-    private fun extractNamingConventions(classes: JavaClasses): NamingConventions {
-        val serviceClasses = classes.filter { javaClass ->
-            javaClass.packageName.contains("service") ||
-                    javaClass.isAnnotatedWith(org.springframework.stereotype.Service::class.java)
+    private fun extractLayerStructure(classInfos: List<ClassInfo>): LayerStructure {
+        val projectProbe = ProjectStructure(projectId = "probe")
+
+        fun byType(type: ClassType): List<ClassInfo> {
+            return classInfos.filter { info ->
+                projectProbe.determineClassType(info.simpleName, info.packageName, info.annotations) == type
+            }
         }
 
-        val repositoryClasses = classes.filter { javaClass ->
-            javaClass.packageName.contains("repository") ||
-                    javaClass.isAnnotatedWith(org.springframework.stereotype.Repository::class.java)
+        return LayerStructure(
+            controllers = byType(ClassType.CONTROLLER),
+            services = byType(ClassType.SERVICE),
+            repositories = byType(ClassType.REPOSITORY),
+            entities = byType(ClassType.ENTITY),
+            dtos = byType(ClassType.DTO),
+            other = classInfos.filter { info ->
+                projectProbe.determineClassType(info.simpleName, info.packageName, info.annotations) == ClassType.OTHER
+            }
+        )
+    }
+
+    private fun extractNamingConventions(classInfos: List<ClassInfo>): NamingConventions {
+        val serviceClasses = classInfos.filter { info ->
+            info.packageName.contains("service", ignoreCase = true) ||
+                    info.annotations.any { it.equals("Service", ignoreCase = true) }
         }
 
-        val controllerClasses = classes.filter { javaClass ->
-            javaClass.packageName.contains("controller") ||
-                    javaClass.isAnnotatedWith(org.springframework.stereotype.Controller::class.java)
+        val repositoryClasses = classInfos.filter { info ->
+            info.packageName.contains("repository", ignoreCase = true) ||
+                    info.annotations.any { it.equals("Repository", ignoreCase = true) }
+        }
+
+        val controllerClasses = classInfos.filter { info ->
+            info.packageName.contains("controller", ignoreCase = true) ||
+                    info.annotations.any { it.equals("Controller", ignoreCase = true) || it.equals("RestController", ignoreCase = true) }
         }
 
         val serviceSuffix = findMostCommonSuffix(serviceClasses, "Service")
@@ -123,7 +174,7 @@ class ProjectStructureScanner {
         )
     }
 
-    private fun findMostCommonSuffix(classes: List<JavaClass>, default: String): String {
+    private fun findMostCommonSuffix(classes: List<ClassInfo>, default: String): String {
         if (classes.isEmpty()) return default
 
         val suffixes = classes
@@ -135,6 +186,7 @@ class ProjectStructureScanner {
                     name.endsWith("Repository") -> "Repository"
                     name.endsWith("Controller") -> "Controller"
                     name.endsWith("ControllerImpl") -> "ControllerImpl"
+                    name.endsWith("Dto") -> "Dto"
                     else -> null
                 }
             }

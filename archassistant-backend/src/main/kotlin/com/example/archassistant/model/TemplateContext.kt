@@ -8,7 +8,9 @@ data class TemplateContext(
     val projectId: String,
     val basePackage: String,
     val architecturePattern: ArchitecturePattern,
+    val detection: ArchitectureDetectionResult? = null,
     val layers: Map<LayerType, List<PackageInfo>>,
+    val classesByLayer: Map<LayerType, List<ClassInfo>> = emptyMap(),
     val annotations: Map<String, Int>,
     val namingConventions: NamingConventions,
     val dependencies: List<DependencyInfo> = emptyList()
@@ -21,10 +23,20 @@ data class TemplateContext(
     }
 
     /**
+     * Получение классов для определённого типа слоя
+     */
+    fun getClassesForLayer(layerType: LayerType): List<ClassInfo> {
+        return classesByLayer[layerType] ?: emptyList()
+    }
+
+    /**
      * Проверка, используется ли определённая аннотация в проекте
      */
     fun usesAnnotation(annotation: String): Boolean {
-        return annotations.containsKey(annotation) && annotations[annotation]!! > 0
+        val normalized = annotation.removePrefix("@")
+        return annotations.entries.any { (key, value) ->
+            value > 0 && key.removePrefix("@").equals(normalized, ignoreCase = true)
+        }
     }
 
     /**

@@ -2,14 +2,16 @@ package com.example.archassistant.service
 
 import com.example.archassistant.config.YamlConfig
 import com.example.archassistant.model.ArchitecturalRule
+import com.example.archassistant.model.RuleSettings
 import com.example.archassistant.model.RulesConfig
+import com.example.archassistant.model.SelectorMode
 import com.example.archassistant.model.ValidationResult
+import com.example.archassistant.model.Violation
+import com.example.archassistant.model.Severity
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.io.File
-import java.nio.file.Files
-import java.nio.file.Path
 import java.nio.file.Paths
 
 /**
@@ -49,11 +51,8 @@ class YamlRuleRepository(
     fun save(config: RulesConfig): Boolean {
         return try {
             val configFile = getConfigFile(config.projectId)
-
-            // Создаём директорию если не существует
             configFile.parentFile?.mkdirs()
 
-            // Записываем YAML
             objectMapper.writerWithDefaultPrettyPrinter()
                 .writeValue(configFile, config)
 
@@ -73,7 +72,7 @@ class YamlRuleRepository(
             projectId = projectId,
             projectType = com.example.archassistant.model.ProjectType.valueOf(projectType),
             rules = emptyList(),
-            settings = com.example.archassistant.model.RuleSettings()
+            settings = RuleSettings()
         )
     }
 
@@ -81,50 +80,68 @@ class YamlRuleRepository(
      * Валидация структуры конфигурации
      */
     fun validate(config: RulesConfig): ValidationResult {
-        val violations = mutableListOf<com.example.archassistant.model.Violation>()
+        val violations = mutableListOf<Violation>()
 
-        // Проверка обязательных полей
         if (config.projectId.isBlank()) {
             violations.add(
-                com.example.archassistant.model.Violation(
+                Violation(
                     ruleId = "config_validation",
                     description = "projectId cannot be empty",
                     className = "RulesConfig",
-                    severity = com.example.archassistant.model.Severity.CRITICAL
+                    severity = Severity.CRITICAL
                 )
             )
         }
 
-        // Проверка правил
         config.rules.forEachIndexed { index, rule ->
             if (rule.id.isBlank()) {
                 violations.add(
-                    com.example.archassistant.model.Violation(
+                    Violation(
                         ruleId = "rule_${index + 1}",
                         description = "Rule ID cannot be empty",
                         className = "ArchitecturalRule",
-                        severity = com.example.archassistant.model.Severity.ERROR
+                        severity = Severity.ERROR
                     )
                 )
             }
 
-            // Проверка wildcard-паттернов
-            if (!isValidWildcardPattern(rule.fromPackage)) {
+            if (rule.fromSelectorMode == SelectorMode.PACKAGE && !isValidWildcardPattern(rule.fromPackage)) {
                 violations.add(
-                    com.example.archassistant.model.Violation(
+                    Violation(
                         ruleId = "rule_${index + 1}",
                         description = "Invalid wildcard pattern in fromPackage: ${rule.fromPackage}",
                         className = "ArchitecturalRule",
-                        severity = com.example.archassistant.model.Severity.WARNING
+                        severity = Severity.WARNING
                     )
                 )
+            }
+
+            if (rule.toSelectorMode == SelectorMode.PACKAGE) {
+                val targets = when {
+                    !rule.toPackages.isNullOrEmpty() -> rule.toPackages
+                    !rule.toPackage.isNullOrBlank() -> listOf(rule.toPackage)
+                    else -> emptyList()
+                }
+
+                targets.forEach { target ->
+                    if (!isValidWildcardPattern(target)) {
+                        violations.add(
+                            Violation(
+                                ruleId = "rule_${index + 1}",
+                                description = "Invalid wildcard pattern in target package: $target",
+                                className = "ArchitecturalRule",
+                                severity = Severity.WARNING
+                            )
+                        )
+                    }
+                }
             }
         }
 
         return if (violations.isEmpty()) {
-            com.example.archassistant.model.ValidationResult.success("Config is valid")
+            ValidationResult.success("Config is valid")
         } else {
-            com.example.archassistant.model.ValidationResult.failure(violations)
+            ValidationResult.failure(violations)
         }
     }
 
@@ -133,7 +150,6 @@ class YamlRuleRepository(
      */
     private fun isValidWildcardPattern(pattern: String): Boolean {
         return try {
-            // Пробуем скомпилировать как regex (упрощённая проверка)
             pattern.toRegexPatternForValidation().toRegex()
             true
         } catch (e: Exception) {
@@ -158,7 +174,6 @@ class YamlRuleRepository(
      * Получение пути к конфигурационному файлу
      */
     private fun getConfigFile(projectId: String): File {
-        // projectId может быть в формате com.example.app или просто app-name
         val safeProjectId = projectId.replace("[^a-zA-Z0-9._-]".toRegex(), "_")
         return Paths.get(configRootPath, safeProjectId, "rules.yml").toFile()
     }

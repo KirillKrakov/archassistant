@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service
  */
 @Service
 class RuleTemplateEngine(
+    private val architectureDetector: ArchitectureDetector,
     private val templates: List<RuleTemplate> = loadDefaultTemplates()
 ) {
 
@@ -17,22 +18,24 @@ class RuleTemplateEngine(
 
     /**
      * Генерация предложений правил для проекта
-     * @param structure Структура проекта (из сканирования)
-     * @return Список предложенных правил с метаданными
      */
     fun suggestRules(structure: ProjectStructure): List<ArchitecturalRule> {
         logger.debug("Generating rule suggestions for project: ${structure.projectId}")
 
-        // Шаг 1: Определяем архитектурный паттерн
-        val pattern = detectArchitecturePattern(structure)
-        logger.debug("Detected architecture pattern: $pattern")
+        val detection = architectureDetector.detect(structure)
+        logger.debug(
+            "Detected architecture pattern: {}, confidence: {}",
+            detection.primaryPattern,
+            detection.confidence
+        )
 
-        // Шаг 2: Строим контекст для шаблонов
-        val context = buildTemplateContext(structure, pattern)
+        val context = buildTemplateContext(structure, detection)
 
-        // Шаг 3: Применяем шаблоны
-        val suggestedRules = templates
-            .filter { it.applicablePatterns.contains(pattern) }
+        val baselineIds = SpringBaselineRules.all().map { it.id }.toSet()
+
+        val primarySuggestions = templates
+            .filter { it.id !in baselineIds }
+            .filter { it.applicablePatterns.contains(detection.primaryPattern) }
             .filter { it.isApplicable(context) }
             .sortedByDescending { it.priority }
             .flatMap { template ->
@@ -44,18 +47,31 @@ class RuleTemplateEngine(
                 }
             }
 
-        logger.debug("Generated ${suggestedRules.size} rule suggestions")
-        return suggestedRules
-    }
+        val fallbackSuggestions =
+            if (detection.primaryPattern == ArchitecturePattern.UNKNOWN || detection.confidence < 0.65) {
+                templates
+                    .filter { it.id in baselineIds }
+                    .filter { it.isApplicable(context) }
+                    .sortedByDescending { it.priority }
+                    .flatMap { template ->
+                        try {
+                            template.generate(context)
+                        } catch (e: Exception) {
+                            logger.warn("Failed to generate fallback rules from template ${template.id}: ${e.message}")
+                            emptyList()
+                        }
+                    }
+            } else {
+                emptyList()
+            }
 
-    /**
-     * Определение архитектурного паттерна по структуре проекта
-     */
-    private fun detectArchitecturePattern(structure: ProjectStructure): ArchitecturePattern {
-        return ArchitecturePattern.fromLayers(
-            structure.packages,
-            structure.annotations
-        )
+        val suggestions = (primarySuggestions + fallbackSuggestions)
+            .distinctBy { it.id }
+            .sortedByDescending { it.weight }
+            .sortedByDescending { it.severity.ordinal }
+
+        logger.debug("Generated ${suggestions.size} rule suggestions")
+        return suggestions
     }
 
     /**
@@ -63,45 +79,68 @@ class RuleTemplateEngine(
      */
     private fun buildTemplateContext(
         structure: ProjectStructure,
-        pattern: ArchitecturePattern
+        detection: ArchitectureDetectionResult
     ): TemplateContext {
-        // Определяем base package (наиболее общий префикс)
         val basePackage = findBasePackage(structure.packages)
 
-        // Группируем пакеты по типам слоёв
-        val layers = structure.packages.associateWith { packageName ->
-            determineLayerType(packageName, structure.annotations, pattern)
-        }.entries.groupBy { it.value }
-            .mapValues { (_, entries) ->
-                entries.map { PackageInfo(
-                    packageName = it.key,
-                    classCount = 0, // Можно дополнить при сканировании
-                    annotations = emptyList(),
-                    dependencies = emptyList()
-                ) }
-            }
+        val controllerInfos = structure.layers.controllers
+        val serviceInfos = structure.layers.services
+        val repositoryInfos = structure.layers.repositories
+        val entityInfos = structure.layers.entities
+        val dtoInfos = structure.layers.dtos
+        val otherInfos = structure.layers.other
+
+        val classesByLayer = mapOf(
+            LayerType.CONTROLLER to controllerInfos,
+            LayerType.SERVICE to serviceInfos,
+            LayerType.REPOSITORY to repositoryInfos,
+            LayerType.ENTITY to entityInfos,
+            LayerType.DTO to dtoInfos,
+            LayerType.OTHER to otherInfos
+        )
+
+        val layers = mapOf(
+            LayerType.CONTROLLER to buildPackageInfos(controllerInfos),
+            LayerType.SERVICE to buildPackageInfos(serviceInfos),
+            LayerType.REPOSITORY to buildPackageInfos(repositoryInfos),
+            LayerType.ENTITY to buildPackageInfos(entityInfos),
+            LayerType.DTO to buildPackageInfos(dtoInfos),
+            LayerType.OTHER to buildPackageInfos(otherInfos)
+        )
+
+        val dependencies = structure.dependencies.map { dep ->
+            DependencyInfo(
+                fromPackage = dep.from.substringBeforeLast('.'),
+                toPackage = dep.to.substringBeforeLast('.'),
+                dependencyType = dep.type
+            )
+        }
 
         return TemplateContext(
             projectId = structure.projectId,
             basePackage = basePackage,
-            architecturePattern = pattern,
+            architecturePattern = detection.primaryPattern,
+            detection = detection,
             layers = layers,
+            classesByLayer = classesByLayer,
             annotations = structure.annotations,
             namingConventions = structure.namingConventions,
-            dependencies = structure.dependencies.map {
-                DependencyInfo(
-                    fromPackage = it.from.substringBeforeLast('.'),
-                    toPackage = it.to.substringBeforeLast('.'),
-                    dependencyType = when (it.type) {
-                        DependencyType.IMPORT -> DependencyType.IMPORT
-                        DependencyType.FIELD -> DependencyType.FIELD
-                        DependencyType.METHOD_PARAM -> DependencyType.METHOD_PARAM
-                        DependencyType.RETURN_TYPE -> DependencyType.RETURN_TYPE
-                        DependencyType.INHERITANCE -> DependencyType.INHERITANCE
-                    }
+            dependencies = dependencies
+        )
+    }
+
+    private fun buildPackageInfos(classes: List<ClassInfo>): List<PackageInfo> {
+        return classes
+            .groupBy { it.packageName }
+            .map { (packageName, infos) ->
+                PackageInfo(
+                    packageName = packageName,
+                    classCount = infos.size,
+                    annotations = infos.flatMap { it.annotations }.distinct(),
+                    dependencies = infos.flatMap { it.dependencies }.distinct()
                 )
             }
-        )
+            .sortedBy { it.packageName }
     }
 
     /**
@@ -120,71 +159,15 @@ class RuleTemplateEngine(
         return base
     }
 
-    /**
-     * Определение типа слоя по имени пакета и аннотациям
-     */
-    private fun determineLayerType(
-        packageName: String,
-        annotations: Map<String, Int>,
-        pattern: ArchitecturePattern
-    ): LayerType {
-        val name = packageName.lowercase()
-
-        return when {
-            // 1. Clean / Hexagonal специфичные (высший приоритет)
-            name.contains("domain") -> LayerType.DOMAIN
-            name.contains("application") -> LayerType.APPLICATION
-            name.contains("infrastructure") -> LayerType.INFRASTRUCTURE
-            name.contains("interface") || name.contains("presentation") -> LayerType.INTERFACE
-            name.contains("port") -> LayerType.PORT
-            name.contains("adapter") -> LayerType.ADAPTER
-
-            // 2. MVVM специфичные
-            name.contains("viewmodel") || name.contains("vm") -> LayerType.VIEWMODEL
-            name.contains("view") || name.contains("fragment") || name.contains("activity") -> LayerType.VIEW
-
-            // 3. Общие по имени пакета (контроллеры, сервисы, репозитории)
-            name.contains("controller") || name.contains("web") || name.contains("api") -> LayerType.CONTROLLER
-            name.contains("service") || name.contains("business") -> LayerType.SERVICE
-            name.contains("repository") || name.contains("dao") || name.contains("data") -> LayerType.REPOSITORY
-            name.contains("entity") || name.contains("model") || name.contains("domain") -> LayerType.ENTITY
-            name.contains("dto") || name.contains("vo") || name.contains("request") -> LayerType.DTO
-
-            // 4. Модульные
-            name.contains("api") && pattern == ArchitecturePattern.MODULAR -> LayerType.API
-            name.contains("impl") && pattern == ArchitecturePattern.MODULAR -> LayerType.IMPL
-
-            // 5. По аннотациям (fallback)
-            annotations.containsKey("@RestController") || annotations.containsKey("@Controller") -> LayerType.CONTROLLER
-            annotations.containsKey("@Service") -> LayerType.SERVICE
-            annotations.containsKey("@Repository") -> LayerType.REPOSITORY
-            annotations.containsKey("@Entity") -> LayerType.ENTITY
-
-            else -> LayerType.OTHER
-        }
-    }
-
-    /**
-     * Загрузка шаблонов по умолчанию
-     * Можно расширять через конфигурацию или SPI
-     */
     companion object {
         fun loadDefaultTemplates(): List<RuleTemplate> {
             return listOf(
-                // Layered Architecture
                 *LayeredArchitectureRules.all().toTypedArray(),
-
-                // Clean Architecture / Hexagonal
                 *CleanArchitectureRules.all().toTypedArray(),
-
-                // Hexagonal
                 *HexagonalRules.all().toTypedArray(),
-
-                // Modular
                 *ModularRules.all().toTypedArray(),
-
-                // MVVM
-                *MvvmArchitectureRules.all().toTypedArray()
+                *MvvmArchitectureRules.all().toTypedArray(),
+                *SpringBaselineRules.all().toTypedArray()
             )
         }
     }

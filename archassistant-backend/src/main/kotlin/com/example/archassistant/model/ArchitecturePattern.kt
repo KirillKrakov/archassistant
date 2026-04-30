@@ -47,37 +47,64 @@ enum class ArchitecturePattern(
 
     companion object {
         fun fromLayers(packages: List<String>, annotations: Map<String, Int>): ArchitecturePattern {
-            // FIXED: используем contains() вместо точного сравнения
             val packageNames = packages.map { it.lowercase() }
-            val annotationNames = annotations.keys.map { it.lowercase() }
+            val annotationNames = annotations.keys.map { it.removePrefix("@").lowercase() }
 
-            fun hasPackageKeyword(vararg keywords: String): Boolean {
-                return packageNames.any { pkg ->
-                    keywords.any { keyword -> pkg.contains(keyword) }
+            fun packageScore(keywords: List<String>): Double =
+                keywords.count { keyword -> packageNames.any { it.contains(keyword.lowercase()) } }.toDouble()
+
+            fun annotationScore(keywords: List<String>): Double =
+                keywords.count { keyword ->
+                    val k = keyword.removePrefix("@").lowercase()
+                    annotationNames.any { it.contains(k) }
+                }.toDouble()
+
+            val scores = entries
+                .filter { it != UNKNOWN }
+                .associateWith { pattern ->
+                    val pkgScore = packageScore(pattern.keyLayers) * 2.0
+                    val annScore = annotationScore(pattern.typicalAnnotations) * 1.5
+
+                    val extra = when (pattern) {
+                        LAYERED -> {
+                            if (
+                                annotationNames.any { it.contains("controller") } &&
+                                annotationNames.any { it.contains("service") } &&
+                                annotationNames.any { it.contains("repository") }
+                            ) 3.0 else 0.0
+                        }
+                        CLEAN_ARCHITECTURE -> {
+                            if (
+                                packageNames.any { it.contains("domain") } &&
+                                packageNames.any { it.contains("application") }
+                            ) 2.0 else 0.0
+                        }
+                        HEXAGONAL -> {
+                            if (
+                                packageNames.any { it.contains("port") } ||
+                                packageNames.any { it.contains("adapter") }
+                            ) 2.0 else 0.0
+                        }
+                        MVVM -> {
+                            if (
+                                packageNames.any { it.contains("viewmodel") } ||
+                                annotationNames.any { it.contains("livedata") }
+                            ) 2.0 else 0.0
+                        }
+                        MODULAR -> {
+                            if (
+                                packageNames.any { it.contains("feature") } ||
+                                packageNames.any { it.contains("impl") }
+                            ) 1.5 else 0.0
+                        }
+                        UNKNOWN -> 0.0
+                    }
+
+                    pkgScore + annScore + extra
                 }
-            }
 
-            return when {
-                // Clean / Hexagonal
-                hasPackageKeyword("domain", "application", "infrastructure") &&
-                        annotationNames.any { it.contains("entity") } -> CLEAN_ARCHITECTURE
-
-                // Layered (Spring Boot style)
-                hasPackageKeyword("controller", "service", "repository") &&
-                        annotationNames.any { it.contains("restcontroller") || it.contains("service") } -> LAYERED
-
-                // MVVM (Android)
-                hasPackageKeyword("viewmodel", "view", "fragment") ||
-                        annotationNames.any { it.contains("viewmodel") || it.contains("livedata") } -> MVVM
-
-                // Hexagonal (ports/adapters)
-                hasPackageKeyword("port", "adapter", "spi") -> HEXAGONAL
-
-                // Modular
-                hasPackageKeyword("api", "impl", "feature") -> MODULAR
-
-                else -> UNKNOWN
-            }
+            val best = scores.maxByOrNull { it.value } ?: return UNKNOWN
+            return if (best.value <= 0.0) UNKNOWN else best.key
         }
     }
 }

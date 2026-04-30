@@ -8,6 +8,7 @@ data class ProjectStructure(
     val projectId: String,
     val architecturePattern: ArchitecturePattern? = null,
     val packages: List<String> = emptyList(),
+    val classes: List<ClassInfo> = emptyList(),
     val layers: LayerStructure = LayerStructure(),
     val annotations: Map<String, Int> = emptyMap(),
     val dependencies: List<Dependency> = emptyList(),
@@ -19,19 +20,38 @@ data class ProjectStructure(
      * Определение типа класса по аннотациям и расположению
      */
     fun determineClassType(className: String, packageName: String): ClassType {
+        val pkg = packageName.lowercase()
+        val simple = className.lowercase()
+
         return when {
-            // Сначала проверяем по пакету (более надёжный признак)
-            packageName.contains("controller") -> ClassType.CONTROLLER
-            packageName.contains("service") -> ClassType.SERVICE
-            packageName.contains("repository") || packageName.contains("dao") -> ClassType.REPOSITORY
-            packageName.contains("entity") || packageName.contains("model") -> ClassType.ENTITY
-            packageName.contains("dto") || packageName.contains("vo") -> ClassType.DTO
-            // Затем по имени класса (суффиксы)
-            className.endsWith("Controller") -> ClassType.CONTROLLER
-            className.endsWith("Service") -> ClassType.SERVICE
-            className.endsWith("Repository") -> ClassType.REPOSITORY
-            className.endsWith("Entity") -> ClassType.ENTITY
-            className.endsWith("Dto") -> ClassType.DTO
+            pkg.contains("controller") ||
+                    simple.endsWith("controller") ->
+                ClassType.CONTROLLER
+
+            pkg.contains("service") ||
+                    simple.endsWith("service") ||
+                    simple.endsWith("usecase") ||
+                    simple.endsWith("interactor") ->
+                ClassType.SERVICE
+
+            pkg.contains("repository") ||
+                    pkg.contains("dao") ||
+                    simple.endsWith("repository") ||
+                    simple.endsWith("dao") ->
+                ClassType.REPOSITORY
+
+            pkg.contains("entity") ||
+                    pkg.contains("model") ||
+                    simple.endsWith("entity") ->
+                ClassType.ENTITY
+
+            pkg.contains("dto") ||
+                    pkg.contains("vo") ||
+                    pkg.contains("request") ||
+                    pkg.contains("response") ||
+                    simple.endsWith("dto") ->
+                ClassType.DTO
+
             else -> ClassType.OTHER
         }
     }
@@ -44,21 +64,21 @@ data class ProjectStructure(
         packageName: String,
         classAnnotations: List<String> = emptyList()
     ): ClassType {
-        // Сначала проверяем аннотации конкретного класса
-        if ("@RestController" in classAnnotations || "@Controller" in classAnnotations) {
+        val annotations = classAnnotations.map { it.removePrefix("@").lowercase() }
+
+        if (annotations.any { it == "restcontroller" || it == "controller" }) {
             return ClassType.CONTROLLER
         }
-        if ("@Service" in classAnnotations) {
+        if (annotations.any { it == "service" }) {
             return ClassType.SERVICE
         }
-        if ("@Repository" in classAnnotations) {
+        if (annotations.any { it == "repository" }) {
             return ClassType.REPOSITORY
         }
-        if ("@Entity" in classAnnotations || "@Table" in classAnnotations) {
+        if (annotations.any { it == "entity" || it == "table" }) {
             return ClassType.ENTITY
         }
 
-        // Fallback на имя пакета/класса
         return determineClassType(className, packageName)
     }
 
@@ -66,7 +86,10 @@ data class ProjectStructure(
      * Проверка, использует ли проект определённую аннотацию
      */
     fun usesAnnotation(annotation: String): Boolean {
-        return annotations.containsKey(annotation) && annotations[annotation]!! > 0
+        val normalized = annotation.removePrefix("@")
+        return annotations.entries.any { (key, value) ->
+            value > 0 && key.removePrefix("@").equals(normalized, ignoreCase = true)
+        }
     }
 
     /**
@@ -77,7 +100,7 @@ data class ProjectStructure(
             ClassType.CONTROLLER -> "Controller"
             ClassType.SERVICE -> "Service"
             ClassType.REPOSITORY -> "Repository"
-            ClassType.ENTITY -> ""  // Entity могут иметь любые имена
+            ClassType.ENTITY -> ""
             ClassType.DTO -> "Dto"
             ClassType.OTHER -> ""
         }
@@ -105,7 +128,7 @@ data class ClassInfo(
     val packageName: String,
     val annotations: List<String> = emptyList(),
     val dependencies: List<String> = emptyList(),
-    val modifiers: List<String> = emptyList()  // public, abstract, final, etc.
+    val modifiers: List<String> = emptyList()
 )
 
 /**
@@ -124,17 +147,17 @@ enum class ClassType {
  * Зависимость между классами
  */
 data class Dependency(
-    val from: String,      // FullName класса-источника
-    val to: String,        // FullName класса-цели
+    val from: String,
+    val to: String,
     val type: DependencyType = DependencyType.IMPORT
 )
 
 enum class DependencyType {
-    IMPORT,        // Прямой импорт
-    FIELD,         // Поле типа
-    METHOD_PARAM,  // Параметр метода
-    RETURN_TYPE,   // Тип возвращаемого значения
-    INHERITANCE    // Наследование/имплементация
+    IMPORT,
+    FIELD,
+    METHOD_PARAM,
+    RETURN_TYPE,
+    INHERITANCE
 }
 
 /**
@@ -146,5 +169,5 @@ data class NamingConventions(
     val controllerSuffix: String = "Controller",
     val dtoSuffix: String = "Dto",
     val packagePrefix: String = "",
-    val compliance: Map<String, Double> = emptyMap()  // % соответствия по типу
+    val compliance: Map<String, Double> = emptyMap()
 )

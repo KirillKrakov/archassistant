@@ -5,6 +5,15 @@ import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.annotation.JsonValue
 
 /**
+ * Режим выбора классов/пакетов для правила
+ */
+enum class SelectorMode {
+    PACKAGE,
+    CLASS_TYPE,
+    ANNOTATION
+}
+
+/**
  * Декларативное описание архитектурного правила
  * Хранится в YAML-конфиге и используется для валидации через ArchUnit
  */
@@ -39,6 +48,18 @@ data class ArchitecturalRule(
     @JsonProperty("annotation")
     val annotation: String? = null,
 
+    @JsonProperty("from_selector_mode")
+    val fromSelectorMode: SelectorMode = SelectorMode.PACKAGE,
+
+    @JsonProperty("to_selector_mode")
+    val toSelectorMode: SelectorMode = SelectorMode.PACKAGE,
+
+    @JsonProperty("from_class_type")
+    val fromClassType: ClassType? = null,
+
+    @JsonProperty("to_class_type")
+    val toClassType: ClassType? = null,
+
     @JsonProperty("severity")
     val severity: Severity = Severity.WARNING,
 
@@ -52,9 +73,13 @@ data class ArchitecturalRule(
     val suggested: Boolean = false
 ) {
     /**
-     * Проверка, применимо ли правило к данному пакету
+     * Проверка, применимо ли правило к данному пакету.
+     * Для class-level / annotation-level правил возвращаем true,
+     * потому что они не завязаны на package selector.
      */
     fun appliesToPackage(packageName: String): Boolean {
+        if (fromSelectorMode != SelectorMode.PACKAGE) return true
+
         val regex = fromPackage.toRegexPattern().toRegex()
         return regex.matches(packageName)
     }
@@ -77,11 +102,11 @@ data class ArchitecturalRule(
  * Тип архитектурного правила
  */
 enum class RuleType {
-    DEPENDENCY,           // Зависимости между пакетами
-    NAMING_CONVENTION,    // Именование классов/пакетов
-    ANNOTATION_CHECK,     // Наличие/отсутствие аннотаций
-    LAYER_ISOLATION,      // Изоляция слоёв
-    CUSTOM;               // Пользовательское правило
+    DEPENDENCY,
+    NAMING_CONVENTION,
+    ANNOTATION_CHECK,
+    LAYER_ISOLATION,
+    CUSTOM;
 
     companion object {
         @JvmStatic
@@ -100,13 +125,13 @@ enum class RuleType {
  * Тип ограничения в правиле
  */
 enum class ConstraintType {
-    NO_DEPENDENCY,        // Запрет зависимостей
-    MUST_DEPEND,          // Обязательная зависимость
-    NAMING_SUFFIX,        // Требуемый суффикс имени
-    NAMING_PREFIX,        // Требуемый префикс имени
-    HAS_ANNOTATION,       // Требуемая аннотация
-    NO_ANNOTATION,        // Запрещённая аннотация
-    CUSTOM;               // Пользовательское ограничение
+    NO_DEPENDENCY,
+    MUST_DEPEND,
+    NAMING_SUFFIX,
+    NAMING_PREFIX,
+    HAS_ANNOTATION,
+    NO_ANNOTATION,
+    CUSTOM;
 
     companion object {
         @JvmStatic
