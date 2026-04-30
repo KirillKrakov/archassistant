@@ -36,3 +36,16 @@ enum class ArchitecturePattern(
         typicalAnnotations = emptyList()
     )
 }
+
+fun ProjectProfile.toArchitecturePattern(): ArchitecturePattern? {
+    return when (this) {
+        ProjectProfile.SPRING_LAYERED,
+        ProjectProfile.SPRING_FEATURED -> ArchitecturePattern.LAYERED
+
+        ProjectProfile.CLEAN -> ArchitecturePattern.CLEAN_ARCHITECTURE
+        ProjectProfile.HEXAGONAL -> ArchitecturePattern.HEXAGONAL
+        ProjectProfile.MVVM -> ArchitecturePattern.MVVM
+        ProjectProfile.MODULAR -> ArchitecturePattern.MODULAR
+        ProjectProfile.UNKNOWN -> ArchitecturePattern.UNKNOWN
+    }
+}

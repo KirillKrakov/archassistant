@@ -5,7 +5,7 @@ import java.time.LocalDateTime
 data class ProjectStructure(
     val projectId: String,
     val architecturePattern: ArchitecturePattern? = null, // только для совместимости
-    val detection: ArchitectureDetectionResult? = null,
+    val detection: ProjectProfileDetection? = null,
     val packages: List<String> = emptyList(),
     val classes: List<ClassInfo> = emptyList(),
     val layers: LayerStructure = LayerStructure(),

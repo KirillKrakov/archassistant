@@ -45,14 +45,10 @@ class ProjectStructureScanner(
         )
 
         val detection = architectureDetector.detect(provisional)
-
-        logger.info(
-            "Project scanned: {} packages, {} annotations, pattern={}",
-            packages.size, annotations.size, detection.primaryPattern
-        )
+        val architecturePattern = detection.primaryProfile.toArchitecturePattern()
 
         return provisional.copy(
-            architecturePattern = detection.primaryPattern,
+            architecturePattern = architecturePattern,
             detection = detection
         )
     }

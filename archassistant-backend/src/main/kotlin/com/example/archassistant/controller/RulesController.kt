@@ -2,9 +2,8 @@ package com.example.archassistant.controller
 
 import com.example.archassistant.model.ArchitecturalRule
 import com.example.archassistant.model.RulesConfig
-import com.example.archassistant.service.ProjectStructureScanner
-import com.example.archassistant.service.RuleTemplateEngine
-import com.example.archassistant.service.YamlRuleRepository
+import com.example.archassistant.model.toArchitecturePattern
+import com.example.archassistant.service.*
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
@@ -24,7 +23,8 @@ import org.springframework.web.bind.annotation.*
 class RulesController(
     private val ruleRepository: YamlRuleRepository,
     private val templateEngine: RuleTemplateEngine,
-    private val projectScanner: ProjectStructureScanner
+    private val projectScanner: ProjectStructureScanner,
+    private val workspaceProjectScanner: WorkspaceProjectScanner
 ) {
 
     private val logger = LoggerFactory.getLogger(RulesController::class.java)
@@ -114,7 +114,7 @@ class RulesController(
             logger.info(
                 "Generated {} rule suggestions for pattern: {}",
                 suggestions.size,
-                structure.detection?.primaryPattern ?: structure.architecturePattern
+                structure.detection?.primaryProfile?.toArchitecturePattern() ?: structure.architecturePattern
             )
 
             ResponseEntity.ok(suggestions)
@@ -123,6 +123,26 @@ class RulesController(
             ResponseEntity.badRequest().body(emptyList())
         } catch (e: Exception) {
             logger.error("Failed to generate rule suggestions: ${e.message}", e)
+            ResponseEntity.internalServerError().body(emptyList())
+        }
+    }
+
+    @GetMapping("/{projectId}/suggest/workspace")
+    fun suggestWorkspaceRules(
+        @PathVariable projectId: String,
+        @RequestParam workspacePath: String
+    ): ResponseEntity<List<WorkspaceModuleSuggestions>> {
+        logger.info("Generating workspace rule suggestions for project: {}, path: {}", projectId, workspacePath)
+
+        return try {
+            ResponseEntity.ok(
+                workspaceProjectScanner.scanWorkspace(workspacePath, projectId)
+            )
+        } catch (e: IllegalArgumentException) {
+            logger.error("Invalid workspace path: ${e.message}")
+            ResponseEntity.badRequest().body(emptyList())
+        } catch (e: Exception) {
+            logger.error("Failed to generate workspace rule suggestions: ${e.message}", e)
             ResponseEntity.internalServerError().body(emptyList())
         }
     }

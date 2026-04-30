@@ -22,7 +22,7 @@ object ArchUnitRuleBuilder {
         val fromPredicate = predicateFor(rule, isFrom = true)
         val toPredicate = predicateFor(rule, isFrom = false)
 
-        val base = when (rule.constraint) {
+        return when (rule.constraint) {
             ConstraintType.NO_DEPENDENCY ->
                 ArchRuleDefinition.noClasses().that(fromPredicate).should().dependOnClassesThat(toPredicate)
 
@@ -30,9 +30,7 @@ object ArchUnitRuleBuilder {
                 ArchRuleDefinition.classes().that(fromPredicate).should().dependOnClassesThat(toPredicate)
 
             else -> throw UnsupportedOperationException("Constraint ${rule.constraint} not supported for DEPENDENCY rules")
-        }
-
-        return base.because(rule.description ?: rule.name)
+        }.because(rule.description ?: rule.name)
     }
 
     private fun buildNamingRule(rule: ArchitecturalRule): ArchRule {
@@ -71,62 +69,42 @@ object ArchUnitRuleBuilder {
 
     private fun predicateFor(rule: ArchitecturalRule, isFrom: Boolean): DescribedPredicate<JavaClass> {
         val mode = if (isFrom) rule.fromSelectorMode else rule.toSelectorMode
-        return when (mode) {
-            SelectorMode.PACKAGE -> {
-                val patterns = if (isFrom) {
-                    listOf(rule.fromPackage)
-                } else {
-                    when {
-                        !rule.toPackages.isNullOrEmpty() -> rule.toPackages
-                        !rule.toPackage.isNullOrBlank() -> listOf(rule.toPackage)
-                        else -> listOf(rule.fromPackage)
-                    }
-                }
-                packagePredicate(patterns)
+        val packagePattern = if (isFrom) {
+            rule.fromPackage
+        } else {
+            when {
+                !rule.toPackages.isNullOrEmpty() -> rule.toPackages.first()
+                !rule.toPackage.isNullOrBlank() -> rule.toPackage
+                else -> rule.fromPackage
             }
+        }
 
-            SelectorMode.CLASS_TYPE -> {
-                val type = if (isFrom) rule.fromClassType else rule.toClassType
-                classTypePredicate(type)
-            }
+        val packagePredicate = if (packagePattern.isNotBlank()) {
+            packagePredicate(packagePattern)
+        } else {
+            null
+        }
 
-            SelectorMode.LAYER -> {
-                val type = if (isFrom) rule.fromLayerType else rule.toLayerType
-                layerPredicate(type)
-            }
-
+        val modePredicate = when (mode) {
+            SelectorMode.PACKAGE -> null
+            SelectorMode.CLASS_TYPE -> classTypePredicate(if (isFrom) rule.fromClassType else rule.toClassType)
+            SelectorMode.LAYER -> layerPredicate(if (isFrom) rule.fromLayerType else rule.toLayerType)
             SelectorMode.ANNOTATION -> annotationPredicate(rule.annotation)
         }
+
+        return when {
+            packagePredicate != null && modePredicate != null -> and(packagePredicate, modePredicate)
+            packagePredicate != null -> packagePredicate
+            modePredicate != null -> modePredicate
+            else -> alwaysTruePredicate()
+        }
     }
 
-    private fun packagePredicate(patterns: List<String>): DescribedPredicate<JavaClass> {
-        val normalized = patterns.map { it.trim() }.filter { it.isNotBlank() }
-
-        return object : DescribedPredicate<JavaClass>("reside in package pattern '${normalized.joinToString(", ")}'") {
+    private fun packagePredicate(pattern: String): DescribedPredicate<JavaClass> {
+        return object : DescribedPredicate<JavaClass>("reside in package pattern '$pattern'") {
             override fun test(item: JavaClass): Boolean {
-                if (normalized.isEmpty()) return false
-                return normalized.any { PackagePatternBuilder.matches(it, item.packageName) }
+                return PackagePatternBuilder.matches(pattern, item.packageName)
             }
-        }
-    }
-
-    private fun classTypePredicate(type: ClassType?): DescribedPredicate<JavaClass> {
-        val resolved = type ?: return object : DescribedPredicate<JavaClass>("match no class type") {
-            override fun test(item: JavaClass): Boolean = false
-        }
-
-        return object : DescribedPredicate<JavaClass>("match class type '$resolved'") {
-            override fun test(item: JavaClass): Boolean = ProjectLayerClassifier.matchesClassType(item, resolved)
-        }
-    }
-
-    private fun layerPredicate(type: LayerType?): DescribedPredicate<JavaClass> {
-        val resolved = type ?: return object : DescribedPredicate<JavaClass>("match no layer") {
-            override fun test(item: JavaClass): Boolean = false
-        }
-
-        return object : DescribedPredicate<JavaClass>("match layer '$resolved'") {
-            override fun test(item: JavaClass): Boolean = ProjectLayerClassifier.matchesLayer(item, resolved)
         }
     }
 
@@ -139,6 +117,41 @@ object ArchUnitRuleBuilder {
                     ann.type.name.substringAfterLast('.').lowercase() == normalized
                 }
             }
+        }
+    }
+
+    private fun classTypePredicate(type: ClassType?): DescribedPredicate<JavaClass> {
+        val resolved = type ?: return neverPredicate("match no class type")
+        return object : DescribedPredicate<JavaClass>("match class type '$resolved'") {
+            override fun test(item: JavaClass): Boolean = ProjectLayerClassifier.matchesClassType(item, resolved)
+        }
+    }
+
+    private fun layerPredicate(type: LayerType?): DescribedPredicate<JavaClass> {
+        val resolved = type ?: return neverPredicate("match no layer")
+        return object : DescribedPredicate<JavaClass>("match layer '$resolved'") {
+            override fun test(item: JavaClass): Boolean = ProjectLayerClassifier.matchesLayer(item, resolved)
+        }
+    }
+
+    private fun and(
+        left: DescribedPredicate<JavaClass>,
+        right: DescribedPredicate<JavaClass>
+    ): DescribedPredicate<JavaClass> {
+        return object : DescribedPredicate<JavaClass>("(${left.description}) and (${right.description})") {
+            override fun test(item: JavaClass): Boolean = left.test(item) && right.test(item)
+        }
+    }
+
+    private fun alwaysTruePredicate(): DescribedPredicate<JavaClass> {
+        return object : DescribedPredicate<JavaClass>("always true") {
+            override fun test(item: JavaClass): Boolean = true
+        }
+    }
+
+    private fun neverPredicate(description: String): DescribedPredicate<JavaClass> {
+        return object : DescribedPredicate<JavaClass>(description) {
+            override fun test(item: JavaClass): Boolean = false
         }
     }
 }

@@ -6,187 +6,167 @@ import org.springframework.stereotype.Service
 @Service
 class ArchitectureDetector {
 
-    fun detect(structure: ProjectStructure): ArchitectureDetectionResult {
-        val scores = ArchitecturePattern.entries
-            .filter { it != ArchitecturePattern.UNKNOWN }
-            .associateWith { pattern -> scorePattern(pattern, structure) }
+    fun detect(structure: ProjectStructure): ProjectProfileDetection {
+        val index = PackageScopeIndex.from(structure)
 
-        val sorted = scores.entries.sortedByDescending { it.value }
-        val top = sorted.firstOrNull()
+        val scores = mapOf(
+            ProjectProfile.MVVM to scoreMvvm(index),
+            ProjectProfile.HEXAGONAL to scoreHexagonal(index),
+            ProjectProfile.CLEAN to scoreClean(index),
+            ProjectProfile.MODULAR to scoreModular(index),
+            ProjectProfile.SPRING_FEATURED to scoreSpringFeatured(index),
+            ProjectProfile.SPRING_LAYERED to scoreSpringLayered(index)
+        )
 
+        val ranked = scores.entries
+            .sortedWith(
+                compareByDescending<Map.Entry<ProjectProfile, Double>> { it.value }
+                    .thenByDescending { priority(it.key) }
+            )
+
+        val top = ranked.firstOrNull()
         if (top == null || top.value <= 0.0) {
-            return ArchitectureDetectionResult(
-                primaryPattern = ArchitecturePattern.UNKNOWN,
+            return ProjectProfileDetection(
+                primaryProfile = ProjectProfile.UNKNOWN,
                 confidence = 0.0,
                 scores = scores,
                 reasons = listOf("No strong architectural signals found"),
-                candidatePatterns = emptyList(),
+                candidateProfiles = emptyList(),
                 isConfident = false
             )
         }
 
-        val second = sorted.getOrNull(1)?.value ?: 0.0
+        val second = ranked.getOrNull(1)?.value ?: 0.0
         val total = scores.values.sum().coerceAtLeast(1.0)
         val confidence = (top.value / total).coerceIn(0.0, 1.0)
-        val confident = top.value >= 4.0 && (top.value - second) >= 1.0
+        val confident = top.value >= 5.0 && (top.value - second) >= 1.5
 
-        return ArchitectureDetectionResult(
-            primaryPattern = top.key,
+        return ProjectProfileDetection(
+            primaryProfile = top.key,
             confidence = confidence,
             scores = scores,
-            reasons = buildReasons(top.key, structure),
-            candidatePatterns = sorted.take(3).map { it.key },
+            reasons = buildReasons(top.key, index),
+            candidateProfiles = ranked.take(3).map { it.key },
             isConfident = confident
         )
     }
 
-    private fun scorePattern(pattern: ArchitecturePattern, structure: ProjectStructure): Double {
-        val packageNames = structure.packages.map { it.lowercase() }.toSet()
-        val annotationNames = structure.annotations.keys.map { it.removePrefix("@").lowercase() }.toSet()
-        val layerMap = structure.effectiveLayerMap()
+    private fun scoreSpringLayered(index: PackageScopeIndex): Double {
+        if (!index.isSpringLike()) return 0.0
 
-        fun packageHits(keywords: List<String>): Int {
-            return keywords.count { keyword ->
-                packageNames.any { it.contains(keyword.lowercase()) }
-            }
-        }
+        val controller = index.countLayer(LayerType.CONTROLLER)
+        val service = index.countLayer(LayerType.SERVICE)
+        val repository = index.countLayer(LayerType.REPOSITORY)
 
-        fun annotationHits(keywords: List<String>): Int {
-            return keywords.count { keyword ->
-                val k = keyword.removePrefix("@").lowercase()
-                annotationNames.any { it.contains(k) }
-            }
-        }
-
-        fun layerCount(type: LayerType): Int = layerMap[type].orEmpty().size
-
-        val pkgScore = packageHits(pattern.keyLayers) * when (pattern) {
-            ArchitecturePattern.LAYERED -> 2.4
-            ArchitecturePattern.CLEAN_ARCHITECTURE -> 2.2
-            ArchitecturePattern.HEXAGONAL -> 2.2
-            ArchitecturePattern.MVVM -> 2.0
-            ArchitecturePattern.MODULAR -> 2.0
-            ArchitecturePattern.UNKNOWN -> 1.0
-        }
-
-        val annScore = annotationHits(pattern.typicalAnnotations) * 1.3
-
-        val classScore = when (pattern) {
-            ArchitecturePattern.LAYERED -> layerCount(LayerType.CONTROLLER) +
-                    layerCount(LayerType.SERVICE) +
-                    layerCount(LayerType.REPOSITORY) +
-                    layerCount(LayerType.ENTITY)
-
-            ArchitecturePattern.CLEAN_ARCHITECTURE -> layerCount(LayerType.DOMAIN) +
-                    layerCount(LayerType.APPLICATION) +
-                    layerCount(LayerType.INFRASTRUCTURE) +
-                    layerCount(LayerType.INTERFACE)
-
-            ArchitecturePattern.HEXAGONAL -> layerCount(LayerType.DOMAIN) +
-                    layerCount(LayerType.APPLICATION) +
-                    layerCount(LayerType.PORT) +
-                    layerCount(LayerType.ADAPTER)
-
-            ArchitecturePattern.MVVM -> layerCount(LayerType.VIEW) +
-                    layerCount(LayerType.VIEWMODEL)
-
-            ArchitecturePattern.MODULAR -> layerCount(LayerType.API) +
-                    layerCount(LayerType.IMPL) +
-                    layerCount(LayerType.COMMON) +
-                    layerCount(LayerType.FEATURE)
-
-            ArchitecturePattern.UNKNOWN -> 0
-        }.toDouble() * 1.1
-
-        val dependencyBonus = when (pattern) {
-            ArchitecturePattern.LAYERED -> {
-                val controllers = layerMap[LayerType.CONTROLLER].orEmpty().map { it.fullName }.toSet()
-                val services = layerMap[LayerType.SERVICE].orEmpty().map { it.fullName }.toSet()
-                val repositories = layerMap[LayerType.REPOSITORY].orEmpty().map { it.fullName }.toSet()
-
-                val hasControllerToService = structure.dependencies.any { dep ->
-                    dep.from in controllers && dep.to in services
-                }
-                val hasServiceToRepository = structure.dependencies.any { dep ->
-                    dep.from in services && dep.to in repositories
-                }
-
-                (if (hasControllerToService) 1.2 else 0.0) + (if (hasServiceToRepository) 1.2 else 0.0)
-            }
-
-            else -> 0.0
-        }
-
-        val extra = when (pattern) {
-            ArchitecturePattern.LAYERED -> {
-                if (
-                    packageNames.any { it.contains("controller") } ||
-                    packageNames.any { it.contains("service") } ||
-                    packageNames.any { it.contains("repository") }
-                ) 1.5 else 0.0
-            }
-
-            ArchitecturePattern.CLEAN_ARCHITECTURE -> {
-                if (packageNames.any { it.contains("domain") } && packageNames.any { it.contains("application") }) 1.5 else 0.0
-            }
-
-            ArchitecturePattern.HEXAGONAL -> {
-                if (packageNames.any { it.contains("port") } || packageNames.any { it.contains("adapter") }) 1.5 else 0.0
-            }
-
-            ArchitecturePattern.MVVM -> {
-                if (packageNames.any { it.contains("viewmodel") } || packageNames.any { it.contains("view") }) 1.5 else 0.0
-            }
-
-            ArchitecturePattern.MODULAR -> {
-                if (
-                    packageNames.any { it.contains("feature") } ||
-                    packageNames.any { it.contains("api") } ||
-                    packageNames.any { it.contains("impl") }
-                ) 1.0 else 0.0
-            }
-
-            ArchitecturePattern.UNKNOWN -> 0.0
-        }
-
-        return pkgScore + annScore + classScore + dependencyBonus + extra
+        return 7.0 +
+                (controller * 1.2) +
+                (service * 1.2) +
+                (repository * 1.2) +
+                if (index.hasAnyPackageKeyword("controller", "service", "repository")) 1.5 else 0.0
     }
 
-    private fun buildReasons(pattern: ArchitecturePattern, structure: ProjectStructure): List<String> {
-        val reasons = mutableListOf<String>()
-        val layerMap = structure.effectiveLayerMap()
+    private fun scoreSpringFeatured(index: PackageScopeIndex): Double {
+        val roots = index.springFeatureRoots()
+        if (!index.isSpringLike() || roots.isEmpty()) return 0.0
 
-        when (pattern) {
-            ArchitecturePattern.LAYERED -> {
-                if (layerMap[LayerType.CONTROLLER].orEmpty().isNotEmpty()) reasons += "Found controller classes"
-                if (layerMap[LayerType.SERVICE].orEmpty().isNotEmpty()) reasons += "Found service classes"
-                if (layerMap[LayerType.REPOSITORY].orEmpty().isNotEmpty()) reasons += "Found repository classes"
-            }
+        return 8.5 +
+                (roots.size * 1.5) +
+                if (roots.size >= 2) 2.0 else 0.0
+    }
 
-            ArchitecturePattern.CLEAN_ARCHITECTURE -> {
-                if (structure.packages.any { it.contains("domain", ignoreCase = true) }) reasons += "Found domain packages"
-                if (structure.packages.any { it.contains("application", ignoreCase = true) }) reasons += "Found application packages"
-            }
+    private fun scoreClean(index: PackageScopeIndex): Double {
+        val hasCleanPackages = index.hasAnyPackageKeyword("domain", "application", "infrastructure", "interface", "core")
+        if (!hasCleanPackages) return 0.0
 
-            ArchitecturePattern.HEXAGONAL -> {
-                if (structure.packages.any { it.contains("port", ignoreCase = true) }) reasons += "Found port packages"
-                if (structure.packages.any { it.contains("adapter", ignoreCase = true) }) reasons += "Found adapter packages"
-            }
+        val domain = index.hasAnyPackageKeyword("domain", "core")
+        val application = index.hasAnyPackageKeyword("application")
+        val infra = index.hasAnyPackageKeyword("infrastructure")
+        val iface = index.hasAnyPackageKeyword("interface", "presentation")
 
-            ArchitecturePattern.MVVM -> {
-                if (structure.packages.any { it.contains("viewmodel", ignoreCase = true) }) reasons += "Found viewmodel packages"
-                if (structure.packages.any { it.contains("view", ignoreCase = true) || it.contains("ui", ignoreCase = true) }) reasons += "Found view/ui packages"
-            }
+        return 8.8 +
+                if (domain) 1.5 else 0.0 +
+                        if (application) 1.5 else 0.0 +
+                                if (infra) 1.5 else 0.0 +
+                                        if (iface) 1.0 else 0.0
+    }
 
-            ArchitecturePattern.MODULAR -> {
-                if (structure.packages.any { it.contains("feature", ignoreCase = true) }) reasons += "Found feature packages"
-                if (structure.packages.any { it.contains("api", ignoreCase = true) }) reasons += "Found api packages"
-            }
+    private fun scoreHexagonal(index: PackageScopeIndex): Double {
+        val portLike = index.hasAnyPackageKeyword("port", "ports", "gateway", "spi", "contract")
+        val adapterLike = index.hasAnyPackageKeyword("adapter", "adapters", "impl", "implementation")
+        val hasCore = index.hasAnyPackageKeyword("domain", "application")
 
-            ArchitecturePattern.UNKNOWN -> reasons += "No confident pattern evidence"
+        if (!hasCore || (!portLike && !adapterLike)) return 0.0
+
+        return 9.2 +
+                if (portLike) 2.0 else 0.0 +
+                        if (adapterLike) 2.0 else 0.0 +
+                                if (index.hasAnyPackageKeyword("domain", "application")) 1.0 else 0.0
+    }
+
+    private fun scoreModular(index: PackageScopeIndex): Double {
+        val roots = index.featureRoots
+        val modularSignals = index.hasAnyPackageKeyword("api", "impl", "common", "shared", "module", "feature")
+        if (!modularSignals || roots.size < 2) return 0.0
+
+        return 8.3 +
+                (roots.size * 1.0) +
+                if (index.hasAnyPackageKeyword("api")) 0.7 else 0.0 +
+                        if (index.hasAnyPackageKeyword("impl")) 0.7 else 0.0 +
+                                if (index.hasAnyPackageKeyword("common", "shared")) 0.7 else 0.0
+    }
+
+    private fun scoreMvvm(index: PackageScopeIndex): Double {
+        val mvvmSignals = index.hasAnyPackageKeyword("viewmodel", "view", "ui", "screen", "fragment", "activity", "compose")
+        if (!mvvmSignals) return 0.0
+
+        return 8.6 +
+                if (index.hasAnyPackageKeyword("viewmodel")) 1.5 else 0.0 +
+                        if (index.hasAnyPackageKeyword("view", "ui", "screen", "fragment", "activity")) 1.2 else 0.0
+    }
+
+    private fun buildReasons(profile: ProjectProfile, index: PackageScopeIndex): List<String> {
+        return when (profile) {
+            ProjectProfile.SPRING_LAYERED -> listOf(
+                "Found controller/service/repository classes",
+                "Packages look Spring-style rather than feature-first"
+            )
+
+            ProjectProfile.SPRING_FEATURED -> listOf(
+                "Found Spring-style layers",
+                "Multiple non-technical feature roots detected: ${index.featureRoots.joinToString(", ")}"
+            )
+
+            ProjectProfile.CLEAN -> listOf(
+                "Found domain/application/infrastructure/interface packages"
+            )
+
+            ProjectProfile.HEXAGONAL -> listOf(
+                "Found port/adapter style packages",
+                "Found core domain/application packages"
+            )
+
+            ProjectProfile.MODULAR -> listOf(
+                "Found multiple feature roots: ${index.featureRoots.joinToString(", ")}",
+                "Found api/impl/common/shared/module signals"
+            )
+
+            ProjectProfile.MVVM -> listOf(
+                "Found view/viewmodel/UI signals"
+            )
+
+            ProjectProfile.UNKNOWN -> listOf("No confident profile evidence")
         }
+    }
 
-        if (reasons.isEmpty()) reasons += "Pattern detected by aggregated package/annotation/class signals"
-        return reasons
+    private fun priority(profile: ProjectProfile): Int {
+        return when (profile) {
+            ProjectProfile.HEXAGONAL -> 6
+            ProjectProfile.CLEAN -> 5
+            ProjectProfile.MODULAR -> 4
+            ProjectProfile.SPRING_FEATURED -> 3
+            ProjectProfile.SPRING_LAYERED -> 2
+            ProjectProfile.MVVM -> 1
+            ProjectProfile.UNKNOWN -> 0
+        }
     }
 }
