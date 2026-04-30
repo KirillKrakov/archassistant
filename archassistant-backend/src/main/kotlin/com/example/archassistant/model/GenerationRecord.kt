@@ -14,14 +14,14 @@ data class GenerationRecord(
     val id: String = java.util.UUID.randomUUID().toString(),
 
     @Column(nullable = false)
-    val projectId: String,
+    val projectId: String = "",
 
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
-    val strategy: StrategyType,
+    val strategy: StrategyType = StrategyType.HYBRID,
 
     @Column(nullable = false)
-    val success: Boolean,
+    val success: Boolean = false,
 
     @Column
     val scoreTotal: Double? = null,

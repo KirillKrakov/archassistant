@@ -54,6 +54,9 @@ dependencies {
     // SpringDoc документация
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0")
 
+    // Поддержка Java 8 date/time в Jackson (для LocalDateTime, Instant, etc.)
+    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.15.3")
+
     // Testing
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")

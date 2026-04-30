@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL Database
   postgres:
@@ -26,9 +24,12 @@ services:
       dockerfile: Dockerfile
     container_name: archassistant-backend
     environment:
-      DB_USERNAME: postgres
-      DB_PASSWORD: postgres
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/archassistant
+      DB_USERNAME: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      GROQ_MODEL: ${GROQ_MODEL}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
     ports:
       - "8080:8080"
     depends_on:
@@ -40,6 +41,9 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    volumes:
+      - C:/Users/Krako/archassistant-tests/spring-petclinic:/test-projects/petclinic:ro
+      - C:/Users/Krako/archassistant-tests/violation-example:/test-projects/violation:ro
 
 volumes:
   postgres_data:
