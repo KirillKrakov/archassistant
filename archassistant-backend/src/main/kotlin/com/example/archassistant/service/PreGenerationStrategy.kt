@@ -4,6 +4,7 @@ import com.example.archassistant.dto.CodeGenerationRequest
 import com.example.archassistant.dto.CodeGenerationResponse
 import com.example.archassistant.dto.GenerationResponseFactory
 import com.example.archassistant.model.*
+import com.example.archassistant.util.CodeCleaner
 import com.example.archassistant.util.PromptFormatter
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -104,7 +105,8 @@ class PreGenerationStrategy(
         }
 
         // Извлекаем сгенерированный код из успешного ответа
-        val generatedCode = result.data!!.code
+        val rawCode = result.data!!.code
+        val generatedCode = CodeCleaner.cleanCode(rawCode)
 
         // Шаг 4: Опциональная валидация (отдельный замер)
         var validationTime: Long = 0

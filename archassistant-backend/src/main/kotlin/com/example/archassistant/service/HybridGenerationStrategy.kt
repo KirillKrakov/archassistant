@@ -4,6 +4,7 @@ import com.example.archassistant.dto.CodeGenerationRequest
 import com.example.archassistant.dto.CodeGenerationResponse
 import com.example.archassistant.dto.GenerationResponseFactory
 import com.example.archassistant.model.*
+import com.example.archassistant.util.CodeCleaner
 import com.example.archassistant.util.ErrorFormatter
 import com.example.archassistant.util.PromptFormatter
 import org.slf4j.LoggerFactory
@@ -100,9 +101,9 @@ class HybridGenerationStrategy(
             logger.debug("Hybrid-Strategy: User prompt (first 200 chars): ${userPrompt.take(200)}")
 
             // 2b. Генерация кода (замер времени)
-            val generatedCode: String
+            val rawCode: String
             val generationTime = measureTimeMillis {
-                generatedCode = try {
+                rawCode = try {
                     llmOrchestrator.generateCodeRaw(
                         systemPrompt = systemPrompt,
                         userPrompt = userPrompt,
@@ -117,6 +118,7 @@ class HybridGenerationStrategy(
                     )
                 }
             }
+            val generatedCode = CodeCleaner.cleanCode(rawCode)
             totalGenerationTime += generationTime
             lastCode = generatedCode
 

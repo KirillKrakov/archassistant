@@ -1,0 +1,62 @@
+package com.example.archassistant.util
+
+import com.example.archassistant.model.GenerationRecord
+import com.example.archassistant.model.Severity
+import org.springframework.stereotype.Component
+import java.time.format.DateTimeFormatter
+
+@Component
+class CsvExporter {
+
+    private val dateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
+
+    /**
+     * Экспорт записей в CSV-формат
+     */
+    fun export(records: List<GenerationRecord>, includeViolations: Boolean): String {
+        val headers = listOf(
+            "id", "projectId", "strategy", "success", "scoreTotal", "scoreRulesPass",
+            "scorePatternMatch", "scoreDependencyCorrect", "iterations", "generationTimeMs",
+            "validationTimeMs", "violationsCount", "createdAt"
+        ) + if (includeViolations) listOf("violations") else emptyList()
+
+        val rows = records.map { record ->
+            val base = listOf(
+                record.id,
+                record.projectId,
+                record.strategy.name,
+                record.success.toString(),
+                record.scoreTotal?.toString() ?: "",
+                record.scoreRulesPass?.toString() ?: "",
+                record.scorePatternMatch?.toString() ?: "",
+                record.scoreDependencyCorrect?.toString() ?: "",
+                record.iterations.toString(),
+                record.generationTimeMs.toString(),
+                record.validationTimeMs.toString(),
+                record.violationsCount.toString(),
+                record.createdAt.format(dateTimeFormatter)
+            )
+            if (includeViolations) {
+                // violations пока не сохраняем в GenerationRecord, заглушка
+                base + listOf("")
+            } else {
+                base
+            }
+        }
+
+        return buildString {
+            appendLine(headers.joinToString(","))
+            rows.forEach { row ->
+                appendLine(row.joinToString(",") { escapeCsv(it) })
+            }
+        }
+    }
+
+    private fun escapeCsv(value: String): String {
+        return if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
+            "\"${value.replace("\"", "\"\"")}\""
+        } else {
+            value
+        }
+    }
+}

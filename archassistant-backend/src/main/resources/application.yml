@@ -58,6 +58,7 @@ server:
 
 # Logging Configuration
 logging:
+  format: ${LOG_FORMAT:TEXT}  # TEXT или JSON
   level:
     root: INFO
     com.example.archassistant: DEBUG
@@ -65,4 +66,18 @@ logging:
     org.springframework.web: DEBUG
     org.springframework.ai: DEBUG
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/archassistant.log
+    max-size: 10MB
+    max-history: 30
+
+# Export configuration
+export:
+  max-records: 10000  # Лимит записей на один экспорт
+  default-format: CSV
+
+# Корреляция запросов
+correlation:
+  header-name: X-Correlation-Id

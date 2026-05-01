@@ -4,6 +4,7 @@ import com.example.archassistant.dto.CodeGenerationRequest
 import com.example.archassistant.dto.CodeGenerationResponse
 import com.example.archassistant.dto.GenerationResponseFactory
 import com.example.archassistant.model.*
+import com.example.archassistant.util.CodeCleaner
 import com.example.archassistant.util.ErrorFormatter
 import com.example.archassistant.util.PromptFormatter
 import org.slf4j.LoggerFactory
@@ -78,13 +79,13 @@ class PostGenerationStrategy(
             logger.debug("Post-Strategy: User prompt (first 200 chars): ${userPrompt.take(200)}")
 
             // 2b. Генерация кода (замер времени)
-            val generatedCode: String
+            val rawCode: String
             val generationTime = measureTimeMillis {
-                generatedCode = try {
+                rawCode = try {
                     llmOrchestrator.generateCodeRaw(
                         systemPrompt = systemPrompt,
                         userPrompt = userPrompt,
-                        maxRetries = 2 // Увеличено для надёжности
+                        maxRetries = 2
                     )
                 } catch (e: Exception) {
                     logger.error("Post-Strategy: Generation failed at iteration $iteration: ${e.message}")
@@ -95,6 +96,7 @@ class PostGenerationStrategy(
                     )
                 }
             }
+            val generatedCode = CodeCleaner.cleanCode(rawCode)
             totalGenerationTime += generationTime
             lastCode = generatedCode
 
