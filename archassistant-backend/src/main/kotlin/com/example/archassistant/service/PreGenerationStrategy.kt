@@ -10,26 +10,13 @@ import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import kotlin.system.measureTimeMillis
 
-/**
- * Pre-Generation Strategy: архитектурные правила добавляются в промпт ДО генерации кода.
- *
- * Преимущества:
- * - Быстро (1 итерация, нет перегенерации)
- * - Минимальная нагрузка на LLM API
- *
- * Недостатки:
- * - LLM может игнорировать правила в промпте
- * - Нет гарантии соответствия архитектурным стандартам
- *
- * Использование: когда скорость важнее гарантированного соответствия,
- * или для сбора базовых метрик перед сравнением с другими стратегиями.
- */
 @Service
 class PreGenerationStrategy(
-    private val llmOrchestrator: LlmOrchestrator,      // FIXED: переиспользуем оркестратор
+    private val llmOrchestrator: LlmOrchestrator,
     private val ruleRepository: YamlRuleRepository,
-    private val scoreCalculator: ComplianceScoreCalculator, // FIXED: обязательный параметр
-    private val warningThreshold: Double = 70.0        // FIXED: настраиваемый порог
+    private val scoreCalculator: ComplianceScoreCalculator,
+    private val projectContextService: ProjectContextService,
+    private val warningThreshold: Double = 70.0
 ) : CodeGenerationStrategy {
 
     private val logger = LoggerFactory.getLogger(PreGenerationStrategy::class.java)
@@ -44,7 +31,16 @@ class PreGenerationStrategy(
             )
         }
 
-        // Шаг 1: Загрузка правил
+        val projectContext = try {
+            projectContextService.requireProjectContext(request.projectId)
+        } catch (e: Exception) {
+            return GenerationResponseFactory.error(
+                errorCode = "PROJECT_CONTEXT_NOT_AVAILABLE",
+                message = e.message ?: "Project context is unavailable",
+                totalTimeMs = 0
+            )
+        }
+
         val rules = request.rules
             ?.let { ruleIds ->
                 ruleRepository.load(request.projectId)?.rules?.filter { it.id in ruleIds && it.enabled }
@@ -52,11 +48,11 @@ class PreGenerationStrategy(
             ?: ruleRepository.load(request.projectId)?.getEnabledRules()
             ?: emptyList()
 
-        // Шаг 2: Формирование промптов
         val systemPrompt = PromptFormatter.formatSystemPrompt(rules)
         val userPrompt = PromptFormatter.formatUserPrompt(
             originalRequest = request.prompt,
             previousErrors = emptyList(),
+            projectContext = projectContext.promptContext(),
             codeContext = request.context?.codeSnippet
         )
 
@@ -64,7 +60,6 @@ class PreGenerationStrategy(
         logger.debug("Pre-Strategy: User prompt (first 200 chars): ${userPrompt.take(200)}")
         logger.debug("Pre-Strategy: {} rules injected", rules.size)
 
-        // Шаг 3: Генерация кода с обработкой ошибок и замером времени
         var result: CodeGenerationResponse
         val generationTime = measureTimeMillis {
             result = try {
@@ -73,7 +68,6 @@ class PreGenerationStrategy(
                     userPrompt = userPrompt,
                     maxRetries = request.maxIterations
                 )
-                // Успех – временный ответ (score и warnings будут добавлены позже)
                 GenerationResponseFactory.success(
                     code = generatedCode,
                     score = null,
@@ -99,16 +93,13 @@ class PreGenerationStrategy(
             }
         }
 
-        // Если генерация завершилась с ошибкой, сразу возвращаем результат с актуальным временем
         if (!result.success) {
             return result.copy(metadata = result.metadata.copy(totalTimeMs = generationTime))
         }
 
-        // Извлекаем сгенерированный код из успешного ответа
         val rawCode = result.data!!.code
         val generatedCode = CodeCleaner.cleanCode(rawCode)
 
-        // Шаг 4: Опциональная валидация (отдельный замер)
         var validationTime: Long = 0
         var score: ComplianceScore? = null
         val warnings = mutableListOf<String>()
@@ -122,7 +113,8 @@ class PreGenerationStrategy(
                         code = generatedCode,
                         className = className,
                         rules = rules,
-                        classpath = request.classpath ?: ""
+                        classpath = request.classpath ?: "",
+                        projectContext = projectContext
                     )
                 }
 
@@ -138,7 +130,6 @@ class PreGenerationStrategy(
             }
         }
 
-        // Шаг 5: Предупреждение о природе Pre-стратегии
         if (rules.isNotEmpty()) {
             warnings.add(
                 "Pre-Strategy: rules are added to prompt but compliance is not enforced. " +
@@ -146,13 +137,11 @@ class PreGenerationStrategy(
             )
         }
 
-        // Шаг 6: Логирование итогового времени
         logger.info(
             "Pre-Strategy completed: generation=${generationTime}ms, validation=${validationTime}ms, " +
                     "score=${score?.total ?: "N/A"}%"
         )
 
-        // Шаг 7: Возврат успешного ответа с актуальными данными и временем
         return GenerationResponseFactory.success(
             code = generatedCode,
             score = score,
@@ -165,9 +154,6 @@ class PreGenerationStrategy(
         )
     }
 
-    /**
-     * Извлечение имени класса из сгенерированного кода (для валидации)
-     */
     private fun extractClassName(code: String): String? {
         val pattern = Regex("""(?:public\s+)?(?:private\s+)?(?:protected\s+)?(?:abstract\s+)?(?:final\s+)?(?:sealed\s+)?(?:data\s+)?class\s+(\w+)""")
 

@@ -1,8 +1,6 @@
 package com.example.archassistant.controller
 
-import com.example.archassistant.model.ArchitecturalRule
 import com.example.archassistant.model.RulesConfig
-import com.example.archassistant.model.toArchitecturePattern
 import com.example.archassistant.service.*
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
@@ -62,7 +60,23 @@ class RulesController(
                 .body(mapOf("success" to false, "error" to "projectId mismatch"))
         }
 
-        val validationResult = ruleRepository.validate(config)
+        // ← ДОБАВИТЬ: Загружаем существующий конфиг для merge
+        val existingConfig = ruleRepository.load(projectId)
+
+        // ← ДОБАВИТЬ: Merge полей — сохраняем старые значения, если новые не переданы
+        val mergedConfig = if (existingConfig != null) {
+            config.copy(
+                projectPath = config.projectPath ?: existingConfig.projectPath,
+                projectType = config.projectType ?: existingConfig.projectType,
+                settings = config.settings ?: existingConfig.settings,
+                version = config.version ?: existingConfig.version
+            )
+        } else {
+            config
+        }
+
+        // Валидируем mergedConfig, а не исходный config
+        val validationResult = ruleRepository.validate(mergedConfig)
         if (!validationResult.passed) {
             return ResponseEntity.badRequest()
                 .body(
@@ -74,7 +88,8 @@ class RulesController(
                 )
         }
 
-        val success = ruleRepository.save(config)
+        // Сохраняем mergedConfig
+        val success = ruleRepository.save(mergedConfig)
 
         return if (success) {
             logger.info("Rules config saved successfully for {}", projectId)

@@ -13,7 +13,8 @@ import kotlin.system.measureTimeMillis
 @Service
 class LlmOrchestrator(
     private val chatClient: ChatClient,
-    private val ruleRepository: YamlRuleRepository  // FIXED: теперь обязательный
+    private val ruleRepository: YamlRuleRepository,
+    private val projectContextService: ProjectContextService
 ) {
 
     private val logger = LoggerFactory.getLogger(LlmOrchestrator::class.java)
@@ -41,10 +42,13 @@ class LlmOrchestrator(
                     ?: ruleRepository.load(projectId)?.getEnabledRules()
                     ?: emptyList()
 
+                val projectContext = projectContextService.getProjectContext(projectId)
+
                 val systemPrompt = PromptFormatter.formatSystemPrompt(effectiveRules)
                 val userPrompt = PromptFormatter.formatUserPrompt(
                     originalRequest = prompt,
                     previousErrors = emptyList(),
+                    projectContext = projectContext?.promptContext(),
                     codeContext = codeContext
                 )
 
@@ -53,7 +57,6 @@ class LlmOrchestrator(
 
                 val generatedCode = callLlmWithRetry(systemPrompt, userPrompt, maxRetries)
 
-                // Временный ответ с generationTimeMs = 0
                 GenerationResponseFactory.success(
                     code = generatedCode,
                     score = null,
@@ -80,7 +83,6 @@ class LlmOrchestrator(
             }
         }
 
-        // Обновляем метаданные с реальным временем
         return if (rawResult.success) {
             rawResult.copy(
                 metadata = rawResult.metadata.copy(generationTimeMs = generationTime)
@@ -110,7 +112,6 @@ class LlmOrchestrator(
                     ?: throw LlmGenerationException("Empty response from LLM", isRetryable = false)
 
             } catch (e: LlmGenerationException) {
-                // FIXED: не ретраим неретраимые ошибки
                 if (!e.isRetryable) {
                     logger.warn("Non-retryable LLM error on attempt $attempt: ${e.message}")
                     throw e
@@ -123,9 +124,8 @@ class LlmOrchestrator(
                 logger.warn("LLM call attempt $attempt failed: ${e.message}, will retry")
             }
 
-            // Экспоненциальная задержка перед ретраем
             if (attempt < maxRetries) {
-                Thread.sleep(1000L * attempt) // 1s, 2s, 3s...
+                Thread.sleep(1000L * attempt)
             }
         }
 
@@ -147,15 +147,9 @@ class LlmOrchestrator(
         rules: List<ArchitecturalRule>? = null,
         codeContext: String? = null
     ): CodeGenerationResponse {
-        // Для PRE-стратегии: просто генерируем с правилами в промпте
-        // POST/HYBRID обрабатываются на уровне StrategyOrchestrator
         return generateCode(prompt, projectId, rules, codeContext)
     }
 
-    /**
-     * Сырая генерация кода через LLM (без обёртки в CodeGenerationResponse)
-     * Используется стратегиями для интеграции с их логикой валидации
-     */
     fun generateCodeRaw(
         systemPrompt: String,
         userPrompt: String,
