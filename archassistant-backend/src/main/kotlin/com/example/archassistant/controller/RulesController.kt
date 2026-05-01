@@ -2,9 +2,8 @@ package com.example.archassistant.controller
 
 import com.example.archassistant.model.ArchitecturalRule
 import com.example.archassistant.model.RulesConfig
-import com.example.archassistant.service.ProjectStructureScanner
-import com.example.archassistant.service.RuleTemplateEngine
-import com.example.archassistant.service.YamlRuleRepository
+import com.example.archassistant.model.toArchitecturePattern
+import com.example.archassistant.service.*
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
@@ -24,7 +23,7 @@ import org.springframework.web.bind.annotation.*
 class RulesController(
     private val ruleRepository: YamlRuleRepository,
     private val templateEngine: RuleTemplateEngine,
-    private val projectScanner: ProjectStructureScanner
+    private val projectScanner: WorkspaceProjectScanner
 ) {
 
     private val logger = LoggerFactory.getLogger(RulesController::class.java)
@@ -93,36 +92,25 @@ class RulesController(
     @GetMapping("/{projectId}/suggest")
     fun suggestRules(
         @PathVariable projectId: String,
-        @RequestParam(required = false) projectPath: String? = null
-    ): ResponseEntity<List<ArchitecturalRule>> {
-        logger.info("Generating rule suggestions for project: {}, path: {}", projectId, projectPath ?: "from config")
+        @RequestParam projectPath: String? = null
+    ): ResponseEntity<List<WorkspaceModuleSuggestions>> {
+        logger.info("Generating workspace rule suggestions for project: {}, path: {}", projectId, projectPath)
 
         return try {
-            val structure = if (!projectPath.isNullOrBlank()) {
-                projectScanner.scanProject(projectPath, projectId)
+            if (!projectPath.isNullOrBlank()) {
+                ResponseEntity.ok(
+                    projectScanner.scanWorkspace(projectPath, projectId)
+                )
             } else {
-                projectScanner.scanProjectFromConfig(projectId, ruleRepository)
+                ResponseEntity.ok(
+                    projectScanner.scanProjectFromConfig(projectId, ruleRepository)
+                )
             }
-
-            if (structure == null) {
-                logger.warn("Could not scan project structure for {}", projectId)
-                return ResponseEntity.ok(emptyList())
-            }
-
-            val suggestions = templateEngine.suggestRules(structure)
-
-            logger.info(
-                "Generated {} rule suggestions for pattern: {}",
-                suggestions.size,
-                structure.detection?.primaryPattern ?: structure.architecturePattern
-            )
-
-            ResponseEntity.ok(suggestions)
         } catch (e: IllegalArgumentException) {
-            logger.error("Invalid project path: ${e.message}")
+            logger.error("Invalid workspace path: ${e.message}")
             ResponseEntity.badRequest().body(emptyList())
         } catch (e: Exception) {
-            logger.error("Failed to generate rule suggestions: ${e.message}", e)
+            logger.error("Failed to generate workspace rule suggestions: ${e.message}", e)
             ResponseEntity.internalServerError().body(emptyList())
         }
     }

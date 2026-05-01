@@ -17,62 +17,19 @@ object ProjectLayerClassifier {
         return classify(javaClass.packageName, simpleName, annotations)
     }
 
-    fun matchesClassType(javaClass: JavaClass, type: ClassType): Boolean {
-        val pkg = javaClass.packageName.lowercase()
-        val simple = javaClass.name.substringAfterLast('.').lowercase()
-        val annotations = javaClass.annotations.map { it.type.name.substringAfterLast('.').lowercase() }
-
-        return when (type) {
-            ClassType.CONTROLLER ->
-                pkg.contains("controller") ||
-                        pkg.contains("web") ||
-                        pkg.contains("api") ||
-                        pkg.contains("rest") ||
-                        pkg.contains("resource") ||
-                        simple.endsWith("controller") ||
-                        simple.endsWith("resource") ||
-                        annotations.any { it == "controller" || it == "restcontroller" }
-
-            ClassType.SERVICE ->
-                pkg.contains("service") ||
-                        pkg.contains("business") ||
-                        simple.endsWith("service") ||
-                        simple.endsWith("usecase") ||
-                        simple.endsWith("interactor") ||
-                        annotations.any { it == "service" }
-
-            ClassType.REPOSITORY ->
-                pkg.contains("repository") ||
-                        pkg.contains("dao") ||
-                        pkg.contains("persistence") ||
-                        pkg.contains("data") ||
-                        simple.endsWith("repository") ||
-                        simple.endsWith("dao") ||
-                        annotations.any { it == "repository" }
-
-            ClassType.ENTITY ->
-                pkg.contains("entity") ||
-                        pkg.contains("domain") ||
-                        pkg.contains("model") ||
-                        simple.endsWith("entity") ||
-                        annotations.any { it == "entity" || it == "table" }
-
-            ClassType.DTO ->
-                pkg.contains("dto") ||
-                        pkg.contains("vo") ||
-                        pkg.contains("request") ||
-                        pkg.contains("response") ||
-                        pkg.contains("command") ||
-                        pkg.contains("query") ||
-                        simple.endsWith("dto") ||
-                        simple.endsWith("request") ||
-                        simple.endsWith("response") ||
-                        simple.endsWith("command") ||
-                        simple.endsWith("query")
-
-            ClassType.OTHER -> false
-        }
+    fun matchesClassType(classInfo: ClassInfo, type: ClassType): Boolean {
+        return classify(classInfo.packageName, classInfo.simpleName, classInfo.annotations).toClassType() == type
     }
+
+    fun matchesClassType(javaClass: JavaClass, type: ClassType): Boolean {
+        return classify(javaClass.packageName, javaClass.name.substringAfterLast('.'),
+            javaClass.annotations.map { it.type.name.substringAfterLast('.') }
+        ).toClassType() == type
+    }
+
+    fun matchesLayer(classInfo: ClassInfo, type: LayerType): Boolean = classify(classInfo) == type
+
+    fun matchesLayer(javaClass: JavaClass, type: LayerType): Boolean = classify(javaClass) == type
 
     private fun classify(
         packageName: String,
@@ -82,95 +39,74 @@ object ProjectLayerClassifier {
         val pkg = packageName.lowercase()
         val simple = simpleName.lowercase()
         val annotations = annotationsRaw.map { it.removePrefix("@").lowercase() }
+        val lastSegment = pkg.split('.').lastOrNull().orEmpty()
 
         return when {
-            isController(pkg, simple, annotations) -> LayerType.CONTROLLER
-            isViewModel(pkg, simple, annotations) -> LayerType.VIEWMODEL
-            isView(pkg, simple, annotations) -> LayerType.VIEW
-            isRepository(pkg, simple, annotations) -> LayerType.REPOSITORY
-            isService(pkg, simple, annotations) -> LayerType.SERVICE
-            isEntity(pkg, simple, annotations) -> LayerType.ENTITY
-            isDto(pkg, simple, annotations) -> LayerType.DTO
-            isPort(pkg, simple, annotations) -> LayerType.PORT
-            isAdapter(pkg, simple, annotations) -> LayerType.ADAPTER
-            isApi(pkg, simple, annotations) -> LayerType.API
-            isImpl(pkg, simple, annotations) -> LayerType.IMPL
-            isFeature(pkg, simple, annotations) -> LayerType.FEATURE
-            isCommon(pkg, simple, annotations) -> LayerType.COMMON
-            isApplication(pkg, simple, annotations) -> LayerType.APPLICATION
-            isInfrastructure(pkg, simple, annotations) -> LayerType.INFRASTRUCTURE
-            isDomain(pkg, simple, annotations) -> LayerType.DOMAIN
+            isController(pkg, lastSegment, simple, annotations) -> LayerType.CONTROLLER
+            isViewModel(pkg, lastSegment, simple, annotations) -> LayerType.VIEWMODEL
+            isView(pkg, lastSegment, simple, annotations) -> LayerType.VIEW
+            isRepository(pkg, lastSegment, simple, annotations) -> LayerType.REPOSITORY
+            isService(pkg, lastSegment, simple, annotations) -> LayerType.SERVICE
+            isEntity(pkg, lastSegment, simple, annotations) -> LayerType.ENTITY
+            isDto(pkg, lastSegment, simple, annotations) -> LayerType.DTO
+            isPort(pkg, lastSegment, simple, annotations) -> LayerType.PORT
+            isAdapter(pkg, lastSegment, simple, annotations) -> LayerType.ADAPTER
+            isApi(pkg, lastSegment, simple, annotations) -> LayerType.API
+            isImpl(pkg, lastSegment, simple, annotations) -> LayerType.IMPL
+            isFeature(pkg, lastSegment, simple, annotations) -> LayerType.FEATURE
+            isCommon(pkg, lastSegment, simple, annotations) -> LayerType.COMMON
+            isApplication(pkg, lastSegment, simple, annotations) -> LayerType.APPLICATION
+            isInfrastructure(pkg, lastSegment, simple, annotations) -> LayerType.INFRASTRUCTURE
+            isDomain(pkg, lastSegment, simple, annotations) -> LayerType.DOMAIN
             else -> LayerType.OTHER
         }
     }
 
-    private fun isController(pkg: String, simple: String, annotations: List<String>): Boolean {
+    private fun isController(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
         return annotations.any { it == "controller" || it == "restcontroller" } ||
-                pkg.contains("controller") ||
-                pkg.contains("web") ||
-                pkg.contains("rest") ||
-                pkg.contains("resource") ||
-                pkg.contains("endpoint") ||
+                last in setOf("controller", "web", "rest", "resource", "endpoint", "api") ||
                 simple.endsWith("controller") ||
                 simple.endsWith("resource")
     }
 
-    private fun isViewModel(pkg: String, simple: String, annotations: List<String>): Boolean {
+    private fun isViewModel(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
         return annotations.any { it.contains("viewmodel") || it.contains("livedata") } ||
-                pkg.contains("viewmodel") ||
-                pkg.contains("vm") ||
+                last in setOf("viewmodel", "vm") ||
                 simple.endsWith("viewmodel")
     }
 
-    private fun isView(pkg: String, simple: String, annotations: List<String>): Boolean {
+    private fun isView(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
         return annotations.any { it == "composable" } ||
-                pkg.contains("view") ||
-                pkg.contains("ui") ||
-                pkg.contains("screen") ||
-                pkg.contains("fragment") ||
-                pkg.contains("activity") ||
+                last in setOf("view", "ui", "screen", "fragment", "activity") ||
                 simple.endsWith("view") ||
                 simple.endsWith("fragment") ||
                 simple.endsWith("activity") ||
                 simple.endsWith("screen")
     }
 
-    private fun isRepository(pkg: String, simple: String, annotations: List<String>): Boolean {
+    private fun isRepository(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
         return annotations.any { it == "repository" } ||
-                pkg.contains("repository") ||
-                pkg.contains("dao") ||
-                pkg.contains("persistence") ||
-                pkg.contains("data") ||
+                last in setOf("repository", "dao", "persistence", "data") ||
                 simple.endsWith("repository") ||
                 simple.endsWith("dao")
     }
 
-    private fun isService(pkg: String, simple: String, annotations: List<String>): Boolean {
+    private fun isService(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
         return annotations.any { it == "service" } ||
-                pkg.contains("service") ||
-                pkg.contains("business") ||
-                pkg.contains("usecase") ||
-                pkg.contains("interactor") ||
+                last in setOf("service", "business", "usecase", "interactor") ||
                 simple.endsWith("service") ||
                 simple.endsWith("usecase") ||
                 simple.endsWith("interactor")
     }
 
-    private fun isEntity(pkg: String, simple: String, annotations: List<String>): Boolean {
+    private fun isEntity(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
         return annotations.any { it == "entity" || it == "table" } ||
-                pkg.contains("entity") ||
-                pkg.contains("domain") ||
-                pkg.contains("model") ||
+                last in setOf("entity", "model", "domain") ||
                 simple.endsWith("entity")
     }
 
-    private fun isDto(pkg: String, simple: String, annotations: List<String>): Boolean {
-        return pkg.contains("dto") ||
-                pkg.contains("vo") ||
-                pkg.contains("request") ||
-                pkg.contains("response") ||
-                pkg.contains("command") ||
-                pkg.contains("query") ||
+    private fun isDto(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
+        return last in setOf("dto", "vo", "request", "response", "command", "query") ||
                 simple.endsWith("dto") ||
                 simple.endsWith("request") ||
                 simple.endsWith("response") ||
@@ -178,72 +114,54 @@ object ProjectLayerClassifier {
                 simple.endsWith("query")
     }
 
-    private fun isPort(pkg: String, simple: String, annotations: List<String>): Boolean {
-        return pkg.contains("port") ||
-                pkg.contains("ports") ||
-                pkg.contains("contract") ||
-                pkg.contains("gateway") ||
-                pkg.contains("spi") ||
+    private fun isPort(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
+        return last in setOf("port", "ports", "contract", "gateway", "spi") ||
                 simple.endsWith("port")
     }
 
-    private fun isAdapter(pkg: String, simple: String, annotations: List<String>): Boolean {
-        return pkg.contains("adapter") ||
-                pkg.contains("adapters") ||
-                pkg.contains("impl") ||
-                pkg.contains("implementation") ||
+    private fun isAdapter(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
+        return last in setOf("adapter", "adapters", "impl", "implementation") ||
                 simple.endsWith("adapter") ||
                 simple.endsWith("impl")
     }
 
-    private fun isApi(pkg: String, simple: String, annotations: List<String>): Boolean {
-        return pkg.contains("api") ||
-                pkg.contains("public") ||
-                pkg.contains("contract") ||
-                pkg.contains("exposed") ||
+    private fun isApi(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
+        return last in setOf("api", "public", "contract", "exposed") ||
                 simple.endsWith("api")
     }
 
-    private fun isImpl(pkg: String, simple: String, annotations: List<String>): Boolean {
-        return pkg.contains("impl") ||
-                pkg.contains("implementation") ||
-                simple.endsWith("impl")
+    private fun isImpl(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
+        return last in setOf("impl", "implementation") || simple.endsWith("impl")
     }
 
-    private fun isFeature(pkg: String, simple: String, annotations: List<String>): Boolean {
-        return pkg.contains("feature") ||
-                pkg.contains("module") ||
-                simple.contains("feature")
+    private fun isFeature(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
+        return last in setOf("feature", "module", "modules") || simple.contains("feature")
     }
 
-    private fun isCommon(pkg: String, simple: String, annotations: List<String>): Boolean {
-        return pkg.contains("common") ||
-                pkg.contains("shared") ||
-                pkg.contains("base") ||
-                pkg.contains("kernel") ||
-                pkg.contains("util") ||
-                simple.contains("common")
+    private fun isCommon(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
+        return last in setOf("common", "shared", "base", "kernel", "util") || simple.contains("common")
     }
 
-    private fun isApplication(pkg: String, simple: String, annotations: List<String>): Boolean {
-        return pkg.contains("application") ||
-                pkg.contains("usecase") ||
-                pkg.contains("interactor") ||
+    private fun isApplication(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
+        return last in setOf("application", "usecase", "interactor") ||
                 simple.endsWith("usecase") ||
                 simple.endsWith("interactor")
     }
 
-    private fun isInfrastructure(pkg: String, simple: String, annotations: List<String>): Boolean {
-        return pkg.contains("infrastructure") ||
-                pkg.contains("persistence") ||
-                pkg.contains("adapter") ||
-                pkg.contains("client") ||
-                pkg.contains("integration") ||
-                pkg.contains("external")
+    private fun isInfrastructure(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
+        return last in setOf("infrastructure", "persistence", "adapter", "client", "integration", "external")
     }
 
-    private fun isDomain(pkg: String, simple: String, annotations: List<String>): Boolean {
-        return pkg.contains("domain") ||
-                pkg.contains("core")
+    private fun isDomain(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
+        return last in setOf("domain", "core")
+    }
+
+    private fun LayerType.toClassType(): ClassType? = when (this) {
+        LayerType.CONTROLLER -> ClassType.CONTROLLER
+        LayerType.SERVICE -> ClassType.SERVICE
+        LayerType.REPOSITORY -> ClassType.REPOSITORY
+        LayerType.ENTITY -> ClassType.ENTITY
+        LayerType.DTO -> ClassType.DTO
+        else -> null
     }
 }
