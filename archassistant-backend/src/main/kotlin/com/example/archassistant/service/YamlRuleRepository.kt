@@ -301,7 +301,7 @@ class YamlRuleRepository(
      */
     private fun isValidWildcardPattern(pattern: String): Boolean {
         return try {
-            PackagePatternBuilder.wildcardToRegex(pattern)
+            PackagePatternBuilder.buildRegex(pattern)
             true
         } catch (e: Exception) {
             false

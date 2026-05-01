@@ -1,67 +1,89 @@
 package com.example.archassistant.util
 
 /**
- * Утилита для построения package wildcard-паттернов
+ * Утилита для построения ArchUnit-совместимых паттернов из имён пакетов
  */
 object PackagePatternBuilder {
 
     fun buildWildcardPatterns(packages: List<String>): List<String> {
+        if (packages.isEmpty()) return listOf("..*")
+
         val normalized = packages
             .map { it.trim().trim('.') }
             .filter { it.isNotBlank() }
             .distinct()
 
-        if (normalized.isEmpty()) return emptyList()
+        if (normalized.isEmpty()) return listOf("..*")
+        if (normalized.size == 1) return listOf("${normalized.first()}..*")
 
-        val commonRoot = commonPackagePrefix(normalized)
-        return if (commonRoot.isNotBlank()) {
-            listOf("$commonRoot..*")
+        val commonPrefix = commonPackagePrefix(normalized)
+        return if (commonPrefix.isNotBlank()) {
+            listOf("$commonPrefix..*")
         } else {
             normalized.map { "$it..*" }
         }
     }
 
+    /**
+     * Общий префикс пакетов, сегментно (а не по символам).
+     */
     fun commonPackagePrefix(packages: List<String>): String {
+        if (packages.isEmpty()) return ""
+        if (packages.size == 1) return packages.first()
+
+        val segments = packages.map { it.trim().trim('.').split('.') }
+        val minSize = segments.minOf { it.size }
+        val common = mutableListOf<String>()
+
+        for (i in 0 until minSize) {
+            val segment = segments.first()[i]
+            if (segments.all { it[i] == segment }) {
+                common += segment
+            } else {
+                break
+            }
+        }
+
+        return common.joinToString(".")
+    }
+
+    /**
+     * Возвращает один компактный wildcard-паттерн для списка пакетов.
+     * Подходит для relation-based rules.
+     */
+    fun compactPattern(packages: List<String>): String? {
         val normalized = packages
             .map { it.trim().trim('.') }
             .filter { it.isNotBlank() }
             .distinct()
 
-        if (normalized.isEmpty()) return ""
-        if (normalized.size == 1) {
-            return normalized.first().substringBeforeLast('.', "")
+        if (normalized.isEmpty()) return null
+        if (normalized.size == 1) return "${normalized.first()}..*"
+
+        val prefix = commonPackagePrefix(normalized)
+        return if (prefix.isNotBlank()) {
+            "$prefix..*"
+        } else {
+            "${normalized.first()}..*"
         }
-
-        val commonSegments = normalized
-            .map { it.split('.') }
-            .reduce { acc, parts ->
-                val max = minOf(acc.size, parts.size)
-                var index = 0
-                while (index < max && acc[index] == parts[index]) {
-                    index++
-                }
-                acc.take(index)
-            }
-
-        return commonSegments.joinToString(".")
     }
 
-    fun wildcardToRegex(pattern: String): Regex {
-        return wildcardToRegexString(pattern).toRegex()
-    }
-
-    fun wildcardToRegexString(pattern: String): String {
-        val subpackageWildcard = "__SUBPKG_WILDCARD__"
-        return pattern
-            .trim()
-            .replace("**", ".*")
-            .replace("..*", subpackageWildcard)
-            .replace("*", "[^.]*")
-            .replace(".", "\\.")
-            .replace(subpackageWildcard, "(\\..*)?")
+    fun buildRegex(pattern: String): Regex {
+        return wildcardToRegex(pattern).toRegex()
     }
 
     fun matches(pattern: String, packageName: String): Boolean {
-        return wildcardToRegex(pattern).matches(packageName)
+        val regex = wildcardToRegex(pattern).toRegex()
+        return regex.matches(packageName)
+    }
+
+    private fun wildcardToRegex(pattern: String): String {
+        val subpackageWildcard = "__SUBPKG_WILDCARD__"
+        return pattern
+            .replace("..*", subpackageWildcard)
+            .replace("**", ".*")
+            .replace("*", "[^.]*")
+            .replace(".", "\\.")
+            .replace(subpackageWildcard, "(\\..*)?")
     }
 }

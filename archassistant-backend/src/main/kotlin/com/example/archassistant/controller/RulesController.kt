@@ -23,8 +23,7 @@ import org.springframework.web.bind.annotation.*
 class RulesController(
     private val ruleRepository: YamlRuleRepository,
     private val templateEngine: RuleTemplateEngine,
-    private val projectScanner: ProjectStructureScanner,
-    private val workspaceProjectScanner: WorkspaceProjectScanner
+    private val projectScanner: WorkspaceProjectScanner
 ) {
 
     private val logger = LoggerFactory.getLogger(RulesController::class.java)
@@ -93,51 +92,20 @@ class RulesController(
     @GetMapping("/{projectId}/suggest")
     fun suggestRules(
         @PathVariable projectId: String,
-        @RequestParam(required = false) projectPath: String? = null
-    ): ResponseEntity<List<ArchitecturalRule>> {
-        logger.info("Generating rule suggestions for project: {}, path: {}", projectId, projectPath ?: "from config")
-
-        return try {
-            val structure = if (!projectPath.isNullOrBlank()) {
-                projectScanner.scanProject(projectPath, projectId)
-            } else {
-                projectScanner.scanProjectFromConfig(projectId, ruleRepository)
-            }
-
-            if (structure == null) {
-                logger.warn("Could not scan project structure for {}", projectId)
-                return ResponseEntity.ok(emptyList())
-            }
-
-            val suggestions = templateEngine.suggestRules(structure)
-
-            logger.info(
-                "Generated {} rule suggestions for pattern: {}",
-                suggestions.size,
-                structure.detection?.primaryProfile?.toArchitecturePattern() ?: structure.architecturePattern
-            )
-
-            ResponseEntity.ok(suggestions)
-        } catch (e: IllegalArgumentException) {
-            logger.error("Invalid project path: ${e.message}")
-            ResponseEntity.badRequest().body(emptyList())
-        } catch (e: Exception) {
-            logger.error("Failed to generate rule suggestions: ${e.message}", e)
-            ResponseEntity.internalServerError().body(emptyList())
-        }
-    }
-
-    @GetMapping("/{projectId}/suggest/workspace")
-    fun suggestWorkspaceRules(
-        @PathVariable projectId: String,
-        @RequestParam workspacePath: String
+        @RequestParam projectPath: String? = null
     ): ResponseEntity<List<WorkspaceModuleSuggestions>> {
-        logger.info("Generating workspace rule suggestions for project: {}, path: {}", projectId, workspacePath)
+        logger.info("Generating workspace rule suggestions for project: {}, path: {}", projectId, projectPath)
 
         return try {
-            ResponseEntity.ok(
-                workspaceProjectScanner.scanWorkspace(workspacePath, projectId)
-            )
+            if (!projectPath.isNullOrBlank()) {
+                ResponseEntity.ok(
+                    projectScanner.scanWorkspace(projectPath, projectId)
+                )
+            } else {
+                ResponseEntity.ok(
+                    projectScanner.scanProjectFromConfig(projectId, ruleRepository)
+                )
+            }
         } catch (e: IllegalArgumentException) {
             logger.error("Invalid workspace path: ${e.message}")
             ResponseEntity.badRequest().body(emptyList())

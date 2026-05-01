@@ -18,37 +18,65 @@ class ArchitectureDetector {
             ProjectProfile.SPRING_LAYERED to scoreSpringLayered(index)
         )
 
-        val ranked = scores.entries
-            .sortedWith(
-                compareByDescending<Map.Entry<ProjectProfile, Double>> { it.value }
-                    .thenByDescending { priority(it.key) }
-            )
+        val primary = choosePrimaryProfile(index, scores)
+        val sorted = scores.entries.sortedWith(
+            compareByDescending<Map.Entry<ProjectProfile, Double>> { it.value }
+                .thenByDescending { priority(it.key) }
+        )
 
-        val top = ranked.firstOrNull()
-        if (top == null || top.value <= 0.0) {
-            return ProjectProfileDetection(
-                primaryProfile = ProjectProfile.UNKNOWN,
-                confidence = 0.0,
-                scores = scores,
-                reasons = listOf("No strong architectural signals found"),
-                candidateProfiles = emptyList(),
-                isConfident = false
-            )
+        val topScore = scores[primary] ?: 0.0
+        val secondScore = sorted.firstOrNull { it.key != primary }?.value ?: 0.0
+        val total = scores.values.sum().coerceAtLeast(1.0)
+
+        val confidence = (topScore / total).coerceIn(0.0, 1.0)
+        val confident = when (primary) {
+            ProjectProfile.HEXAGONAL -> topScore >= 8.0 && (topScore - secondScore) >= 1.0
+            ProjectProfile.CLEAN -> topScore >= 7.5 && (topScore - secondScore) >= 1.0
+            ProjectProfile.SPRING_FEATURED -> topScore >= 8.0 && (topScore - secondScore) >= 1.0
+            ProjectProfile.SPRING_LAYERED -> topScore >= 6.0 && (topScore - secondScore) >= 1.0
+            ProjectProfile.MODULAR -> topScore >= 7.0 && (topScore - secondScore) >= 1.0
+            ProjectProfile.MVVM -> topScore >= 6.0 && (topScore - secondScore) >= 1.0
+            ProjectProfile.UNKNOWN -> false
         }
 
-        val second = ranked.getOrNull(1)?.value ?: 0.0
-        val total = scores.values.sum().coerceAtLeast(1.0)
-        val confidence = (top.value / total).coerceIn(0.0, 1.0)
-        val confident = top.value >= 5.0 && (top.value - second) >= 1.5
-
         return ProjectProfileDetection(
-            primaryProfile = top.key,
+            primaryProfile = primary,
             confidence = confidence,
             scores = scores,
-            reasons = buildReasons(top.key, index),
-            candidateProfiles = ranked.take(3).map { it.key },
+            reasons = buildReasons(primary, index),
+            candidateProfiles = sorted.take(3).map { it.key },
             isConfident = confident
         )
+    }
+
+    private fun choosePrimaryProfile(
+        index: PackageScopeIndex,
+        scores: Map<ProjectProfile, Double>
+    ): ProjectProfile {
+        val hasHexagonalSignals =
+            index.hasAnyPackageKeyword("port", "ports", "spi", "contract", "gateway", "adapter", "adapters") &&
+                    index.hasAnyPackageKeyword("domain", "application")
+
+        val hasCleanSignals =
+            index.hasAnyPackageKeyword("domain", "core", "application", "infrastructure", "interface", "presentation")
+
+        val springFeatureRoots = index.springFeatureRoots()
+        val hasSpringFeatureSignals = index.isSpringLike() && springFeatureRoots.size >= 2
+
+        val hasSpringLayeredSignals = index.isSpringLike()
+
+        val hasModularSignals =
+            index.hasAnyPackageKeyword("common", "shared", "feature", "module", "api", "impl") &&
+                    index.featureRoots.size >= 2
+
+        return when {
+            hasHexagonalSignals -> ProjectProfile.HEXAGONAL
+            hasCleanSignals -> ProjectProfile.CLEAN
+            hasSpringFeatureSignals -> ProjectProfile.SPRING_FEATURED
+            hasSpringLayeredSignals -> ProjectProfile.SPRING_LAYERED
+            hasModularSignals -> ProjectProfile.MODULAR
+            else -> ProjectProfile.UNKNOWN
+        }
     }
 
     private fun scoreSpringLayered(index: PackageScopeIndex): Double {
@@ -75,13 +103,13 @@ class ArchitectureDetector {
     }
 
     private fun scoreClean(index: PackageScopeIndex): Double {
-        val hasCleanPackages = index.hasAnyPackageKeyword("domain", "application", "infrastructure", "interface", "core")
+        val hasCleanPackages = index.hasAnyPackageKeyword("domain", "core", "application", "infrastructure", "interface", "presentation", "entities", "entity")
         if (!hasCleanPackages) return 0.0
 
-        val domain = index.hasAnyPackageKeyword("domain", "core")
-        val application = index.hasAnyPackageKeyword("application")
-        val infra = index.hasAnyPackageKeyword("infrastructure")
-        val iface = index.hasAnyPackageKeyword("interface", "presentation")
+        val domain = index.hasAnyPackageKeyword("domain", "core", "entity", "entities")
+        val application = index.hasAnyPackageKeyword("application", "usecase", "use-case", "interactor")
+        val infra = index.hasAnyPackageKeyword("infrastructure", "persistence", "adapter", "gateway")
+        val iface = index.hasAnyPackageKeyword("interface", "presentation", "web", "rest", "api")
 
         return 8.8 +
                 if (domain) 1.5 else 0.0 +
@@ -91,9 +119,9 @@ class ArchitectureDetector {
     }
 
     private fun scoreHexagonal(index: PackageScopeIndex): Double {
-        val portLike = index.hasAnyPackageKeyword("port", "ports", "gateway", "spi", "contract")
+        val portLike = index.hasAnyPackageKeyword("port", "ports", "spi", "contract", "gateway")
         val adapterLike = index.hasAnyPackageKeyword("adapter", "adapters", "impl", "implementation")
-        val hasCore = index.hasAnyPackageKeyword("domain", "application")
+        val hasCore = index.hasAnyPackageKeyword("domain", "core", "application")
 
         if (!hasCore || (!portLike && !adapterLike)) return 0.0
 

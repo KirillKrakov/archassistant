@@ -2,6 +2,7 @@ package com.example.archassistant.service
 
 import com.example.archassistant.model.ArchitecturalRule
 import com.example.archassistant.model.ProjectProfileDetection
+import com.example.archassistant.model.ProjectStructure
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.nio.file.Files
@@ -52,6 +53,18 @@ class WorkspaceProjectScanner(
                 profile = profile,
                 rules = rules
             )
+        }
+    }
+
+    fun scanProjectFromConfig(projectId: String, ruleRepository: YamlRuleRepository): List<WorkspaceModuleSuggestions>? {
+        val config = ruleRepository.load(projectId)
+        val projectPath = config?.projectPath ?: return null
+
+        return if (Files.exists(Paths.get(projectPath))) {
+            scanWorkspace(projectPath, projectId)
+        } else {
+            logger.warn("Project path not found: {}", projectPath)
+            null
         }
     }
 

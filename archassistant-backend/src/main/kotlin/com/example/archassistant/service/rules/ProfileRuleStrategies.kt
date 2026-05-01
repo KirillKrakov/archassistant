@@ -1,6 +1,7 @@
 package com.example.archassistant.service.rules
 
 import com.example.archassistant.model.*
+import com.example.archassistant.util.PackagePatternBuilder
 import org.springframework.stereotype.Service
 
 @Service
@@ -184,107 +185,102 @@ class CleanProfileStrategy : ProfileRuleStrategy {
     override val profile = ProjectProfile.CLEAN
 
     override fun generate(context: RuleGenerationContext): List<ArchitecturalRule> {
-        val domainPackages = context.index.packagesContaining("domain", "core")
-        val applicationPackages = context.index.packagesContaining("application")
-        val infrastructurePackages = context.index.packagesContaining("infrastructure")
-        val interfacePackages = context.index.packagesContaining("interface", "presentation")
+        val domainPattern = PackagePatternBuilder.compactPattern(
+            context.index.packagesContaining("domain", "core", "entity", "entities")
+        ) ?: return emptyList()
 
-        if (
-            domainPackages.isEmpty() &&
-            applicationPackages.isEmpty() &&
-            infrastructurePackages.isEmpty() &&
-            interfacePackages.isEmpty()
-        ) {
-            return emptyList()
-        }
+        val applicationPattern = PackagePatternBuilder.compactPattern(
+            context.index.packagesContaining("application", "usecase", "usecases", "interactor")
+        )
+
+        val infrastructurePattern = PackagePatternBuilder.compactPattern(
+            context.index.packagesContaining("infrastructure", "persistence", "adapter", "gateway", "dataproviders", "repository")
+        )
+
+        val interfacePattern = PackagePatternBuilder.compactPattern(
+            context.index.packagesContaining("interface", "presentation", "web", "rest", "api", "delivery", "boundary", "boundaries")
+        )
 
         val rules = mutableListOf<ArchitecturalRule>()
 
-        domainPackages.forEach { domain ->
-            infrastructurePackages.forEach { infra ->
-                rules += RuleFactory.packageDependency(
-                    context, "clean", domain, infra,
-                    "Domain should not depend on infrastructure",
-                    "Domain layer must remain isolated from infrastructure",
-                    ConstraintType.NO_DEPENDENCY, Severity.CRITICAL, 2.0
-                )
-            }
-            applicationPackages.forEach { app ->
-                rules += RuleFactory.packageDependency(
-                    context, "clean", domain, app,
-                    "Domain should not depend on application",
-                    "Domain layer should not depend on application layer",
-                    ConstraintType.NO_DEPENDENCY, Severity.ERROR, 1.5
-                )
-            }
-            interfacePackages.forEach { iface ->
-                rules += RuleFactory.packageDependency(
-                    context, "clean", domain, iface,
-                    "Domain should not depend on interface",
-                    "Domain layer must not depend on presentation/interface layer",
-                    ConstraintType.NO_DEPENDENCY, Severity.ERROR, 1.5
-                )
-            }
-
-            rules += RuleFactory.annotationNo(
-                context, "clean", domain, "Controller",
-                "Domain should not use controllers",
-                "Domain classes should not be annotated as controllers",
-                Severity.ERROR, 1.0
-            )
-            rules += RuleFactory.annotationNo(
-                context, "clean", domain, "Service",
-                "Domain should not use services",
-                "Domain classes should not be annotated as services",
-                Severity.ERROR, 1.0
-            )
-            rules += RuleFactory.annotationNo(
-                context, "clean", domain, "Repository",
-                "Domain should not use repositories",
-                "Domain classes should not be annotated as repositories",
-                Severity.ERROR, 1.0
+        fun addDependency(
+            from: String,
+            to: String,
+            name: String,
+            description: String,
+            severity: Severity,
+            weight: Double
+        ) {
+            if (from == to) return
+            rules += RuleFactory.packageDependency(
+                context = context,
+                prefix = "clean",
+                fromPackage = from,
+                toPackage = to,
+                name = name,
+                description = description,
+                constraint = ConstraintType.NO_DEPENDENCY,
+                severity = severity,
+                weight = weight
             )
         }
 
-        applicationPackages.forEach { app ->
-            infrastructurePackages.forEach { infra ->
-                rules += RuleFactory.packageDependency(
-                    context, "clean", app, infra,
-                    "Application should not depend on infrastructure",
-                    "Application layer must not depend on infrastructure",
-                    ConstraintType.NO_DEPENDENCY, Severity.ERROR, 1.5
-                )
-            }
-            interfacePackages.forEach { iface ->
-                rules += RuleFactory.packageDependency(
-                    context, "clean", app, iface,
-                    "Application should not depend on interface",
-                    "Application layer should not depend on interface layer",
-                    ConstraintType.NO_DEPENDENCY, Severity.ERROR, 1.5
-                )
-            }
-
-            rules += RuleFactory.annotationNo(
-                context, "clean", app, "Controller",
-                "Application should not use controllers",
-                "Application classes should not be annotated as controllers",
-                Severity.ERROR, 1.0
-            )
-            rules += RuleFactory.annotationNo(
-                context, "clean", app, "Service",
-                "Application should not use services",
-                "Application classes should not be annotated as services",
-                Severity.ERROR, 1.0
-            )
-            rules += RuleFactory.annotationNo(
-                context, "clean", app, "Repository",
-                "Application should not use repositories",
-                "Application classes should not be annotated as repositories",
-                Severity.ERROR, 1.0
+        if (infrastructurePattern != null) {
+            addDependency(
+                from = domainPattern,
+                to = infrastructurePattern,
+                name = "Domain should not depend on infrastructure",
+                description = "Domain layer must remain isolated from infrastructure",
+                severity = Severity.CRITICAL,
+                weight = 2.0
             )
         }
 
-        return rules
+        if (applicationPattern != null) {
+            addDependency(
+                from = domainPattern,
+                to = applicationPattern,
+                name = "Domain should not depend on application",
+                description = "Domain layer should not depend on application layer",
+                severity = Severity.ERROR,
+                weight = 1.5
+            )
+
+            if (infrastructurePattern != null) {
+                addDependency(
+                    from = applicationPattern,
+                    to = infrastructurePattern,
+                    name = "Application should not depend on infrastructure",
+                    description = "Application layer must not depend on infrastructure",
+                    severity = Severity.ERROR,
+                    weight = 1.5
+                )
+            }
+        }
+
+        if (interfacePattern != null) {
+            addDependency(
+                from = domainPattern,
+                to = interfacePattern,
+                name = "Domain should not depend on interface",
+                description = "Domain layer must not depend on presentation/interface layer",
+                severity = Severity.ERROR,
+                weight = 1.5
+            )
+
+            if (applicationPattern != null) {
+                addDependency(
+                    from = applicationPattern,
+                    to = interfacePattern,
+                    name = "Application should not depend on interface",
+                    description = "Application layer should not depend on interface layer",
+                    severity = Severity.ERROR,
+                    weight = 1.5
+                )
+            }
+        }
+
+        return rules.distinctBy { it.id }
     }
 }
 
@@ -293,100 +289,108 @@ class HexagonalProfileStrategy : ProfileRuleStrategy {
     override val profile = ProjectProfile.HEXAGONAL
 
     override fun generate(context: RuleGenerationContext): List<ArchitecturalRule> {
-        val domainPackages = context.index.packagesContaining("domain", "core")
-        val applicationPackages = context.index.packagesContaining("application", "usecase", "interactor")
-        val portPackages = context.index.packagesContaining("port", "ports", "spi", "contract", "gateway")
-        val adapterPackages = context.index.packagesContaining("adapter", "adapters", "impl", "implementation")
+        val domainPattern = PackagePatternBuilder.compactPattern(
+            context.index.packagesContaining("domain", "core")
+        ) ?: return emptyList()
 
-        if (
-            domainPackages.isEmpty() &&
-            applicationPackages.isEmpty() &&
-            portPackages.isEmpty() &&
-            adapterPackages.isEmpty()
-        ) {
-            return emptyList()
-        }
+        val applicationPattern = PackagePatternBuilder.compactPattern(
+            context.index.packagesContaining("application", "usecase", "usecases", "interactor")
+        )
+
+        val portPattern = PackagePatternBuilder.compactPattern(
+            context.index.packagesContaining("port", "ports", "spi", "contract", "gateway", "gateways")
+        )
+
+        val adapterPattern = PackagePatternBuilder.compactPattern(
+            context.index.packagesContaining("adapter", "adapters", "impl", "implementation", "persistence", "web", "boundary", "boundaries")
+        )
 
         val rules = mutableListOf<ArchitecturalRule>()
 
-        domainPackages.forEach { domain ->
-            adapterPackages.forEach { adapter ->
-                rules += RuleFactory.packageDependency(
-                    context, "hexagonal", domain, adapter,
-                    "Domain should not depend on adapters",
-                    "Domain layer must stay independent from adapters",
-                    ConstraintType.NO_DEPENDENCY, Severity.CRITICAL, 2.0
-                )
-            }
-            portPackages.forEach { port ->
-                rules += RuleFactory.packageDependency(
-                    context, "hexagonal", domain, port,
-                    "Domain should not depend on ports",
-                    "Domain layer should not depend on port definitions",
-                    ConstraintType.NO_DEPENDENCY, Severity.ERROR, 1.5
+        fun addDependency(
+            from: String,
+            to: String,
+            name: String,
+            description: String,
+            constraint: ConstraintType,
+            severity: Severity,
+            weight: Double
+        ) {
+            if (from == to) return
+            rules += RuleFactory.packageDependency(
+                context = context,
+                prefix = "hexagonal",
+                fromPackage = from,
+                toPackage = to,
+                name = name,
+                description = description,
+                constraint = constraint,
+                severity = severity,
+                weight = weight
+            )
+        }
+
+        if (adapterPattern != null) {
+            addDependency(
+                from = domainPattern,
+                to = adapterPattern,
+                name = "Domain should not depend on adapters",
+                description = "Domain layer must stay independent from adapters",
+                constraint = ConstraintType.NO_DEPENDENCY,
+                severity = Severity.CRITICAL,
+                weight = 2.0
+            )
+
+            if (applicationPattern != null) {
+                addDependency(
+                    from = applicationPattern,
+                    to = adapterPattern,
+                    name = "Application should not depend on adapters",
+                    description = "Application layer must not depend on adapter implementations",
+                    constraint = ConstraintType.NO_DEPENDENCY,
+                    severity = Severity.ERROR,
+                    weight = 1.5
                 )
             }
         }
 
-        applicationPackages.forEach { app ->
-            adapterPackages.forEach { adapter ->
-                rules += RuleFactory.packageDependency(
-                    context, "hexagonal", app, adapter,
-                    "Application should not depend on adapters",
-                    "Application layer must not depend on adapter implementations",
-                    ConstraintType.NO_DEPENDENCY, Severity.ERROR, 1.5
-                )
-            }
-            portPackages.forEach { port ->
-                rules += RuleFactory.packageDependency(
-                    context, "hexagonal", app, port,
-                    "Application should depend on ports",
-                    "Application layer should communicate through ports",
-                    ConstraintType.MUST_DEPEND, Severity.WARNING, 1.0
+        if (portPattern != null) {
+            if (applicationPattern != null) {
+                addDependency(
+                    from = applicationPattern,
+                    to = portPattern,
+                    name = "Application should depend on ports",
+                    description = "Application layer should communicate through ports",
+                    constraint = ConstraintType.MUST_DEPEND,
+                    severity = Severity.WARNING,
+                    weight = 1.0
                 )
             }
 
-            rules += RuleFactory.annotationNo(
-                context, "hexagonal", app, "Service",
-                "Application should not expose services",
-                "Application classes should not be annotated as services",
-                Severity.ERROR, 1.0
-            )
-            rules += RuleFactory.annotationNo(
-                context, "hexagonal", app, "Repository",
-                "Application should not expose repositories",
-                "Application classes should not be annotated as repositories",
-                Severity.ERROR, 1.0
+            addDependency(
+                from = domainPattern,
+                to = portPattern,
+                name = "Domain should not depend on ports",
+                description = "Domain layer should not depend on port definitions",
+                constraint = ConstraintType.NO_DEPENDENCY,
+                severity = Severity.ERROR,
+                weight = 1.5
             )
         }
 
-        adapterPackages.forEach { adapter ->
-            domainPackages.forEach { domain ->
-                rules += RuleFactory.packageDependency(
-                    context, "hexagonal", adapter, domain,
-                    "Adapters should not depend on domain",
-                    "Adapters should not own domain logic",
-                    ConstraintType.NO_DEPENDENCY, Severity.ERROR, 1.5
-                )
-            }
-            rules += RuleFactory.packageNaming(
-                context, "hexagonal", adapter, "Adapter",
-                "Adapter packages should end with Adapter",
-                "Adapter packages should keep Adapter naming",
-                Severity.INFO, 0.5
+        if (adapterPattern != null) {
+            addDependency(
+                from = adapterPattern,
+                to = domainPattern,
+                name = "Adapters should not depend on domain",
+                description = "Adapters should not own domain logic",
+                constraint = ConstraintType.NO_DEPENDENCY,
+                severity = Severity.ERROR,
+                weight = 1.5
             )
         }
 
-        portPackages.forEach { port ->
-            rules += RuleFactory.packageNaming(
-                context, "hexagonal", port, "Port",
-                "Port packages should end with Port",
-                "Port packages should keep Port naming",
-                Severity.INFO, 0.5
-            )
-        }
-
-        return rules
+        return rules.distinctBy { it.id }
     }
 }
 

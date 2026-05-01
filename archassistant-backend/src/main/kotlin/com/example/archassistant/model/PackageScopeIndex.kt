@@ -31,9 +31,7 @@ data class PackageScopeIndex(
 
     fun scopePatternsForRoots(vararg roots: String): List<String> {
         return roots
-            .flatMap { root ->
-                scopesByRoot[root].orEmpty().map { scopePattern(it.root) }
-            }
+            .flatMap { root -> scopesByRoot[root].orEmpty().map { scopePattern(it.root) } }
             .distinct()
     }
 
@@ -97,7 +95,7 @@ data class PackageScopeIndex(
 
     companion object {
         fun from(structure: ProjectStructure): PackageScopeIndex {
-            val base = PackagePatternBuilder.commonPackagePrefix(structure.packages)
+            val base = findStableBasePackage(structure.packages)
 
             val scopes = structure.classes
                 .groupBy { it.packageName }
@@ -107,9 +105,7 @@ data class PackageScopeIndex(
                         .groupingBy { ProjectLayerClassifier.classify(it) }
                         .eachCount()
 
-                    val dominantLayer = layerCounts
-                        .maxByOrNull { it.value }
-                        ?.key ?: LayerType.OTHER
+                    val dominantLayer = layerCounts.maxByOrNull { it.value }?.key ?: LayerType.OTHER
 
                     PackageScope(
                         packageName = packageName,
@@ -130,8 +126,10 @@ data class PackageScopeIndex(
 
             val featureRoots = scopesByRoot.keys
                 .filter { root ->
-                    root.isNotBlank() &&
-                            root.lowercase() !in TECHNICAL_ROOTS
+                    val r = root.lowercase()
+                    r.isNotBlank() &&
+                            r !in GENERIC_ROOTS &&
+                            r !in TECHNICAL_ROOTS
                 }
                 .filter { root ->
                     scopesByRoot[root].orEmpty().sumOf { it.classes.size } >= 1
@@ -147,6 +145,29 @@ data class PackageScopeIndex(
             )
         }
 
+        private fun findStableBasePackage(packages: List<String>): String {
+            val normalized = packages
+                .map { it.trim().trim('.') }
+                .filter { it.isNotBlank() }
+                .distinct()
+
+            if (normalized.isEmpty()) return ""
+            if (normalized.size == 1) return normalized.first().substringBeforeLast('.', "")
+
+            var prefix = PackagePatternBuilder.commonPackagePrefix(normalized)
+
+            while (prefix.isNotBlank()) {
+                val lastSegment = prefix.substringAfterLast('.', prefix)
+                if (lastSegment.lowercase() in GENERIC_ROOTS) {
+                    prefix = prefix.substringBeforeLast('.', "")
+                } else {
+                    break
+                }
+            }
+
+            return prefix
+        }
+
         private fun rootOf(packageName: String, basePackage: String): String {
             val relative = if (basePackage.isNotBlank() && packageName.startsWith("$basePackage.")) {
                 packageName.removePrefix("$basePackage.").trim('.')
@@ -154,11 +175,12 @@ data class PackageScopeIndex(
                 packageName.trim('.')
             }
 
-            return relative
-                .split('.')
-                .firstOrNull()
-                .orEmpty()
-                .ifBlank { packageName.substringAfterLast('.') }
+            val segments = relative.split('.').filter { it.isNotBlank() }
+
+            return segments.firstOrNull { segment ->
+                val s = segment.lowercase()
+                s !in GENERIC_ROOTS && s !in TECHNICAL_ROOTS
+            } ?: segments.lastOrNull().orEmpty()
         }
 
         private fun ClassType.toLayerType(): LayerType? {
@@ -172,12 +194,27 @@ data class PackageScopeIndex(
             }
         }
 
+        private val BASE_TRIM_SEGMENTS = setOf(
+            "api", "adapter", "adapters", "application", "infrastructure",
+            "interface", "presentation", "web", "rest",
+            "controller", "service", "repository",
+            "feature", "module", "modules",
+            "common", "shared"
+        )
+
+        private val GENERIC_ROOTS = setOf(
+            "com", "org", "io", "net", "edu", "gov",
+            "apache", "springframework", "samples", "spring", "boot"
+        )
+
         private val TECHNICAL_ROOTS = setOf(
             "controller", "service", "repository", "entity", "dto", "model",
             "domain", "application", "infrastructure", "interface",
             "view", "viewmodel", "port", "ports", "adapter", "adapters",
-            "api", "impl", "common", "shared", "feature",
-            "config", "util", "web", "rest", "presentation"
+            "common", "shared", "feature", "module",
+            "config", "util", "web", "rest", "presentation",
+            "delivery", "dataproviders", "boundary", "boundaries",
+            "gateway", "gateways", "usecase", "usecases", "interactor"
         )
     }
 }

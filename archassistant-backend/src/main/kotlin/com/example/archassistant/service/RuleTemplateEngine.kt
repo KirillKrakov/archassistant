@@ -17,7 +17,7 @@ class RuleTemplateEngine(
         logger.debug("Generating rule suggestions for project: ${structure.projectId}")
 
         val index = PackageScopeIndex.from(structure)
-        val detection = architectureDetector.detect(structure)
+        val detection = structure.detection ?: architectureDetector.detect(structure)
 
         logger.debug(
             "Detected project profile: {}, confidence: {}",
@@ -31,13 +31,13 @@ class RuleTemplateEngine(
             detection = detection
         )
 
-        val selectedProfiles = linkedSetOf(detection.primaryProfile)
-        if (!detection.isConfident) {
-            detection.candidateProfiles.take(2).forEach { selectedProfiles += it }
+        if (detection.primaryProfile == ProjectProfile.UNKNOWN) {
+            logger.debug("Unknown profile detected, no rules generated")
+            return emptyList()
         }
 
         val generated = strategies
-            .filter { it.profile in selectedProfiles }
+            .filter { it.profile == detection.primaryProfile }
             .flatMap { strategy ->
                 try {
                     strategy.generate(context)
