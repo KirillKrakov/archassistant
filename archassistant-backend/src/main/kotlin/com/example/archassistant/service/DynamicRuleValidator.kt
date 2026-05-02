@@ -2,7 +2,7 @@ package com.example.archassistant.service
 
 import com.example.archassistant.model.*
 import com.example.archassistant.util.ArchUnitRuleBuilder
-import com.example.archassistant.util.ClasspathUtils
+import com.example.archassistant.util.ArchUnitValidationUtils
 import com.example.archassistant.util.CodeCompiler
 import com.example.archassistant.model.ProjectContextSnapshot
 import com.tngtech.archunit.core.domain.JavaClasses
@@ -12,10 +12,6 @@ import org.springframework.stereotype.Service
 import java.nio.file.Path
 import kotlin.system.measureTimeMillis
 
-/**
- * Сервис программной валидации кода через ArchUnit API
- * Не генерирует Java-файлы тестов — правила создаются и проверяются в памяти
- */
 @Service
 class DynamicRuleValidator(
     private val codeCompiler: CodeCompiler = CodeCompiler()
@@ -37,9 +33,6 @@ class DynamicRuleValidator(
         return result.copy(executionTimeMs = executionTime)
     }
 
-    /**
-     * Упрощённая валидация (только компиляция + базовые проверки)
-     */
     fun validateBasic(
         code: String,
         className: String,
@@ -83,15 +76,7 @@ class DynamicRuleValidator(
             tempRoot = codeCompiler.compileCode(code, className, classpath, projectContext)
             val classesDir = tempRoot.resolve("classes")
 
-            val importPaths = linkedSetOf<Path>().apply {
-                add(classesDir)
-                addAll(projectContext?.importPaths().orEmpty())
-                addAll(ClasspathUtils.splitClasspathToDirectories(classpath))
-            }
-
-            val importedClasses: JavaClasses =
-                ClassFileImporter().importPaths(*importPaths.toTypedArray())
-
+            val importedClasses: JavaClasses = ClassFileImporter().importPath(classesDir)
             val enabledRules = rules.filter { it.enabled }
 
             val validPairs = enabledRules.mapNotNull { rule ->
@@ -104,11 +89,19 @@ class DynamicRuleValidator(
             }
 
             val violations = mutableListOf<Violation>()
+            var evaluatedRules = 0
 
             for ((rule, archRule) in validPairs) {
                 try {
                     archRule.check(importedClasses)
+                    evaluatedRules++
                 } catch (e: AssertionError) {
+                    if (ArchUnitValidationUtils.isNoApplicableClassesFailure(e.message)) {
+                        logger.debug("Skipping rule {}: no applicable generated classes", rule.id)
+                        continue
+                    }
+
+                    evaluatedRules++
                     violations.add(
                         Violation(
                             ruleId = rule.id,
@@ -117,11 +110,27 @@ class DynamicRuleValidator(
                             severity = rule.severity
                         )
                     )
+                } catch (e: Exception) {
+                    evaluatedRules++
+                    logger.warn("Validation failed for rule ${rule.id}: ${e.message}", e)
+                    violations.add(
+                        Violation(
+                            ruleId = rule.id,
+                            description = "Check failed: ${e.message}",
+                            className = className,
+                            severity = Severity.ERROR
+                        )
+                    )
                 }
             }
 
             if (violations.isEmpty()) {
-                ValidationResult.success("All ${validPairs.size} rules passed")
+                val message = if (evaluatedRules == 0) {
+                    "No applicable rules for generated code"
+                } else {
+                    "All $evaluatedRules applicable rules passed"
+                }
+                ValidationResult.success(message)
             } else {
                 ValidationResult.failure(violations)
             }

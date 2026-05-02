@@ -10,30 +10,38 @@ object PatternMatcher {
 
     private val logger = LoggerFactory.getLogger(PatternMatcher::class.java)
 
-    // ========== ОСНОВНЫЕ МЕТОДЫ ==========
-
     fun calculatePatternMatch(importedClasses: JavaClasses, rules: List<ArchitecturalRule>): Double {
         val relevant = rules.filter { it.enabled && it.type in listOf(RuleType.NAMING_CONVENTION, RuleType.ANNOTATION_CHECK) }
         if (relevant.isEmpty()) return 100.0
 
-        // Строим только те правила, которые удалось сконвертировать
-        val buildable = relevant.mapNotNull { rule ->
-            ArchUnitRuleBuilder.build(rule)?.let { rule to it }
-        }
-        if (buildable.isEmpty()) return 100.0
-
         var passed = 0
-        for ((rule, archRule) in buildable) {
+        var evaluated = 0
+
+        for (rule in relevant) {
+            val archRule = ArchUnitRuleBuilder.build(rule)
+            if (archRule == null) {
+                logger.warn("Cannot build ArchRule for ${rule.id} (unsupported constraint?)")
+                continue
+            }
+
             try {
                 archRule.check(importedClasses)
                 passed++
+                evaluated++
             } catch (e: AssertionError) {
-                // правило не выполнено – ничего не делаем
+                if (ArchUnitValidationUtils.isNoApplicableClassesFailure(e.message)) {
+                    logger.debug("Skipping pattern rule {}: no applicable generated classes", rule.id)
+                    continue
+                }
+                evaluated++
             } catch (e: Exception) {
                 logger.warn("Pattern check failed for rule ${rule.id}: ${e.message}")
+                evaluated++
             }
         }
-        return (passed.toDouble() / buildable.size) * 100.0
+
+        if (evaluated == 0) return 100.0
+        return (passed.toDouble() / evaluated) * 100.0
     }
 
     fun calculatePatternMatch(classesDir: Path, rules: List<ArchitecturalRule>): Double {
@@ -49,11 +57,17 @@ object PatternMatcher {
             val archRule = ArchUnitRuleBuilder.build(rule)
             if (archRule == null) {
                 logger.warn("Cannot build ArchRule for ${rule.id} (unsupported constraint?)")
-                continue // исключаем из проверки
+                continue
             }
+
             try {
                 archRule.check(importedClasses)
             } catch (e: AssertionError) {
+                if (ArchUnitValidationUtils.isNoApplicableClassesFailure(e.message)) {
+                    logger.debug("Skipping pattern rule {} in violations: no applicable generated classes", rule.id)
+                    continue
+                }
+
                 val violatingClasses = extractViolatingClasses(e.message, importedClasses, rule)
                 if (violatingClasses.isNotEmpty()) {
                     violations.addAll(
@@ -67,7 +81,6 @@ object PatternMatcher {
                         }
                     )
                 } else {
-                    // fallback – общее нарушение
                     violations.add(
                         Violation(
                             ruleId = rule.id,
@@ -97,11 +110,6 @@ object PatternMatcher {
         return checkWithViolations(imported, rules)
     }
 
-    // ========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ==========
-
-    /**
-     * Извлекает имена классов из сообщения ArchUnit (формат "Class <...>").
-     */
     private fun extractViolatingClasses(errorMessage: String?, importedClasses: JavaClasses, rule: ArchitecturalRule): List<String> {
         if (errorMessage == null) return emptyList()
         val pattern = Regex("""Class <([^>]+)>""")
@@ -111,11 +119,7 @@ object PatternMatcher {
             .toList()
     }
 
-    /**
-     * Форматирует человекочитаемое сообщение о нарушении.
-     */
     private fun formatViolationMessage(rule: ArchitecturalRule, detail: String): String {
-        // Если detail – это имя класса, формируем специфическое сообщение
         if (!detail.contains(" ")) {
             return when (rule.constraint) {
                 ConstraintType.NAMING_SUFFIX -> "Class `$detail` should end with `${rule.pattern}`"
@@ -125,7 +129,6 @@ object PatternMatcher {
                 else -> "Rule '${rule.name}' violated by class `$detail`"
             }
         }
-        // fallback – возвращаем исходное сообщение или краткое описание
         return detail.takeIf { it.isNotBlank() } ?: "Rule '${rule.name}' violated"
     }
 }

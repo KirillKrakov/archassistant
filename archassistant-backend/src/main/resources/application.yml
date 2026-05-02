@@ -2,6 +2,10 @@ spring:
   application:
     name: archassistant-backend
 
+  autoconfigure:
+    exclude:
+      - org.springframework.ai.autoconfigure.openai.OpenAiAutoConfiguration
+
   # Database Configuration (можно закомментировать для этапа 1)
   datasource:
     url: jdbc:postgresql://postgres:5432/${POSTGRES_DB:archassistant}
@@ -16,18 +20,6 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
-
-  ai:
-    openai:
-      base-url: https://api.groq.com/openai/v1
-      api-key: ${GROQ_API_KEY}
-      chat:
-        options:
-          model: ${GROQ_MODEL:llama3-70b-8192}
-          temperature: 0.2
-          max-tokens: 4096
-      embedding:
-        enabled: false
 
   web:
     cors:

@@ -10,29 +10,38 @@ object DependencyAnalyzer {
 
     private val logger = LoggerFactory.getLogger(DependencyAnalyzer::class.java)
 
-    // ========== ОСНОВНЫЕ МЕТОДЫ ==========
-
     fun calculateDependencyCorrect(importedClasses: JavaClasses, rules: List<ArchitecturalRule>): Double {
         val dependencyRules = rules.filter { it.enabled && it.type == RuleType.DEPENDENCY }
         if (dependencyRules.isEmpty()) return 100.0
 
         var passed = 0
+        var evaluated = 0
+
         for (rule in dependencyRules) {
             val archRule = ArchUnitRuleBuilder.build(rule)
             if (archRule == null) {
                 logger.warn("Cannot build ArchRule for ${rule.id} (unsupported constraint?)")
                 continue
             }
+
             try {
                 archRule.check(importedClasses)
                 passed++
+                evaluated++
             } catch (e: AssertionError) {
-                // правило не выполнено – ничего не делаем
+                if (ArchUnitValidationUtils.isNoApplicableClassesFailure(e.message)) {
+                    logger.debug("Skipping dependency rule {}: no applicable generated classes", rule.id)
+                    continue
+                }
+                evaluated++
             } catch (e: Exception) {
                 logger.warn("Dependency check failed for rule ${rule.id}: ${e.message}")
+                evaluated++
             }
         }
-        return (passed.toDouble() / dependencyRules.size) * 100.0
+
+        if (evaluated == 0) return 100.0
+        return (passed.toDouble() / evaluated) * 100.0
     }
 
     fun calculateDependencyCorrect(classesDir: Path, rules: List<ArchitecturalRule>): Double {
@@ -50,9 +59,15 @@ object DependencyAnalyzer {
                 logger.warn("Cannot build ArchRule for ${rule.id}")
                 continue
             }
+
             try {
                 archRule.check(importedClasses)
             } catch (e: AssertionError) {
+                if (ArchUnitValidationUtils.isNoApplicableClassesFailure(e.message)) {
+                    logger.debug("Skipping dependency rule {} in violations: no applicable generated classes", rule.id)
+                    continue
+                }
+
                 val violatingClasses = extractViolatingClasses(e.message, importedClasses, rule)
                 if (violatingClasses.isNotEmpty()) {
                     violations.addAll(
@@ -94,8 +109,6 @@ object DependencyAnalyzer {
         val imported = ClassFileImporter().importPath(classesDir)
         return analyzeWithViolations(imported, rules)
     }
-
-    // ========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ==========
 
     private fun extractViolatingClasses(errorMessage: String?, importedClasses: JavaClasses, rule: ArchitecturalRule): List<String> {
         if (errorMessage == null) return emptyList()
