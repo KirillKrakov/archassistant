@@ -3,6 +3,7 @@ package com.example.archassistant.service
 import com.example.archassistant.model.*
 import com.example.archassistant.util.ProjectLayerClassifier
 import com.tngtech.archunit.core.domain.JavaClasses
+import com.tngtech.archunit.core.domain.JavaModifier
 import com.tngtech.archunit.core.importer.ClassFileImporter
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -96,13 +97,25 @@ class ProjectStructureScanner(
                 }
                 .distinct()
 
+            val publicMethods = javaClass.methods
+                .filter { it.modifiers.contains(JavaModifier.PUBLIC) }
+                .map { method ->
+                    val params = method.rawParameterTypes.joinToString(", ") { it.name.substringAfterLast('.') }
+                    val returnType = method.rawReturnType.name.substringAfterLast('.')
+                    "${
+                        method.name
+                    }($params): $returnType"
+                }
+                .distinct()
+
             ClassInfo(
                 fullName = javaClass.name,
                 simpleName = simpleName,
                 packageName = javaClass.packageName,
                 annotations = annotations,
                 dependencies = dependencies,
-                modifiers = emptyList()
+                modifiers = emptyList(),
+                publicMethods = publicMethods
             )
         }
     }

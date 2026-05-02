@@ -4,11 +4,9 @@ import com.example.archassistant.model.ArchitecturalRule
 
 object PromptFormatter {
 
-    /**
-     * Формирование system prompt с архитектурными правилами
-     * FIXED: больше не принимает projectContext — контекст в userPrompt
-     */
     fun formatSystemPrompt(rules: List<ArchitecturalRule>): String {
+        val language = detectLanguage(rules)
+
         val rulesSection = if (rules.isNotEmpty()) {
             """
             |АРХИТЕКТУРНЫЕ ПРАВИЛА ПРОЕКТА (обязательны к соблюдению):
@@ -21,16 +19,21 @@ object PromptFormatter {
         }
 
         return """
-            Ты опытный разработчик на ${detectLanguage(rules)}. 
+            Ты опытный разработчик на $language.
             Твоя задача — генерировать чистый, эффективный код, соблюдая архитектурные стандарты проекта.
-            
+
             $rulesSection
-            
+
             ИНСТРУКЦИИ:
-            1. Возвращай ТОЛЬКО код, без объяснений, комментариев или маркдауна.
-            2. Используй лучшие практики для ${detectLanguage(rules)} проектов.
+            1. Возвращай ТОЛЬКО чистый код, без объяснений, комментариев или markdown.
+            2. Используй лучшие практики для $language проектов.
             3. Если правило противоречит запросу, приоритет у архитектурного правила.
             4. Если запрос неполный, сделай разумные предположения и сгенерируй рабочий код.
+            5. Если для решения нужны несколько классов, возвращай их как отдельные полноценные source files.
+            6. Каждый source file должен начинаться со своей собственной package declaration.
+            7. Никогда не объединяй несколько package declaration в один файл.
+            8. Если в user prompt есть контекст проекта, используй только существующие пакеты, классы и методы из него.
+            9. Не выдумывай package roots, которых нет в контексте проекта.
         """.trimIndent()
     }
 
@@ -44,14 +47,30 @@ object PromptFormatter {
 
         return when (rule.type) {
             com.example.archassistant.model.RuleType.DEPENDENCY -> {
-                "$prefix${rule.name}: классы в `${rule.fromPackage}` не должны зависеть от `${rule.toPackage ?: rule.toPackages?.joinToString(", ") ?: "*"}"
+                val target = rule.toPackage ?: rule.toPackages?.joinToString(", ") ?: "*"
+                "$prefix${rule.name}: классы в `${rule.fromPackage}` не должны зависеть от `$target`"
             }
+
             com.example.archassistant.model.RuleType.NAMING_CONVENTION -> {
-                "$prefix${rule.name}: классы в `${rule.fromPackage}` должны ${if (rule.constraint == com.example.archassistant.model.ConstraintType.NAMING_SUFFIX) "заканчиваться на" else "начинаться с"} `${rule.pattern}`"
+                "$prefix${rule.name}: классы в `${rule.fromPackage}` должны ${
+                    if (rule.constraint == com.example.archassistant.model.ConstraintType.NAMING_SUFFIX) {
+                        "заканчиваться на"
+                    } else {
+                        "начинаться с"
+                    }
+                } `${rule.pattern}`"
             }
+
             com.example.archassistant.model.RuleType.ANNOTATION_CHECK -> {
-                "$prefix${rule.name}: классы в `${rule.fromPackage}` должны ${if (rule.constraint == com.example.archassistant.model.ConstraintType.HAS_ANNOTATION) "иметь" else "не иметь"} аннотацию `${rule.annotation}`"
+                "$prefix${rule.name}: классы в `${rule.fromPackage}` должны ${
+                    if (rule.constraint == com.example.archassistant.model.ConstraintType.HAS_ANNOTATION) {
+                        "иметь"
+                    } else {
+                        "не иметь"
+                    }
+                } аннотацию `${rule.annotation}`"
             }
+
             else -> "$prefix${rule.name}: ${rule.description ?: rule.id}"
         }
     }
@@ -64,18 +83,33 @@ object PromptFormatter {
         }
     }
 
-    /**
-     * Формирование user prompt с учётом контекста и истории ошибок
-     * FIXED: codeContext теперь добавляется сюда, а не в system prompt
-     */
     fun formatUserPrompt(
         originalRequest: String,
         previousErrors: List<String> = emptyList(),
+        projectContext: String? = null,
         codeContext: String? = null
     ): String {
+        val projectSection = projectContext?.takeIf { it.isNotBlank() }?.let {
+            """
+            |КОНТЕКСТ ПРОЕКТА:
+            |```text
+            |$it
+            |```
+            """.trimMargin()
+        } ?: ""
+
+        val codeSection = codeContext?.takeIf { it.isNotBlank() }?.let {
+            """
+            |РЕФЕРЕНСНЫЙ КОД ИЗ ПРОЕКТА:
+            |```text
+            |$it
+            |```
+            """.trimMargin()
+        } ?: ""
+
         val errorSection = if (previousErrors.isNotEmpty()) {
             """
-            |⚠️ ПРЕДУПРЕЖДЕНИЕ: Предыдущая версия кода нарушала следующие правила:
+            |⚠️ ПРЕДЫДУЩАЯ ВЕРСИЯ НАРУШАЛА СЛЕДУЮЩИЕ ПРАВИЛА:
             |${previousErrors.joinToString("\n") { "- $it" }}
             |
             |Исправь эти ошибки в новой версии.
@@ -84,23 +118,18 @@ object PromptFormatter {
             ""
         }
 
-        // FIXED: контекст добавляется в user prompt, не в system prompt
-        val contextSection = codeContext?.let {
-            """
-            |ПРИМЕРЫ ИЗ ПРОЕКТА (используй как референс для стиля):
-            |```
-            |$it
-            |```
-            """.trimMargin()
-        } ?: ""
-
         return """
             $originalRequest
-            
-            $contextSection
+
+            $projectSection
+            $codeSection
             $errorSection
-            
+
             Сгенерируй код сейчас.
+            Если нужно несколько классов, выведи их как отдельные полноценные файлы,
+            каждый со своей package declaration, без смешивания нескольких package в одном файле.
+            Используй только существующие пакеты и сигнатуры из контекста проекта.
+            Не добавляй импорты из пакетов, которых нет в knownPackages.
         """.trimIndent()
     }
 }

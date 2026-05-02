@@ -9,28 +9,28 @@ import java.time.LocalDateTime
  */
 data class RulesConfig(
     @JsonProperty("version")
-    val version: String = "1.0",
+    val version: String? = "1.0",
 
     @JsonProperty("project_id")
     val projectId: String,
 
     @JsonProperty("project_type")
-    val projectType: ProjectType = ProjectType.SPRING_BOOT,
+    val projectType: ProjectType? = ProjectType.SPRING_BOOT,
 
     @JsonProperty("rules")
     val rules: List<ArchitecturalRule> = emptyList(),
 
     @JsonProperty("settings")
-    val settings: RuleSettings = RuleSettings(),
+    val settings: RuleSettings? = RuleSettings(),
 
     @JsonProperty("project_path")
     val projectPath: String? = null,
 
     @JsonProperty("created_at")
-    val createdAt: String = LocalDateTime.now().toString(),
+    val createdAt: String? = LocalDateTime.now().toString(),
 
     @JsonProperty("updated_at")
-    val updatedAt: String = LocalDateTime.now().toString()
+    val updatedAt: String? = LocalDateTime.now().toString()
 ) {
     /**
      * Получение только включённых правил

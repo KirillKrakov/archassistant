@@ -4,39 +4,19 @@ import com.example.archassistant.dto.CodeGenerationRequest
 import com.example.archassistant.dto.CodeGenerationResponse
 import com.example.archassistant.dto.GenerationResponseFactory
 import com.example.archassistant.model.*
+import com.example.archassistant.util.CodeCleaner
 import com.example.archassistant.util.ErrorFormatter
 import com.example.archassistant.util.PromptFormatter
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import kotlin.system.measureTimeMillis
 
-/**
- * Hybrid-Generation Strategy: комбинация Pre + Post подходов.
- *
- * Алгоритм:
- * 1. Правила добавляются в system prompt (как в Pre)
- * 2. Код генерируется
- * 3. Код валидируется (как в Post)
- * 4. При нарушениях — перегенерация с обратной связью
- * 5. Цикл повторяется до успеха или исчерпания итераций
- *
- * Преимущества:
- * - Быстрее чистой Post-стратегии (правила в промпте уменьшают число ошибок)
- * - Надёжнее чистой Pre-стратегии (валидация гарантирует соответствие)
- * - Гибкая настройка через maxIterations и warningThreshold
- *
- * Недостатки:
- * - Сложнее в отладке (два механизма контроля)
- * - Выше затраты на LLM API при множественных итерациях
- *
- * Использование: когда нужно максимальное соответствие архитектурным стандартам
- * при приемлемом времени генерации.
- */
 @Service
 class HybridGenerationStrategy(
     private val llmOrchestrator: LlmOrchestrator,
     private val ruleRepository: YamlRuleRepository,
     private val scoreCalculator: ComplianceScoreCalculator,
+    private val projectContextService: ProjectContextService,
     private val warningThreshold: Double = 70.0
 ) : CodeGenerationStrategy {
 
@@ -52,7 +32,16 @@ class HybridGenerationStrategy(
             )
         }
 
-        // Шаг 1: Загрузка правил
+        val projectContext = try {
+            projectContextService.requireProjectContext(request.projectId)
+        } catch (e: Exception) {
+            return GenerationResponseFactory.error(
+                errorCode = "PROJECT_CONTEXT_NOT_AVAILABLE",
+                message = e.message ?: "Project context is unavailable",
+                totalTimeMs = 0
+            )
+        }
+
         val rules = request.rules
             ?.let { ruleIds ->
                 ruleRepository.load(request.projectId)?.rules?.filter { it.id in ruleIds && it.enabled }
@@ -60,11 +49,11 @@ class HybridGenerationStrategy(
             ?: ruleRepository.load(request.projectId)?.getEnabledRules()
             ?: emptyList()
 
-        // Базовые промпты: правила уже в system prompt (Pre-компонент)
         val baseSystemPrompt = PromptFormatter.formatSystemPrompt(rules)
         val baseUserPrompt = PromptFormatter.formatUserPrompt(
             originalRequest = request.prompt,
             previousErrors = emptyList(),
+            projectContext = projectContext.promptContext(),
             codeContext = request.context?.codeSnippet
         )
 
@@ -76,21 +65,18 @@ class HybridGenerationStrategy(
         var totalValidationTime: Long = 0
         val extraWarnings = mutableListOf<String>()
 
-        // Шаг 2: Цикл генерации + валидации (Post-компонент)
         while (iteration < request.maxIterations) {
             iteration++
             logger.info("Hybrid-Strategy: Iteration $iteration/${request.maxIterations}")
 
-            // 2a. Формирование промпта для этой итерации
             val (systemPrompt, userPrompt) = if (iteration == 1) {
-                // Первая итерация: базовые промпты (правила уже в system prompt)
                 baseSystemPrompt to baseUserPrompt
             } else {
-                // Последующие итерации: добавляем ошибки через ErrorFormatter
                 val errorSection = ErrorFormatter.formatFixInstruction(lastViolations)
                 val enhancedUserPrompt = PromptFormatter.formatUserPrompt(
                     originalRequest = request.prompt,
-                    previousErrors = emptyList(), // Не дублируем ошибки
+                    previousErrors = emptyList(),
+                    projectContext = projectContext.promptContext(),
                     codeContext = request.context?.codeSnippet
                 )
                 baseSystemPrompt to "$enhancedUserPrompt\n\n$errorSection"
@@ -99,10 +85,9 @@ class HybridGenerationStrategy(
             logger.debug("Hybrid-Strategy: System prompt (first 200 chars): ${systemPrompt.take(200)}")
             logger.debug("Hybrid-Strategy: User prompt (first 200 chars): ${userPrompt.take(200)}")
 
-            // 2b. Генерация кода (замер времени)
-            val generatedCode: String
+            val rawCode: String
             val generationTime = measureTimeMillis {
-                generatedCode = try {
+                rawCode = try {
                     llmOrchestrator.generateCodeRaw(
                         systemPrompt = systemPrompt,
                         userPrompt = userPrompt,
@@ -117,10 +102,10 @@ class HybridGenerationStrategy(
                     )
                 }
             }
+            val generatedCode = CodeCleaner.cleanCode(rawCode)
             totalGenerationTime += generationTime
             lastCode = generatedCode
 
-            // 2c. Валидация кода (замер времени, обработка исключений)
             val className = request.expectedClassName ?: extractClassName(generatedCode)
             var validationTime = 0L
             var score: ComplianceScore?
@@ -133,7 +118,8 @@ class HybridGenerationStrategy(
                             code = generatedCode,
                             className = className,
                             rules = rules,
-                            classpath = request.classpath ?: ""
+                            classpath = request.classpath ?: "",
+                            projectContext = projectContext
                         )
                         violations = score?.violations ?: emptyList()
                     }
@@ -155,9 +141,7 @@ class HybridGenerationStrategy(
                 )
             }
 
-            // 2d. Проверка результата
             if (lastViolations.isEmpty() && (lastScore?.total ?: 0.0) >= warningThreshold) {
-                // Успех: код прошёл валидацию и достиг порога
                 logger.info(
                     "Hybrid-Strategy: Success at iteration $iteration: score=${lastScore?.total}%, " +
                             "violations=${lastViolations.size}, generation=${generationTime}ms, validation=${validationTime}ms"
@@ -175,14 +159,12 @@ class HybridGenerationStrategy(
                 )
             }
 
-            // Не успех: продолжаем цикл, если есть итерации
             logger.debug(
                 "Hybrid-Strategy: Iteration $iteration failed: score=${lastScore?.total}%, " +
                         "violations=${lastViolations.size}. Retrying..."
             )
         }
 
-        // Шаг 3: Исчерпаны итерации — возвращаем последний результат с предупреждением
         logger.warn(
             "Hybrid-Strategy: Exhausted $iteration iterations. Best score: ${lastScore?.total ?: "N/A"}%, " +
                     "violations: ${lastViolations.size}"
@@ -205,9 +187,6 @@ class HybridGenerationStrategy(
         )
     }
 
-    /**
-     * Создание успешного ответа с объединением предупреждений
-     */
     private fun createSuccessResponse(
         code: String,
         score: ComplianceScore?,
@@ -232,9 +211,6 @@ class HybridGenerationStrategy(
         )
     }
 
-    /**
-     * Извлечение имени класса из кода
-     */
     private fun extractClassName(code: String): String? {
         val pattern = Regex("""(?:public\s+)?(?:private\s+)?(?:protected\s+)?(?:abstract\s+)?(?:final\s+)?(?:sealed\s+)?(?:data\s+)?class\s+(\w+)""")
 
@@ -249,9 +225,6 @@ class HybridGenerationStrategy(
                 ?.takeIf { it.isNotBlank() && it !in listOf("class", "data", "sealed", "abstract") }
     }
 
-    /**
-     * Формирование стандартных предупреждений
-     */
     private fun buildWarnings(
         rules: List<ArchitecturalRule>,
         score: ComplianceScore?,

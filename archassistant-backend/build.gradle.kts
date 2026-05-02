@@ -57,6 +57,9 @@ dependencies {
     // Поддержка Java 8 date/time в Jackson (для LocalDateTime, Instant, etc.)
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.15.3")
 
+    // Structured logging (Logstash encoder)
+    implementation("net.logstash.logback:logstash-logback-encoder:7.4")
+
     // Testing
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")

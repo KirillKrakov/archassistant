@@ -15,24 +15,21 @@ class SpringAiConfig {
 
     @Bean
     fun openAiApi(): OpenAiApi {
-        val apiKey = System.getenv("GROQ_API_KEY")
-            ?: System.getenv("OPENAI_API_KEY")
-            ?: throw IllegalStateException("No API key found. Set GROQ_API_KEY or OPENAI_API_KEY.")
+        val apiKey = System.getenv("MISTRAL_API_KEY")
+            ?: throw IllegalStateException("No API key found. Set MISTRAL_API_KEY.")
 
-        val baseUrl = System.getenv("GROQ_BASE_URL") ?: "https://api.groq.com/openai"
-
+        val baseUrl = "https://api.mistral.ai"
         logger.info("Creating OpenAiApi with baseUrl: $baseUrl")
-
         return OpenAiApi(baseUrl, apiKey)
     }
 
     @Bean
     fun openAiChatOptions(): OpenAiChatOptions {
-        val model = System.getenv("GROQ_MODEL") ?: "llama-3.3-70b-versatile"
+        val model = System.getenv("MISTRAL_MODEL") ?: "devstral-2512"
         return OpenAiChatOptions.builder()
             .withModel(model)
             .withTemperature(0.2)
-            .withMaxTokens(4096)
+            .withMaxTokens(8000)
             .withFrequencyPenalty(0.0)
             .withPresencePenalty(0.0)
             .build()

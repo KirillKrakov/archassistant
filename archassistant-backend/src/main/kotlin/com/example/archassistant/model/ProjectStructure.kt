@@ -4,7 +4,7 @@ import java.time.LocalDateTime
 
 data class ProjectStructure(
     val projectId: String,
-    val architecturePattern: ArchitecturePattern? = null, // только для совместимости
+    val architecturePattern: ArchitecturePattern? = null,
     val detection: ProjectProfileDetection? = null,
     val packages: List<String> = emptyList(),
     val classes: List<ClassInfo> = emptyList(),
@@ -110,7 +110,8 @@ data class ClassInfo(
     val packageName: String,
     val annotations: List<String> = emptyList(),
     val dependencies: List<String> = emptyList(),
-    val modifiers: List<String> = emptyList()
+    val modifiers: List<String> = emptyList(),
+    val publicMethods: List<String> = emptyList()
 )
 
 enum class ClassType {
