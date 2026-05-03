@@ -9,7 +9,8 @@ enum class SelectorMode {
     PACKAGE,
     CLASS_TYPE,
     LAYER,
-    ANNOTATION
+    ANNOTATION,
+    MEMBER
 }
 
 data class ArchitecturalRule(
@@ -61,6 +62,60 @@ data class ArchitecturalRule(
     @JsonProperty("to_layer_type")
     val toLayerType: LayerType? = null,
 
+    @JsonProperty("from_name_pattern")
+    val fromNamePattern: String? = null,
+
+    @JsonProperty("to_name_pattern")
+    val toNamePattern: String? = null,
+
+    @JsonProperty("from_method_name_pattern")
+    val fromMethodNamePattern: String? = null,
+
+    @JsonProperty("to_method_name_pattern")
+    val toMethodNamePattern: String? = null,
+
+    @JsonProperty("from_field_name_pattern")
+    val fromFieldNamePattern: String? = null,
+
+    @JsonProperty("to_field_name_pattern")
+    val toFieldNamePattern: String? = null,
+
+    @JsonProperty("from_return_type")
+    val fromReturnType: String? = null,
+
+    @JsonProperty("to_return_type")
+    val toReturnType: String? = null,
+
+    @JsonProperty("from_parameter_types")
+    val fromParameterTypes: List<String>? = null,
+
+    @JsonProperty("to_parameter_types")
+    val toParameterTypes: List<String>? = null,
+
+    @JsonProperty("from_throws_types")
+    val fromThrowsTypes: List<String>? = null,
+
+    @JsonProperty("to_throws_types")
+    val toThrowsTypes: List<String>? = null,
+
+    @JsonProperty("from_modifiers")
+    val fromModifiers: List<String>? = null,
+
+    @JsonProperty("to_modifiers")
+    val toModifiers: List<String>? = null,
+
+    @JsonProperty("from_field_type")
+    val fromFieldType: String? = null,
+
+    @JsonProperty("to_field_type")
+    val toFieldType: String? = null,
+
+    @JsonProperty("slice_pattern")
+    val slicePattern: String? = null,
+
+    @JsonProperty("max_cycle_length")
+    val maxCycleLength: Int? = null,
+
     @JsonProperty("severity")
     val severity: Severity = Severity.WARNING,
 
@@ -85,13 +140,28 @@ enum class RuleType {
     NAMING_CONVENTION,
     ANNOTATION_CHECK,
     LAYER_ISOLATION,
+    CYCLE_CHECK,
+    INHERITANCE_CHECK,
+    INTERFACE_CHECK,
+    MODIFIER_CHECK,
+    METHOD_SIGNATURE_CHECK,
+    FIELD_CHECK,
+    EXCEPTION_CHECK,
     CUSTOM;
 
     companion object {
+        private fun normalize(value: String): String =
+            value.trim()
+                .replace('-', '_')
+                .replace(' ', '_')
+                .replace(Regex("([a-z0-9])([A-Z])"), "$1_$2")
+                .uppercase()
+
         @JvmStatic
         @JsonCreator
         fun fromValue(value: String): RuleType {
-            return entries.find { it.name.equals(value, ignoreCase = true) } ?: DEPENDENCY
+            val normalized = normalize(value)
+            return entries.find { it.name.equals(normalized, ignoreCase = true) } ?: DEPENDENCY
         }
     }
 
@@ -106,13 +176,51 @@ enum class ConstraintType {
     NAMING_PREFIX,
     HAS_ANNOTATION,
     NO_ANNOTATION,
+
+    NO_CYCLE,
+    MAX_CYCLE_LENGTH,
+
+    SHOULD_EXTEND,
+    SHOULD_NOT_EXTEND,
+    SHOULD_IMPLEMENT,
+    SHOULD_NOT_IMPLEMENT,
+
+    SHOULD_BE_PUBLIC,
+    SHOULD_NOT_BE_PUBLIC,
+    SHOULD_BE_FINAL,
+    SHOULD_NOT_BE_FINAL,
+    SHOULD_BE_ABSTRACT,
+    SHOULD_NOT_BE_ABSTRACT,
+
+    RETURN_TYPE,
+    PARAMETER_COUNT,
+    PARAMETER_TYPES,
+    METHOD_VISIBILITY,
+    METHOD_NAME_PATTERN,
+
+    FIELD_TYPE,
+    FIELD_VISIBILITY,
+    FIELD_ANNOTATION,
+    FIELD_NAME_PATTERN,
+
+    SHOULD_ONLY_THROW,
+    SHOULD_NOT_THROW,
+
     CUSTOM;
 
     companion object {
+        private fun normalize(value: String): String =
+            value.trim()
+                .replace('-', '_')
+                .replace(' ', '_')
+                .replace(Regex("([a-z0-9])([A-Z])"), "$1_$2")
+                .uppercase()
+
         @JvmStatic
         @JsonCreator
         fun fromValue(value: String): ConstraintType {
-            return entries.find { it.name.equals(value, ignoreCase = true) } ?: NO_DEPENDENCY
+            val normalized = normalize(value)
+            return entries.find { it.name.equals(normalized, ignoreCase = true) } ?: NO_DEPENDENCY
         }
     }
 

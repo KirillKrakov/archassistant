@@ -12,6 +12,11 @@ import com.example.archassistant.util.PackagePatternBuilder
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
+import com.example.archassistant.dto.RuleDefinition
+import com.example.archassistant.model.ArchitecturalRule
+import com.example.archassistant.model.ConstraintType
+import com.example.archassistant.model.RuleType
+import com.example.archassistant.model.SelectorMode
 
 @RestController
 @RequestMapping("/api/validate")
@@ -194,54 +199,110 @@ class ValidationController(
  */
 object RuleConverter {
 
-    fun convert(input: com.example.archassistant.dto.RuleDefinition): com.example.archassistant.model.ArchitecturalRule {
+    fun convert(input: RuleDefinition): ArchitecturalRule {
         val type = convertType(input.type)
         val constraint = input.constraint?.let { convertConstraint(it) } ?: defaultConstraintFor(type)
 
-        return com.example.archassistant.model.ArchitecturalRule(
-            id = "temp_${java.util.UUID.randomUUID()}",
-            name = "Converted rule from ${input.fromPackage}",
-            description = "Rule converted from API request",
+        return ArchitecturalRule(
+            id = input.id?.takeIf { it.isNotBlank() } ?: "temp_${java.util.UUID.randomUUID()}",
+            name = input.name ?: "Converted rule from ${input.fromPackage}",
+            description = input.description ?: "Rule converted from API request",
             type = type,
-            fromPackage = normalizePackagePattern(input.fromPackage),
-            toPackage = input.toPackage?.let { normalizePackagePattern(it) },
-            toPackages = input.toPackages?.map { normalizePackagePattern(it) },
+            fromPackage = normalizeReferenceValue(input.fromPackage) ?: input.fromPackage,
+            toPackage = normalizeReferenceValue(input.toPackage),
+            toPackages = input.toPackages?.mapNotNull { normalizeReferenceValue(it) },
             constraint = constraint,
-            severity = com.example.archassistant.model.Severity.WARNING,
-            weight = 1.0,
-            enabled = true,
+            pattern = input.pattern,
+            annotation = input.annotation,
+            fromSelectorMode = convertSelectorMode(input.fromSelectorMode) ?: SelectorMode.PACKAGE,
+            toSelectorMode = convertSelectorMode(input.toSelectorMode) ?: SelectorMode.PACKAGE,
+            fromClassType = convertClassType(input.fromClassType),
+            toClassType = convertClassType(input.toClassType),
+            fromLayerType = convertLayerType(input.fromLayerType),
+            toLayerType = convertLayerType(input.toLayerType),
+            fromNamePattern = input.fromNamePattern,
+            toNamePattern = input.toNamePattern,
+            fromMethodNamePattern = input.fromMethodNamePattern,
+            toMethodNamePattern = input.toMethodNamePattern,
+            fromFieldNamePattern = input.fromFieldNamePattern,
+            toFieldNamePattern = input.toFieldNamePattern,
+            fromReturnType = input.fromReturnType,
+            toReturnType = input.toReturnType,
+            fromParameterTypes = input.fromParameterTypes,
+            toParameterTypes = input.toParameterTypes,
+            fromThrowsTypes = input.fromThrowsTypes,
+            toThrowsTypes = input.toThrowsTypes,
+            fromModifiers = input.fromModifiers,
+            toModifiers = input.toModifiers,
+            fromFieldType = input.fromFieldType,
+            toFieldType = input.toFieldType,
+            slicePattern = input.slicePattern,
+            maxCycleLength = input.maxCycleLength,
+            severity = convertSeverity(input.severity),
+            weight = input.weight ?: 1.0,
+            enabled = input.enabled,
             suggested = false
         )
     }
 
-    private fun convertType(typeString: String): com.example.archassistant.model.RuleType {
-        return try {
-            com.example.archassistant.model.RuleType.valueOf(typeString.uppercase())
-        } catch (e: IllegalArgumentException) {
-            com.example.archassistant.model.RuleType.DEPENDENCY
+    private fun normalizeReferenceValue(raw: String?): String? {
+        if (raw.isNullOrBlank()) return null
+
+        val value = raw.trim()
+        val simple = value.substringAfterLast('.')
+        val looksLikeTypeName =
+            simple.isNotBlank() &&
+                    simple.firstOrNull()?.isUpperCase() == true &&
+                    !value.contains('*') &&
+                    !value.contains("..")
+
+        return if (looksLikeTypeName) {
+            value
+        } else {
+            PackagePatternBuilder.buildWildcardPatterns(listOf(value)).firstOrNull() ?: value
         }
     }
 
-    private fun convertConstraint(constraintString: String): com.example.archassistant.model.ConstraintType {
-        return try {
-            com.example.archassistant.model.ConstraintType.valueOf(
-                constraintString.uppercase().replace(" ", "_")
-            )
-        } catch (e: IllegalArgumentException) {
-            com.example.archassistant.model.ConstraintType.NO_DEPENDENCY
-        }
+    private fun convertType(typeString: String): RuleType {
+        return runCatching { RuleType.fromValue(typeString) }.getOrDefault(RuleType.DEPENDENCY)
     }
 
-    private fun defaultConstraintFor(type: com.example.archassistant.model.RuleType): com.example.archassistant.model.ConstraintType {
+    private fun convertConstraint(constraintString: String): ConstraintType {
+        return runCatching { ConstraintType.fromValue(constraintString) }.getOrDefault(ConstraintType.NO_DEPENDENCY)
+    }
+
+    private fun convertSelectorMode(value: String?): SelectorMode? {
+        if (value.isNullOrBlank()) return null
+        return runCatching { SelectorMode.valueOf(value.trim().uppercase()) }.getOrNull()
+    }
+
+    private fun convertClassType(value: String?): com.example.archassistant.model.ClassType? {
+        if (value.isNullOrBlank()) return null
+        return runCatching { com.example.archassistant.model.ClassType.valueOf(value.trim().uppercase()) }.getOrNull()
+    }
+
+    private fun convertLayerType(value: String?): com.example.archassistant.model.LayerType? {
+        if (value.isNullOrBlank()) return null
+        return runCatching { com.example.archassistant.model.LayerType.valueOf(value.trim().uppercase()) }.getOrNull()
+    }
+
+    private fun convertSeverity(value: String): Severity {
+        return runCatching { Severity.valueOf(value.trim().uppercase()) }.getOrDefault(Severity.INFO)
+    }
+
+    private fun defaultConstraintFor(type: RuleType): ConstraintType {
         return when (type) {
-            com.example.archassistant.model.RuleType.DEPENDENCY -> com.example.archassistant.model.ConstraintType.NO_DEPENDENCY
-            com.example.archassistant.model.RuleType.NAMING_CONVENTION -> com.example.archassistant.model.ConstraintType.NAMING_SUFFIX
-            com.example.archassistant.model.RuleType.ANNOTATION_CHECK -> com.example.archassistant.model.ConstraintType.HAS_ANNOTATION
-            else -> com.example.archassistant.model.ConstraintType.NO_DEPENDENCY
+            RuleType.DEPENDENCY, RuleType.LAYER_ISOLATION -> ConstraintType.NO_DEPENDENCY
+            RuleType.NAMING_CONVENTION -> ConstraintType.NAMING_SUFFIX
+            RuleType.ANNOTATION_CHECK -> ConstraintType.HAS_ANNOTATION
+            RuleType.CYCLE_CHECK -> ConstraintType.NO_CYCLE
+            RuleType.INHERITANCE_CHECK -> ConstraintType.SHOULD_EXTEND
+            RuleType.INTERFACE_CHECK -> ConstraintType.SHOULD_IMPLEMENT
+            RuleType.MODIFIER_CHECK -> ConstraintType.SHOULD_BE_PUBLIC
+            RuleType.METHOD_SIGNATURE_CHECK -> ConstraintType.METHOD_NAME_PATTERN
+            RuleType.FIELD_CHECK -> ConstraintType.FIELD_NAME_PATTERN
+            RuleType.EXCEPTION_CHECK -> ConstraintType.SHOULD_ONLY_THROW
+            RuleType.CUSTOM -> ConstraintType.CUSTOM
         }
-    }
-
-    private fun normalizePackagePattern(pattern: String): String {
-        return PackagePatternBuilder.buildWildcardPatterns(listOf(pattern)).firstOrNull() ?: pattern
     }
 }
