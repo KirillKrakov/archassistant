@@ -68,35 +68,39 @@ object ArchUnitRuleBuilder {
     }
 
     private fun predicateFor(rule: ArchitecturalRule, isFrom: Boolean): DescribedPredicate<JavaClass> {
-        val mode = if (isFrom) rule.fromSelectorMode else rule.toSelectorMode
-        val packagePattern = if (isFrom) {
-            rule.fromPackage
+        val selectorMode = if (isFrom) rule.fromSelectorMode else rule.toSelectorMode
+        val classType = if (isFrom) rule.fromClassType else rule.toClassType
+        val layerType = if (isFrom) rule.fromLayerType else rule.toLayerType
+        val annotation = rule.annotation
+        val packages: List<String> = if (isFrom) {
+            listOf(rule.fromPackage)
         } else {
-            when {
-                !rule.toPackages.isNullOrEmpty() -> rule.toPackages.first()
-                !rule.toPackage.isNullOrBlank() -> rule.toPackage
-                else -> rule.fromPackage
+            rule.toPackages?.ifEmpty { null } ?: listOfNotNull(rule.toPackage)
+        }
+
+        val predicates = mutableListOf<DescribedPredicate<JavaClass>>()
+
+        if (packages.isNotEmpty()) {
+            predicates.add(JavaClass.Predicates.resideInAnyPackage(*packages.toTypedArray()))
+        }
+
+        when (selectorMode) {
+            SelectorMode.CLASS_TYPE -> {
+                if (classType != null) predicates.add(classTypePredicate(classType))
             }
+            SelectorMode.LAYER -> {
+                if (layerType != null) predicates.add(layerPredicate(layerType))
+            }
+            SelectorMode.ANNOTATION -> {
+                if (!annotation.isNullOrBlank()) predicates.add(annotationPredicate(annotation))
+            }
+            SelectorMode.PACKAGE -> { }
         }
 
-        val packagePredicate = if (packagePattern.isNotBlank()) {
-            packagePredicate(packagePattern)
+        return if (predicates.isEmpty()) {
+            DescribedPredicate.alwaysTrue()
         } else {
-            null
-        }
-
-        val modePredicate = when (mode) {
-            SelectorMode.PACKAGE -> null
-            SelectorMode.CLASS_TYPE -> classTypePredicate(if (isFrom) rule.fromClassType else rule.toClassType)
-            SelectorMode.LAYER -> layerPredicate(if (isFrom) rule.fromLayerType else rule.toLayerType)
-            SelectorMode.ANNOTATION -> annotationPredicate(rule.annotation)
-        }
-
-        return when {
-            packagePredicate != null && modePredicate != null -> and(packagePredicate, modePredicate)
-            packagePredicate != null -> packagePredicate
-            modePredicate != null -> modePredicate
-            else -> alwaysTruePredicate()
+            predicates.reduce { acc, predicate -> acc.and(predicate) }
         }
     }
 

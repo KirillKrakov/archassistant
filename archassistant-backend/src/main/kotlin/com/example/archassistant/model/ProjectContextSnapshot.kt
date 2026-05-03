@@ -113,6 +113,10 @@ data class ProjectContextSnapshot(
 
             importantDependencies:
             $dependencyText
+            
+            IMPORTANT: The list of existingClassSignatures is exhaustive.
+            If a class is not listed, it does not exist in the project.
+            Use only listed classes or generate any missing ones as separate files.
 
             INSTRUCTIONS FOR GENERATION:
             - Use only packages that exist in knownPackages or are the base package root.
