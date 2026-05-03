@@ -25,7 +25,7 @@ class SpringAiConfig {
 
     @Bean
     fun openAiChatOptions(): OpenAiChatOptions {
-        val model = System.getenv("MISTRAL_MODEL") ?: "devstral-2512"
+        val model = System.getenv("MISTRAL_MODEL")
         return OpenAiChatOptions.builder()
             .withModel(model)
             .withTemperature(0.2)
