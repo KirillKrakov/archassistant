@@ -54,17 +54,8 @@ data class ProjectContextSnapshot(
             "${it.primaryProfile.name} (confidence ${"%.2f".format(it.confidence)})"
         } ?: "unknown"
 
-        val packageText = packages
-            .sorted()
-            .take(maxPackages)
-            .joinToString(", ")
-            .ifBlank { "none" }
-
-        val featureRootsText = structure
-            .featureRoots(basePackage)
-            .take(10)
-            .joinToString(", ")
-            .ifBlank { "none" }
+        val packageText = packages.sorted().take(maxPackages).joinToString(", ").ifBlank { "none" }
+        val featureRootsText = structure.featureRoots(basePackage).take(10).joinToString(", ").ifBlank { "none" }
 
         val layerText = structure
             .effectiveLayerMap()
@@ -98,11 +89,6 @@ data class ProjectContextSnapshot(
             }
             .ifBlank { "- none" }
 
-        val absentRoots = listOf("repository", "repositories", "vaccination", "vaccinations")
-            .filter { root -> packages.none { pkg -> pkg.contains(".$root.") || pkg.endsWith(".$root") || pkg == "$basePackage.$root" } }
-
-        val absentRootsText = absentRoots.takeIf { it.isNotEmpty() }?.joinToString(", ") ?: "none"
-
         return """
             PROJECT CONTEXT
             - projectId: $projectId
@@ -111,7 +97,6 @@ data class ProjectContextSnapshot(
             - architecturePattern: ${architecturePattern?.name ?: "unknown"}
             - detectedProfile: $profileText
             - knownPackages: $packageText
-            - missingCommonRoots: $absentRootsText
             - featureRoots: $featureRootsText
 
             namingConventions:
@@ -131,9 +116,8 @@ data class ProjectContextSnapshot(
 
             INSTRUCTIONS FOR GENERATION:
             - Use only packages that exist in knownPackages or are the base package root.
-            - Do not invent package roots such as repository, repositories, or vaccination if they are not present in this project.
             - Prefer existing classes and exact public method signatures from this context.
-            - If a method signature is shown here, use its real return type exactly as written.
+            - Never invent repository/service/controller types if a matching class is already present in the project.
         """.trimIndent()
     }
 

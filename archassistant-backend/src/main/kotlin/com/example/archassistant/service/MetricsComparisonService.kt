@@ -14,6 +14,12 @@ class MetricsComparisonService(
     private val recordRepository: GenerationRecordRepository
 ) {
 
+    private companion object {
+        const val ITERATION_TARGET = 5.0
+        const val TURNAROUND_TARGET_MS = 20_000.0
+        const val QUALITY_THRESHOLD = 70.0
+    }
+
     private val logger = LoggerFactory.getLogger(MetricsComparisonService::class.java)
 
     /**
@@ -62,36 +68,50 @@ class MetricsComparisonService(
         records: List<GenerationRecord>
     ): StrategyComparison {
         val total = records.size.toLong()
-        val successCount = records.count { it.success }.toLong()
-        val successRate = if (total > 0) successCount.toDouble() / total else 0.0
+
+        val successRate = if (total > 0) {
+            records.map { effectiveSuccessScore(it) }.average()
+        } else {
+            0.0
+        }
 
         val scoreTotals = records.mapNotNull { it.scoreTotal }
         val avgScore = if (scoreTotals.isNotEmpty()) scoreTotals.average() else null
-
-        val avgIterations = records.map { it.iterations }.average()
-        val avgGenTime = records.map { it.generationTimeMs }.average()
-        val avgValTime = records.map { it.validationTimeMs }.average()
-        val avgViolations = records.map { it.violationsCount }.average()
 
         return StrategyComparison(
             strategy = strategy,
             totalGenerations = total,
             successRate = successRate,
             avgScore = avgScore,
-            avgIterations = avgIterations,
-            avgGenerationTimeMs = avgGenTime,
-            avgValidationTimeMs = avgValTime,
-            avgViolations = avgViolations
+            avgIterations = records.map { it.iterations }.average(),
+            avgGenerationTimeMs = records.map { it.generationTimeMs }.average(),
+            avgValidationTimeMs = records.map { it.validationTimeMs }.average(),
+            avgViolations = records.map { it.violationsCount }.average()
         )
     }
 
+    private fun effectiveSuccessScore(record: GenerationRecord): Double {
+        return when {
+            !record.success -> 0.0
+            record.scoreTotal == null || record.scoreTotal <= QUALITY_THRESHOLD -> 0.5
+            else -> 1.0
+        }
+    }
+
     private fun generateRecommendation(comparisons: List<StrategyComparison>): Recommendation {
-        // Простая эвристика: лучшая стратегия = высокая успешность + высокая оценка + низкое время
         val scored = comparisons.map { comp ->
-            val score = comp.successRate * 0.4 +
-                    (comp.avgScore?.let { it / 100.0 } ?: 0.0) * 0.3 +
-                    (1.0 - (comp.avgGenerationTimeMs / 5000.0).coerceIn(0.0, 1.0)) * 0.2 +
-                    (1.0 - (comp.avgIterations / 5.0).coerceIn(0.0, 1.0)) * 0.1
+            val qualityScore = (comp.avgScore ?: 0.0).coerceIn(0.0, 100.0) / 100.0
+            val turnaroundMs = comp.avgGenerationTimeMs + comp.avgValidationTimeMs
+            val timeScore = 1.0 - (turnaroundMs / TURNAROUND_TARGET_MS).coerceIn(0.0, 1.0)
+            val iterationScore = 1.0 - (comp.avgIterations / ITERATION_TARGET).coerceIn(0.0, 1.0)
+
+            val score = (
+                    qualityScore * 0.55 +
+                            comp.successRate * 0.25 +
+                            timeScore * 0.15 +
+                            iterationScore * 0.05
+                    ).coerceIn(0.0, 1.0)
+
             comp to score
         }
 
@@ -101,16 +121,26 @@ class MetricsComparisonService(
             confidence = 0.0
         )
 
+        val runnerUp = scored.sortedByDescending { it.second }.getOrNull(1)
+        val confidence = if (runnerUp == null) {
+            best.second
+        } else {
+            (0.55 + (best.second - runnerUp.second).coerceIn(0.0, 1.0) * 0.45).coerceIn(0.0, 1.0)
+        }
+
         val reason = buildString {
-            append("Best balance of success rate (${best.first.successRate * 100}%), ")
-            append("quality score (${best.first.avgScore?.toInt()}%), ")
-            append("and generation time (${best.first.avgGenerationTimeMs.toInt()}ms)")
+            append("Best balance of effective success (${formatPercent(best.first.successRate)}%), ")
+            append("avg quality score (${formatScore(best.first.avgScore)}%), ")
+            append("and total turnaround time (${(best.first.avgGenerationTimeMs + best.first.avgValidationTimeMs).toInt()}ms)")
         }
 
         return Recommendation(
             bestStrategy = best.first.strategy,
             reason = reason,
-            confidence = best.second
+            confidence = confidence
         )
     }
+
+    private fun formatPercent(value: Double): String = "%.1f".format(value * 100.0)
+    private fun formatScore(value: Double?): String = value?.let { "%.1f".format(it) } ?: "N/A"
 }

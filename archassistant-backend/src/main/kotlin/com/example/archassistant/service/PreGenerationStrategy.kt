@@ -5,6 +5,7 @@ import com.example.archassistant.dto.CodeGenerationResponse
 import com.example.archassistant.dto.GenerationResponseFactory
 import com.example.archassistant.model.*
 import com.example.archassistant.util.CodeCleaner
+import com.example.archassistant.util.GeneratedTypeNameExtractor
 import com.example.archassistant.util.PromptFormatter
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -105,7 +106,7 @@ class PreGenerationStrategy(
         val warnings = mutableListOf<String>()
 
         if (request.collectMetrics) {
-            val className = request.expectedClassName ?: extractClassName(generatedCode)
+            val className = request.expectedClassName ?: GeneratedTypeNameExtractor.extract(generatedCode)
 
             if (className != null) {
                 validationTime = measureTimeMillis {
@@ -152,19 +153,5 @@ class PreGenerationStrategy(
             model = llmOrchestrator.extractModelName(),
             warnings = warnings
         )
-    }
-
-    private fun extractClassName(code: String): String? {
-        val pattern = Regex("""(?:public\s+)?(?:private\s+)?(?:protected\s+)?(?:abstract\s+)?(?:final\s+)?(?:sealed\s+)?(?:data\s+)?class\s+(\w+)""")
-
-        return pattern.find(code)?.groupValues?.get(1)
-            ?: code.lines()
-                .firstOrNull { line ->
-                    line.contains("class ") && !line.trimStart().startsWith("//") && !line.trimStart().startsWith("/*")
-                }
-                ?.substringAfter("class ")
-                ?.substringBefore(' ')
-                ?.substringBefore('{')
-                ?.takeIf { it.isNotBlank() && it !in listOf("class", "data", "sealed", "abstract") }
     }
 }

@@ -1,7 +1,6 @@
 package com.example.archassistant.controller
 
 import com.example.archassistant.dto.ExportRequest
-import com.example.archassistant.dto.StrategyMetrics
 import com.example.archassistant.model.GenerationRecord
 import com.example.archassistant.repository.GenerationRecordRepository
 import com.example.archassistant.service.MetricsComparisonService
@@ -13,6 +12,7 @@ import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import java.time.LocalDateTime
 import com.example.archassistant.dto.ExportFormat
+import com.example.archassistant.dto.GenerationRecordDto
 
 @RestController
 @RequestMapping("/api/metrics")
@@ -22,6 +22,10 @@ class MetricsController(
     private val exportService: MetricsExportService,
     private val comparisonService: MetricsComparisonService
 ) {
+
+    private companion object {
+        const val RECENT_HISTORY_LIMIT = 50
+    }
 
     private val logger = LoggerFactory.getLogger(MetricsController::class.java)
 
@@ -47,7 +51,7 @@ class MetricsController(
     @GetMapping("/{projectId}")
     fun getProjectMetrics(@PathVariable projectId: String): ResponseEntity<Map<String, Any?>> {
         val totalGenerations = metricsRepository.countByProjectId(projectId)
-        val history = metricsRepository.findByProjectIdOrderByCreatedAtDesc(projectId).take(10)
+        val history = metricsRepository.findByProjectIdOrderByCreatedAtDesc(projectId).take(RECENT_HISTORY_LIMIT)
         val scoreTotals = history.mapNotNull { it.scoreTotal }
         val avgScore = if (scoreTotals.isNotEmpty()) scoreTotals.average() else null
         val lastGeneration = history.firstOrNull()?.createdAt
@@ -55,8 +59,8 @@ class MetricsController(
         return ResponseEntity.ok(mapOf(
             "projectId" to projectId,
             "totalGenerations" to totalGenerations,
-            "avgScore" to (avgScore?.let { "%.2f".format(it).toDouble() } ?: null),
-            "lastGeneration" to (lastGeneration?.toString() ?: null),
+            "avgScore" to avgScore?.let { "%.2f".format(it).toDouble() },
+            "lastGeneration" to lastGeneration?.toString(),
             "recentHistory" to history.map { record ->
                 mapOf<String, Any?>(
                     "strategy" to record.strategy.name,
@@ -87,7 +91,8 @@ class MetricsController(
                 iterations = record.iterations,
                 generationTimeMs = record.generationTimeMs,
                 validationTimeMs = record.validationTimeMs,
-                violationsCount = record.violationsCount
+                violationsCount = record.violationsCount,
+                violationsJson = record.violationsJson
             )
 
             metricsRepository.save(entity)
@@ -99,10 +104,6 @@ class MetricsController(
                 .body(mapOf<String, Any>("success" to false, "error" to (e.message ?: "Unknown error")))
         }
     }
-
-    // ─────────────────────────────────────────────────────────────────
-    // НОВЫЕ эндпоинты Этапа 12
-    // ─────────────────────────────────────────────────────────────────
 
     /**
      * Экспорт метрик в CSV/JSON
@@ -169,8 +170,12 @@ class MetricsController(
                         fromDate,
                         toDate
                     )
-                strategy != null ->
-                    metricsRepository.findByProjectIdAndStrategy(projectId, com.example.archassistant.model.StrategyType.valueOf(strategy))
+                strategy != null -> {
+                    val strategyType = parseStrategyOrNull(strategy)
+                        ?: return ResponseEntity.badRequest().body(mapOf("error" to "Unknown strategy: $strategy"))
+
+                    metricsRepository.findByProjectIdAndStrategy(projectId, strategyType)
+                }
                 fromDate != null && toDate != null ->
                     metricsRepository.findByProjectIdAndCreatedAtBetween(projectId, fromDate, toDate)
                 else ->
@@ -208,20 +213,11 @@ class MetricsController(
                 .body(mapOf("error" to "History fetch failed: ${e.message}"))
         }
     }
-}
 
-// DTO для сохранения записи (уже есть, но на всякий случай)
-data class GenerationRecordDto(
-    val id: String? = null,
-    val projectId: String,
-    val strategy: com.example.archassistant.model.StrategyType,
-    val success: Boolean,
-    val scoreTotal: Double? = null,
-    val scoreRulesPass: Double? = null,
-    val scorePatternMatch: Double? = null,
-    val scoreDependencyCorrect: Double? = null,
-    val iterations: Int = 1,
-    val generationTimeMs: Long = 0,
-    val validationTimeMs: Long = 0,
-    val violationsCount: Int = 0
-)
+    private fun parseStrategyOrNull(value: String?): com.example.archassistant.model.StrategyType? {
+        if (value.isNullOrBlank()) return null
+        return runCatching {
+            com.example.archassistant.model.StrategyType.valueOf(value.uppercase())
+        }.getOrNull()
+    }
+}

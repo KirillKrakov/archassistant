@@ -99,34 +99,37 @@ class LlmOrchestrator(
         userPrompt: String,
         maxRetries: Int
     ): String {
-
         var lastException: Exception? = null
 
         for (attempt in 1..maxRetries) {
             try {
-                return chatClient.prompt()
+                val chatResponse = chatClient.prompt()
                     .system(systemPrompt)
                     .user(userPrompt)
                     .call()
-                    .content()
+                    .chatResponse()
+
+                val usage = chatResponse?.metadata?.usage
+                logger.info(
+                    "LLM usage: promptTokens={}, generationTokens={}, totalTokens={}",
+                    usage?.promptTokens,
+                    usage?.generationTokens,
+                    usage?.totalTokens
+                )
+
+                return chatResponse?.results?.firstOrNull()
+                    ?.output
+                    ?.content
                     ?: throw LlmGenerationException("Empty response from LLM", isRetryable = false)
 
             } catch (e: LlmGenerationException) {
-                if (!e.isRetryable) {
-                    logger.warn("Non-retryable LLM error on attempt $attempt: ${e.message}")
-                    throw e
-                }
+                if (!e.isRetryable) throw e
                 lastException = e
-                logger.warn("LLM call attempt $attempt failed: ${e.message}, will retry")
-
             } catch (e: Exception) {
                 lastException = e
-                logger.warn("LLM call attempt $attempt failed: ${e.message}, will retry")
             }
 
-            if (attempt < maxRetries) {
-                Thread.sleep(1000L * attempt)
-            }
+            if (attempt < maxRetries) Thread.sleep(1000L * attempt)
         }
 
         throw LlmGenerationException(

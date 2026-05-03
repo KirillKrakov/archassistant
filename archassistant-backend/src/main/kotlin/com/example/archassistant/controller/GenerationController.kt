@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.*
 import com.example.archassistant.model.GenerationRecord
 import com.example.archassistant.model.StrategyType
 import com.example.archassistant.repository.GenerationRecordRepository
+import com.fasterxml.jackson.databind.ObjectMapper
 
 /**
  * Контроллер для генерации кода с архитектурным контролем
@@ -23,7 +24,8 @@ import com.example.archassistant.repository.GenerationRecordRepository
 @CrossOrigin(origins = ["*"]) // Для удобства тестирования из Postman/браузера (поменять в production)
 class GenerationController(
     private val strategyOrchestrator: StrategyOrchestrator,
-    private val metricsRepository: GenerationRecordRepository
+    private val metricsRepository: GenerationRecordRepository,
+    private val objectMapper: ObjectMapper
 ) {
 
     private val logger = LoggerFactory.getLogger(GenerationController::class.java)
@@ -105,6 +107,7 @@ class GenerationController(
 
     private fun saveMetricsAsync(projectId: String, response: CodeGenerationResponse) {
         try {
+            val violations = response.data?.score?.violations.orEmpty()
             val record = GenerationRecord(
                 projectId = projectId,
                 strategy = response.data?.strategy ?: StrategyType.HYBRID,
@@ -116,12 +119,12 @@ class GenerationController(
                 iterations = response.data?.iterations ?: 1,
                 generationTimeMs = response.metadata.generationTimeMs,
                 validationTimeMs = response.metadata.validationTimeMs,
-                violationsCount = response.data?.score?.violations?.size ?: 0
+                violationsCount = violations.size,
+                violationsJson = if (violations.isNotEmpty()) objectMapper.writeValueAsString(violations) else null
             )
             metricsRepository.save(record)
         } catch (e: Exception) {
             logger.warn("Failed to save metrics: ${e.message}")
-            // Не прерываем основной поток, просто логируем
         }
     }
 }
