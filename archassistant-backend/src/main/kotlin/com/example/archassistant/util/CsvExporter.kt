@@ -1,7 +1,6 @@
 package com.example.archassistant.util
 
 import com.example.archassistant.model.GenerationRecord
-import com.example.archassistant.model.Severity
 import org.springframework.stereotype.Component
 import java.time.format.DateTimeFormatter
 
@@ -18,7 +17,7 @@ class CsvExporter {
             "id", "projectId", "strategy", "success", "scoreTotal", "scoreRulesPass",
             "scorePatternMatch", "scoreDependencyCorrect", "iterations", "generationTimeMs",
             "validationTimeMs", "violationsCount", "createdAt"
-        ) + if (includeViolations) listOf("violations") else emptyList()
+        ) + if (includeViolations) listOf("violationsJson") else emptyList()
 
         val rows = records.map { record ->
             val base = listOf(
@@ -26,10 +25,10 @@ class CsvExporter {
                 record.projectId,
                 record.strategy.name,
                 record.success.toString(),
-                record.scoreTotal?.toString() ?: "",
-                record.scoreRulesPass?.toString() ?: "",
-                record.scorePatternMatch?.toString() ?: "",
-                record.scoreDependencyCorrect?.toString() ?: "",
+                record.scoreTotal?.toString() ?: "N/A",
+                record.scoreRulesPass?.toString() ?: "N/A",
+                record.scorePatternMatch?.toString() ?: "N/A",
+                record.scoreDependencyCorrect?.toString() ?: "N/A",
                 record.iterations.toString(),
                 record.generationTimeMs.toString(),
                 record.validationTimeMs.toString(),
@@ -37,8 +36,7 @@ class CsvExporter {
                 record.createdAt.format(dateTimeFormatter)
             )
             if (includeViolations) {
-                // violations пока не сохраняем в GenerationRecord, заглушка
-                base + listOf("")
+                base + listOf(record.violationsJson?.let { escapeCsv(it) } ?: "N/A")
             } else {
                 base
             }

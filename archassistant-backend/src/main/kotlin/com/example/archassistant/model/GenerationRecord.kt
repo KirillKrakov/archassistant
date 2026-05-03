@@ -47,6 +47,9 @@ data class GenerationRecord(
     @Column
     val violationsCount: Int = 0,
 
+    @Column(columnDefinition = "TEXT")
+    val violationsJson: String? = null,
+
     @Column(nullable = false)
     val createdAt: LocalDateTime = LocalDateTime.now()
 )

@@ -32,10 +32,16 @@ class MetricsExportService(
         val records = fetchRecords(request)
 
         // 2. Экспортируем в запрошенный формат
+        val exportRecords = if (request.includeViolations) {
+            records
+        } else {
+            records.map { it.copy(violationsJson = null) }
+        }
+
         val content = when (request.format) {
-            ExportFormat.CSV -> csvExporter.export(records, request.includeViolations)
-            ExportFormat.JSON -> jsonExporter.export(records, pretty = false)
-            ExportFormat.JSON_PRETTY -> jsonExporter.export(records, pretty = true)
+            ExportFormat.CSV -> csvExporter.export(exportRecords, request.includeViolations)
+            ExportFormat.JSON -> jsonExporter.export(exportRecords, pretty = false)
+            ExportFormat.JSON_PRETTY -> jsonExporter.export(exportRecords, pretty = true)
         }
 
         // 3. Формируем результат
@@ -52,14 +58,14 @@ class MetricsExportService(
             request.projectId != null && request.strategy != null && request.fromDate != null && request.toDate != null ->
                 recordRepository.findByProjectIdAndStrategyAndCreatedAtBetween(
                     request.projectId,
-                    com.example.archassistant.model.StrategyType.valueOf(request.strategy),
+                    parseStrategyOrThrow(request.strategy),
                     request.fromDate,
                     request.toDate
                 )
             request.projectId != null && request.strategy != null ->
                 recordRepository.findByProjectIdAndStrategy(
                     request.projectId,
-                    com.example.archassistant.model.StrategyType.valueOf(request.strategy)
+                    parseStrategyOrThrow(request.strategy)
                 )
             request.projectId != null && request.fromDate != null && request.toDate != null ->
                 recordRepository.findByProjectIdAndCreatedAtBetween(
@@ -73,6 +79,14 @@ class MetricsExportService(
                 recordRepository.findByCreatedAtBetween(request.fromDate, request.toDate)
             else ->
                 recordRepository.findAll()
+        }
+    }
+
+    private fun parseStrategyOrThrow(strategy: String): com.example.archassistant.model.StrategyType {
+        return runCatching {
+            com.example.archassistant.model.StrategyType.valueOf(strategy.uppercase())
+        }.getOrElse {
+            throw IllegalArgumentException("Unknown strategy: $strategy")
         }
     }
 }
