@@ -21,9 +21,16 @@ data class CodeGenerationRequest(
  * Дополнительный контекст для генерации
  */
 data class GenerationContext(
-    val entity: String? = null,           // Сущность, для которой генерируется код
-    val packageName: String? = null,      // Целевой пакет
-    val classType: String? = null,        // Тип класса: Service, Repository, etc.
-    val dependencies: List<String>? = null,// Ожидаемые зависимости
-    val codeSnippet: String? = null       // Существующий код для контекста (RAG)
+    val targetPackage: String? = null,
+    val existingTypes: List<String> = emptyList(),
+    val codeSnippet: String? = null,
+    val module: String? = null,
+    val artifactKind: ArtifactKind? = null
 )
+
+enum class ArtifactKind {
+    CLASS,
+    INTERFACE,
+    RECORD,
+    MULTI_FILE
+}
