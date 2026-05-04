@@ -37,6 +37,18 @@
       {
         "command": "archassistant.toggleRule",
         "title": "ArchAssistant: Toggle Rule"
+      },
+      {
+        "command": "archassistant.generateCode",
+        "title": "ArchAssistant: Generate Code"
+      },
+      {
+        "command": "archassistant.showMetrics",
+        "title": "ArchAssistant: Show Metrics"
+      },
+      {
+        "command": "archassistant.exportMetrics",
+        "title": "ArchAssistant: Export Metrics"
       }
     ],
     "viewsContainers": {
@@ -71,6 +83,15 @@
           "command": "archassistant.toggleRule",
           "when": "view == archassistant.rulesList && viewItem == archassistant.rule",
           "group": "inline@2"
+        },
+        {
+          "command": "archassistant.generateCode",
+          "group": "ArchAssistant@1"
+        },
+        {
+          "command": "archassistant.showMetrics",
+          "when": "view == archassistant.projectInfo",
+          "group": "inline@1"
         }
       ]
     },
@@ -99,7 +120,7 @@
     "test": "node ./out/test/runTest.js"
   },
   "devDependencies": {
-    "@types/node": "^20.11.0",
+    "@types/node": "^20.19.39",
     "@types/vscode": "^1.80.0",
     "@vscode/test-electron": "^2.3.10",
     "eslint": "^8.57.0",

@@ -32,5 +32,6 @@ enum class ArtifactKind {
     CLASS,
     INTERFACE,
     RECORD,
+    ENUM,
     MULTI_FILE
 }

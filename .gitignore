@@ -5,6 +5,7 @@
 *.war
 *.ear
 *.iml
+bin/
 
 # Gradle
 .gradle/
@@ -28,6 +29,9 @@ Thumbs.db
 # Environment
 .env
 application-local.yml
+
+# VS Code Extention
+archassistant-vscode/node_modules/
 
 # Test
 test-results/
