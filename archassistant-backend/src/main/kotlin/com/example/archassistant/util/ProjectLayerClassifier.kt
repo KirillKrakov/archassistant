@@ -8,23 +8,21 @@ import com.tngtech.archunit.core.domain.JavaClass
 object ProjectLayerClassifier {
 
     fun classify(classInfo: ClassInfo): LayerType {
-        return classify(classInfo.packageName, classInfo.simpleName, classInfo.annotations)
+        return classify(null, classInfo.packageName, classInfo.simpleName, classInfo.annotations)
     }
 
     fun classify(javaClass: JavaClass): LayerType {
         val annotations = javaClass.annotations.map { it.type.name.substringAfterLast('.') }
         val simpleName = javaClass.name.substringAfterLast('.')
-        return classify(javaClass.packageName, simpleName, annotations)
+        return classify(javaClass, javaClass.packageName, simpleName, annotations)
     }
 
     fun matchesClassType(classInfo: ClassInfo, type: ClassType): Boolean {
-        return classify(classInfo.packageName, classInfo.simpleName, classInfo.annotations).toClassType() == type
+        return classify(null, classInfo.packageName, classInfo.simpleName, classInfo.annotations).toClassType() == type
     }
 
     fun matchesClassType(javaClass: JavaClass, type: ClassType): Boolean {
-        return classify(javaClass.packageName, javaClass.name.substringAfterLast('.'),
-            javaClass.annotations.map { it.type.name.substringAfterLast('.') }
-        ).toClassType() == type
+        return classify(javaClass).toClassType() == type
     }
 
     fun matchesLayer(classInfo: ClassInfo, type: LayerType): Boolean = classify(classInfo) == type
@@ -32,6 +30,7 @@ object ProjectLayerClassifier {
     fun matchesLayer(javaClass: JavaClass, type: LayerType): Boolean = classify(javaClass) == type
 
     private fun classify(
+        javaClass: JavaClass?,
         packageName: String,
         simpleName: String,
         annotationsRaw: List<String>
@@ -45,7 +44,7 @@ object ProjectLayerClassifier {
             isController(pkg, lastSegment, simple, annotations) -> LayerType.CONTROLLER
             isViewModel(pkg, lastSegment, simple, annotations) -> LayerType.VIEWMODEL
             isView(pkg, lastSegment, simple, annotations) -> LayerType.VIEW
-            isRepository(pkg, lastSegment, simple, annotations) -> LayerType.REPOSITORY
+            isRepository(javaClass, pkg, lastSegment, simple, annotations) -> LayerType.REPOSITORY
             isService(pkg, lastSegment, simple, annotations) -> LayerType.SERVICE
             isEntity(pkg, lastSegment, simple, annotations) -> LayerType.ENTITY
             isDto(pkg, lastSegment, simple, annotations) -> LayerType.DTO
@@ -84,11 +83,59 @@ object ProjectLayerClassifier {
                 simple.endsWith("screen")
     }
 
-    private fun isRepository(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
+    private fun isRepository(
+        javaClass: JavaClass?,
+        pkg: String,
+        last: String,
+        simple: String,
+        annotations: List<String>
+    ): Boolean {
         return annotations.any { it == "repository" } ||
                 last in setOf("repository", "dao", "persistence", "data") ||
                 simple.endsWith("repository") ||
-                simple.endsWith("dao")
+                simple.endsWith("dao") ||
+                javaClass?.let { hasRepositoryContract(it) } == true
+    }
+
+    private fun hasRepositoryContract(javaClass: JavaClass): Boolean {
+        val visited = mutableSetOf<String>()
+
+        fun inspect(type: JavaClass): Boolean {
+            if (!visited.add(type.name)) return false
+
+            if (isRepositoryTypeName(type.packageName, type.name.substringAfterLast('.'))) return true
+
+            if (type.rawInterfaces.any { iface ->
+                    isRepositoryTypeName(iface.packageName, iface.name.substringAfterLast('.')) || inspect(iface)
+                }) {
+                return true
+            }
+
+            val superClass = type.rawSuperclass.orElse(null)
+            if (superClass != null) {
+                if (isRepositoryTypeName(superClass.packageName, superClass.name.substringAfterLast('.'))) return true
+                if (inspect(superClass)) return true
+            }
+
+            return false
+        }
+
+        return inspect(javaClass)
+    }
+
+    private fun isRepositoryTypeName(packageName: String, simpleName: String): Boolean {
+        val pkg = packageName.lowercase()
+        val simple = simpleName.lowercase()
+
+        return pkg.endsWith(".repository") ||
+                pkg.contains(".repository.") ||
+                simple == "repository" ||
+                simple.endsWith("repository") ||
+                simple.endsWith("crudrepository") ||
+                simple.endsWith("jparepository") ||
+                simple.endsWith("pagingandsortingrepository") ||
+                simple.endsWith("mongorepository") ||
+                simple.endsWith("reactiverepository")
     }
 
     private fun isService(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
@@ -120,9 +167,8 @@ object ProjectLayerClassifier {
     }
 
     private fun isAdapter(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
-        return last in setOf("adapter", "adapters", "impl", "implementation") ||
-                simple.endsWith("adapter") ||
-                simple.endsWith("impl")
+        return last in setOf("adapter", "adapters") ||
+                simple.endsWith("adapter")
     }
 
     private fun isApi(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {

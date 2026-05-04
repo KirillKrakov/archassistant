@@ -2,7 +2,6 @@ package com.example.archassistant.service
 
 import com.example.archassistant.model.*
 import com.example.archassistant.util.*
-import com.tngtech.archunit.core.domain.JavaClasses
 import com.tngtech.archunit.core.importer.ClassFileImporter
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -23,32 +22,56 @@ class ComplianceScoreCalculator(
         classpath: String = "",
         projectContext: ProjectContextSnapshot? = null
     ): ComplianceScore {
-
         var tempRoot: Path? = null
 
         return try {
             tempRoot = codeCompiler.compileCode(code, className, classpath, projectContext)
             val classesDir = tempRoot.resolve("classes")
-
-            // ТОЛЬКО generated classes
             val importedClasses = ClassFileImporter().importPath(classesDir)
 
-            val rulesPass = calculateRulesPass(importedClasses, rules)
-            val patternMatch = PatternMatcher.calculatePatternMatch(importedClasses, rules)
-            val dependencyCorrect = DependencyAnalyzer.calculateDependencyCorrect(importedClasses, rules)
-            val violations = collectViolations(importedClasses, rules)
+            val allRules = rules.filter { it.enabled }
+            val universal = RuleViolationAnalyzer.evaluate(importedClasses, allRules, RuleType.entries.toSet())
+
+            val pattern = RuleViolationAnalyzer.evaluate(
+                importedClasses,
+                allRules,
+                setOf(
+                    RuleType.NAMING_CONVENTION,
+                    RuleType.ANNOTATION_CHECK,
+                    RuleType.MODIFIER_CHECK,
+                    RuleType.METHOD_SIGNATURE_CHECK,
+                    RuleType.FIELD_CHECK,
+                    RuleType.EXCEPTION_CHECK
+                )
+            )
+
+            val dependency = RuleViolationAnalyzer.evaluate(
+                importedClasses,
+                allRules,
+                setOf(
+                    RuleType.DEPENDENCY,
+                    RuleType.LAYER_ISOLATION,
+                    RuleType.CYCLE_CHECK,
+                    RuleType.INHERITANCE_CHECK,
+                    RuleType.INTERFACE_CHECK
+                )
+            )
+
+            val violations = universal.violations.ifEmpty {
+                pattern.violations + dependency.violations
+            }
 
             val total = (
-                    weights.rulesPass * rulesPass +
-                            weights.patternMatch * patternMatch +
-                            weights.dependencyCorrect * dependencyCorrect
+                    weights.rulesPass * universal.score +
+                            weights.patternMatch * pattern.score +
+                            weights.dependencyCorrect * dependency.score
                     ) / (weights.rulesPass + weights.patternMatch + weights.dependencyCorrect)
 
             ComplianceScore(
                 total = total.coerceIn(0.0, 100.0),
-                rulesPass = rulesPass.coerceIn(0.0, 100.0),
-                patternMatch = patternMatch.coerceIn(0.0, 100.0),
-                dependencyCorrect = dependencyCorrect.coerceIn(0.0, 100.0),
+                rulesPass = universal.score.coerceIn(0.0, 100.0),
+                patternMatch = pattern.score.coerceIn(0.0, 100.0),
+                dependencyCorrect = dependency.score.coerceIn(0.0, 100.0),
                 weights = weights,
                 violations = violations
             )
@@ -72,54 +95,6 @@ class ComplianceScoreCalculator(
         } finally {
             tempRoot?.let { codeCompiler.cleanup(it) }
         }
-    }
-
-    private fun calculateRulesPass(
-        importedClasses: JavaClasses,
-        rules: List<ArchitecturalRule>
-    ): Double {
-        val dependencyRules = rules.filter {
-            it.enabled && it.type == RuleType.DEPENDENCY
-        }
-
-        if (dependencyRules.isEmpty()) return 100.0
-
-        var passedCount = 0
-        var evaluatedCount = 0
-
-        for (rule in dependencyRules) {
-            val archRule = ArchUnitRuleBuilder.build(rule)
-            if (archRule == null) {
-                logger.warn("Cannot build rule ${rule.id}: unsupported constraint")
-                continue
-            }
-
-            try {
-                archRule.check(importedClasses)
-                passedCount++
-                evaluatedCount++
-            } catch (e: AssertionError) {
-                if (ArchUnitValidationUtils.isNoApplicableClassesFailure(e.message)) {
-                    logger.debug("Skipping dependency rule {}: no applicable generated classes", rule.id)
-                    continue
-                }
-                evaluatedCount++
-            } catch (e: Exception) {
-                logger.warn("Rule check failed for ${rule.id}: ${e.message}")
-                evaluatedCount++
-            }
-        }
-
-        if (evaluatedCount == 0) return 100.0
-        return (passedCount.toDouble() / evaluatedCount) * 100.0
-    }
-
-    private fun collectViolations(
-        importedClasses: JavaClasses,
-        rules: List<ArchitecturalRule>
-    ): List<Violation> {
-        return PatternMatcher.checkWithViolations(importedClasses, rules) +
-                DependencyAnalyzer.analyzeWithViolations(importedClasses, rules)
     }
 
     fun isPassing(

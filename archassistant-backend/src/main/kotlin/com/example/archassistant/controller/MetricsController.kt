@@ -29,10 +29,6 @@ class MetricsController(
 
     private val logger = LoggerFactory.getLogger(MetricsController::class.java)
 
-    // ─────────────────────────────────────────────────────────────────
-    // Существующие эндпоинты (без изменений, для совместимости)
-    // ─────────────────────────────────────────────────────────────────
-
     @GetMapping("/strategies")
     fun compareStrategies(
         @RequestParam(required = false) projectId: String?

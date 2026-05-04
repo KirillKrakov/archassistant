@@ -1,7 +1,6 @@
 package com.example.archassistant.service.rules
 
 import com.example.archassistant.model.*
-import com.example.archassistant.util.PackagePatternBuilder
 import org.springframework.stereotype.Service
 
 @Service
@@ -14,7 +13,11 @@ class SpringLayeredProfileStrategy : ProfileRuleStrategy {
         val scope = if (context.basePackage.isBlank()) "..*" else "${context.basePackage}..*"
         val rules = mutableListOf<ArchitecturalRule>()
 
-        if (context.index.hasAnyClassType(ClassType.CONTROLLER, ClassType.SERVICE)) {
+        val hasController = context.index.hasAnyClassType(ClassType.CONTROLLER)
+        val hasService = context.index.hasAnyClassType(ClassType.SERVICE)
+        val hasRepository = context.index.hasAnyClassType(ClassType.REPOSITORY)
+
+        if (hasController && hasService) {
             rules += RuleFactory.classDependency(
                 context, "spring_layered", scope, "all",
                 "Controllers should depend on services",
@@ -24,7 +27,7 @@ class SpringLayeredProfileStrategy : ProfileRuleStrategy {
             )
         }
 
-        if (context.index.hasAnyClassType(ClassType.CONTROLLER, ClassType.REPOSITORY)) {
+        if (hasController && hasRepository) {
             rules += RuleFactory.classDependency(
                 context, "spring_layered", scope, "all",
                 "Controllers should not depend on repositories",
@@ -34,7 +37,7 @@ class SpringLayeredProfileStrategy : ProfileRuleStrategy {
             )
         }
 
-        if (context.index.hasAnyClassType(ClassType.SERVICE, ClassType.CONTROLLER)) {
+        if (hasService && hasController) {
             rules += RuleFactory.classDependency(
                 context, "spring_layered", scope, "all",
                 "Services should not depend on controllers",
@@ -44,7 +47,7 @@ class SpringLayeredProfileStrategy : ProfileRuleStrategy {
             )
         }
 
-        if (context.index.hasAnyClassType(ClassType.REPOSITORY, ClassType.SERVICE)) {
+        if (hasRepository && hasService) {
             rules += RuleFactory.classDependency(
                 context, "spring_layered", scope, "all",
                 "Repositories should not depend on services",
@@ -54,7 +57,7 @@ class SpringLayeredProfileStrategy : ProfileRuleStrategy {
             )
         }
 
-        if (context.index.hasAnyClassType(ClassType.CONTROLLER)) {
+        if (hasController) {
             rules += RuleFactory.classNaming(
                 context, "spring_layered", scope, "all",
                 ClassType.CONTROLLER, "Controller",
@@ -62,9 +65,36 @@ class SpringLayeredProfileStrategy : ProfileRuleStrategy {
                 "Controllers should use the Controller suffix",
                 Severity.INFO, 0.5
             )
+
+            rules += RuleFactory.modifierCheck(
+                context = context,
+                prefix = "spring_layered",
+                scopePackage = scope,
+                name = "Controllers should be public",
+                description = "Controller classes should be public",
+                constraint = ConstraintType.SHOULD_BE_PUBLIC,
+                severity = Severity.INFO,
+                weight = 0.4,
+                scopeLabel = "all"
+            )
+
+            if (shouldSuggestResponseEntityRules(context)) {
+                rules += RuleFactory.methodSignatureCheck(
+                    context = context,
+                    prefix = "spring_layered",
+                    scopePackage = scope,
+                    name = "Controller methods should return ResponseEntity",
+                    description = "Public controller methods should expose ResponseEntity-based contracts",
+                    constraint = ConstraintType.RETURN_TYPE,
+                    severity = Severity.WARNING,
+                    weight = 0.8,
+                    methodNamePattern = "*",
+                    returnType = org.springframework.http.ResponseEntity::class.java.name
+                )
+            }
         }
 
-        if (context.index.hasAnyClassType(ClassType.SERVICE)) {
+        if (hasService) {
             rules += RuleFactory.classNaming(
                 context, "spring_layered", scope, "all",
                 ClassType.SERVICE, "Service",
@@ -72,9 +102,33 @@ class SpringLayeredProfileStrategy : ProfileRuleStrategy {
                 "Services should use the Service suffix",
                 Severity.INFO, 0.5
             )
+
+            rules += RuleFactory.modifierCheck(
+                context = context,
+                prefix = "spring_layered",
+                scopePackage = scope,
+                name = "Services should be public",
+                description = "Service classes should be public",
+                constraint = ConstraintType.SHOULD_BE_PUBLIC,
+                severity = Severity.INFO,
+                weight = 0.4,
+                scopeLabel = "all"
+            )
+
+            rules += RuleFactory.exceptionCheck(
+                context = context,
+                prefix = "spring_layered",
+                scopePackage = scope,
+                name = "Services should not throw generic Exception",
+                description = "Service layer should avoid declaring generic Exception in throws clauses",
+                constraint = ConstraintType.SHOULD_NOT_THROW,
+                severity = Severity.WARNING,
+                weight = 0.8,
+                forbiddenExceptions = listOf("java.lang.Exception")
+            )
         }
 
-        if (context.index.hasAnyClassType(ClassType.REPOSITORY)) {
+        if (hasRepository) {
             rules += RuleFactory.classNaming(
                 context, "spring_layered", scope, "all",
                 ClassType.REPOSITORY, "Repository",
@@ -82,9 +136,21 @@ class SpringLayeredProfileStrategy : ProfileRuleStrategy {
                 "Repositories should use the Repository suffix",
                 Severity.INFO, 0.5
             )
+
+            rules += RuleFactory.modifierCheck(
+                context = context,
+                prefix = "spring_layered",
+                scopePackage = scope,
+                name = "Repositories should be public",
+                description = "Repository classes should be public",
+                constraint = ConstraintType.SHOULD_BE_PUBLIC,
+                severity = Severity.INFO,
+                weight = 0.4,
+                scopeLabel = "all"
+            )
         }
 
-        return rules
+        return rules.distinctBy { it.id }
     }
 }
 
@@ -100,14 +166,13 @@ class SpringFeaturedProfileStrategy : ProfileRuleStrategy {
 
         roots.forEach { root ->
             val scope = context.index.scopePattern(root)
-            val label = root
             val hasController = context.index.hasAnyClassTypeInRoot(root, ClassType.CONTROLLER)
             val hasService = context.index.hasAnyClassTypeInRoot(root, ClassType.SERVICE)
             val hasRepository = context.index.hasAnyClassTypeInRoot(root, ClassType.REPOSITORY)
 
             if (hasController && hasService) {
                 rules += RuleFactory.classDependency(
-                    context, "spring_featured", scope, label,
+                    context, "spring_featured", scope, root,
                     "[$root] Controllers should depend on services",
                     "Controller classes in $root should call services within the same feature",
                     ClassType.CONTROLLER, ClassType.SERVICE,
@@ -117,7 +182,7 @@ class SpringFeaturedProfileStrategy : ProfileRuleStrategy {
 
             if (hasController && hasRepository) {
                 rules += RuleFactory.classDependency(
-                    context, "spring_featured", scope, label,
+                    context, "spring_featured", scope, root,
                     "[$root] Controllers should not depend on repositories",
                     "Controller classes in $root should not access repositories directly",
                     ClassType.CONTROLLER, ClassType.REPOSITORY,
@@ -127,7 +192,7 @@ class SpringFeaturedProfileStrategy : ProfileRuleStrategy {
 
             if (hasService && hasController) {
                 rules += RuleFactory.classDependency(
-                    context, "spring_featured", scope, label,
+                    context, "spring_featured", scope, root,
                     "[$root] Services should not depend on controllers",
                     "Service layer in $root should remain independent from presentation",
                     ClassType.SERVICE, ClassType.CONTROLLER,
@@ -137,7 +202,7 @@ class SpringFeaturedProfileStrategy : ProfileRuleStrategy {
 
             if (hasRepository && hasService) {
                 rules += RuleFactory.classDependency(
-                    context, "spring_featured", scope, label,
+                    context, "spring_featured", scope, root,
                     "[$root] Repositories should not depend on services",
                     "Repository layer in $root should stay below the service layer",
                     ClassType.REPOSITORY, ClassType.SERVICE,
@@ -147,36 +212,99 @@ class SpringFeaturedProfileStrategy : ProfileRuleStrategy {
 
             if (hasController) {
                 rules += RuleFactory.classNaming(
-                    context, "spring_featured", scope, label,
+                    context, "spring_featured", scope, root,
                     ClassType.CONTROLLER, "Controller",
                     "[$root] Controllers should have 'Controller' suffix",
                     "Controllers in $root should use the Controller suffix",
                     Severity.INFO, 0.5
                 )
+
+                rules += RuleFactory.modifierCheck(
+                    context = context,
+                    prefix = "spring_featured",
+                    scopePackage = scope,
+                    name = "[$root] Controllers should be public",
+                    description = "Controller classes in $root should be public",
+                    constraint = ConstraintType.SHOULD_BE_PUBLIC,
+                    severity = Severity.INFO,
+                    weight = 0.4,
+                    scopeLabel = root
+                )
+
+                if (shouldSuggestResponseEntityRules(context)) {
+                    rules += RuleFactory.methodSignatureCheck(
+                        context = context,
+                        prefix = "spring_featured",
+                        scopePackage = scope,
+                        name = "[$root] Controller methods should return ResponseEntity",
+                        description = "Controller methods in $root should expose ResponseEntity-based contracts",
+                        constraint = ConstraintType.RETURN_TYPE,
+                        severity = Severity.WARNING,
+                        weight = 0.8,
+                        methodNamePattern = "*",
+                        returnType = org.springframework.http.ResponseEntity::class.java.name
+                    )
+                }
             }
 
             if (hasService) {
                 rules += RuleFactory.classNaming(
-                    context, "spring_featured", scope, label,
+                    context, "spring_featured", scope, root,
                     ClassType.SERVICE, "Service",
                     "[$root] Services should have 'Service' suffix",
                     "Services in $root should use the Service suffix",
                     Severity.INFO, 0.5
                 )
+
+                rules += RuleFactory.modifierCheck(
+                    context = context,
+                    prefix = "spring_featured",
+                    scopePackage = scope,
+                    name = "[$root] Services should be public",
+                    description = "Service classes in $root should be public",
+                    constraint = ConstraintType.SHOULD_BE_PUBLIC,
+                    severity = Severity.INFO,
+                    weight = 0.4,
+                    scopeLabel = root
+                )
+
+                rules += RuleFactory.exceptionCheck(
+                    context = context,
+                    prefix = "spring_featured",
+                    scopePackage = scope,
+                    name = "[$root] Services should not throw generic Exception",
+                    description = "Service layer in $root should avoid declaring generic Exception in throws clauses",
+                    constraint = ConstraintType.SHOULD_NOT_THROW,
+                    severity = Severity.WARNING,
+                    weight = 0.8,
+                    forbiddenExceptions = listOf("java.lang.Exception")
+                )
             }
 
             if (hasRepository) {
                 rules += RuleFactory.classNaming(
-                    context, "spring_featured", scope, label,
+                    context, "spring_featured", scope, root,
                     ClassType.REPOSITORY, "Repository",
                     "[$root] Repositories should have 'Repository' suffix",
                     "Repositories in $root should use the Repository suffix",
                     Severity.INFO, 0.5
                 )
+
+                rules += RuleFactory.modifierCheck(
+                    context = context,
+                    prefix = "spring_featured",
+                    scopePackage = scope,
+                    name = "[$root] Repositories should be public",
+                    description = "Repository classes in $root should be public",
+                    constraint = ConstraintType.SHOULD_BE_PUBLIC,
+                    severity = Severity.INFO,
+                    weight = 0.4,
+                    scopeLabel = root
+                )
             }
         }
 
-        return rules
+        return rules.distinctBy { it.id }
     }
 }
 
@@ -185,19 +313,19 @@ class CleanProfileStrategy : ProfileRuleStrategy {
     override val profile = ProjectProfile.CLEAN
 
     override fun generate(context: RuleGenerationContext): List<ArchitecturalRule> {
-        val domainPattern = PackagePatternBuilder.compactPattern(
+        val domainPattern = com.example.archassistant.util.PackagePatternBuilder.compactPattern(
             context.index.packagesContaining("domain", "core", "entity", "entities")
         ) ?: return emptyList()
 
-        val applicationPattern = PackagePatternBuilder.compactPattern(
+        val applicationPattern = com.example.archassistant.util.PackagePatternBuilder.compactPattern(
             context.index.packagesContaining("application", "usecase", "usecases", "interactor")
         )
 
-        val infrastructurePattern = PackagePatternBuilder.compactPattern(
+        val infrastructurePattern = com.example.archassistant.util.PackagePatternBuilder.compactPattern(
             context.index.packagesContaining("infrastructure", "persistence", "adapter", "gateway", "dataproviders", "repository")
         )
 
-        val interfacePattern = PackagePatternBuilder.compactPattern(
+        val interfacePattern = com.example.archassistant.util.PackagePatternBuilder.compactPattern(
             context.index.packagesContaining("interface", "presentation", "web", "rest", "api", "delivery", "boundary", "boundaries")
         )
 
@@ -280,6 +408,48 @@ class CleanProfileStrategy : ProfileRuleStrategy {
             }
         }
 
+        val basePackage = context.basePackage
+        if (basePackage.isNotBlank()) {
+            val cyclePattern = "$basePackage.(*)..*"
+            rules += RuleFactory.cycleCheck(
+                context = context,
+                prefix = "clean",
+                scopePattern = cyclePattern,
+                name = "Architecture should be free of package cycles",
+                description = "Clean architecture layers should not form cyclic package dependencies",
+                severity = Severity.CRITICAL,
+                weight = 2.0
+            )
+        }
+
+        if (infrastructurePattern != null) {
+            rules += RuleFactory.inheritanceCheck(
+                context = context,
+                prefix = "clean",
+                fromPackage = domainPattern,
+                toPackage = infrastructurePattern,
+                name = "Domain should not extend infrastructure types",
+                description = "Domain layer should not inherit from infrastructure classes",
+                constraint = ConstraintType.SHOULD_NOT_EXTEND,
+                severity = Severity.CRITICAL,
+                weight = 1.5
+            )
+
+            if (applicationPattern != null) {
+                rules += RuleFactory.inheritanceCheck(
+                    context = context,
+                    prefix = "clean",
+                    fromPackage = applicationPattern,
+                    toPackage = infrastructurePattern,
+                    name = "Application should not extend infrastructure types",
+                    description = "Application layer should not inherit from infrastructure classes",
+                    constraint = ConstraintType.SHOULD_NOT_EXTEND,
+                    severity = Severity.ERROR,
+                    weight = 1.2
+                )
+            }
+        }
+
         return rules.distinctBy { it.id }
     }
 }
@@ -289,19 +459,19 @@ class HexagonalProfileStrategy : ProfileRuleStrategy {
     override val profile = ProjectProfile.HEXAGONAL
 
     override fun generate(context: RuleGenerationContext): List<ArchitecturalRule> {
-        val domainPattern = PackagePatternBuilder.compactPattern(
+        val domainPattern = com.example.archassistant.util.PackagePatternBuilder.compactPattern(
             context.index.packagesContaining("domain", "core")
         ) ?: return emptyList()
 
-        val applicationPattern = PackagePatternBuilder.compactPattern(
+        val applicationPattern = com.example.archassistant.util.PackagePatternBuilder.compactPattern(
             context.index.packagesContaining("application", "usecase", "usecases", "interactor")
         )
 
-        val portPattern = PackagePatternBuilder.compactPattern(
+        val portPattern = com.example.archassistant.util.PackagePatternBuilder.compactPattern(
             context.index.packagesContaining("port", "ports", "spi", "contract", "gateway", "gateways")
         )
 
-        val adapterPattern = PackagePatternBuilder.compactPattern(
+        val adapterPattern = com.example.archassistant.util.PackagePatternBuilder.compactPattern(
             context.index.packagesContaining("adapter", "adapters", "impl", "implementation", "persistence", "web", "boundary", "boundaries")
         )
 
@@ -390,6 +560,61 @@ class HexagonalProfileStrategy : ProfileRuleStrategy {
             )
         }
 
+        val basePackage = context.basePackage
+        if (basePackage.isNotBlank()) {
+            rules += RuleFactory.cycleCheck(
+                context = context,
+                prefix = "hexagonal",
+                scopePattern = "$basePackage.(*)..*",
+                name = "Hexagonal modules should be free of cycles",
+                description = "Hexagonal architecture should avoid cyclic dependencies between package slices",
+                severity = Severity.CRITICAL,
+                weight = 2.0
+            )
+        }
+
+        if (portPattern != null && applicationPattern != null) {
+            rules += RuleFactory.interfaceCheck(
+                context = context,
+                prefix = "hexagonal",
+                fromPackage = applicationPattern,
+                toPackage = portPattern,
+                name = "Application should implement port interfaces",
+                description = "Application layer should implement the input port contracts",
+                constraint = ConstraintType.SHOULD_IMPLEMENT,
+                severity = Severity.INFO,
+                weight = 1.0
+            )
+        }
+
+        if (portPattern != null && adapterPattern != null) {
+            rules += RuleFactory.interfaceCheck(
+                context = context,
+                prefix = "hexagonal",
+                fromPackage = adapterPattern,
+                toPackage = portPattern,
+                name = "Adapters should implement port interfaces",
+                description = "Adapters should implement the relevant port contracts",
+                constraint = ConstraintType.SHOULD_IMPLEMENT,
+                severity = Severity.INFO,
+                weight = 1.0
+            )
+        }
+
+        if (adapterPattern != null) {
+            rules += RuleFactory.inheritanceCheck(
+                context = context,
+                prefix = "hexagonal",
+                fromPackage = adapterPattern,
+                toPackage = domainPattern,
+                name = "Adapters should not extend domain types",
+                description = "Adapters should not inherit from domain classes",
+                constraint = ConstraintType.SHOULD_NOT_EXTEND,
+                severity = Severity.ERROR,
+                weight = 1.2
+            )
+        }
+
         return rules.distinctBy { it.id }
     }
 }
@@ -415,11 +640,36 @@ class MvvmProfileStrategy : ProfileRuleStrategy {
                     ConstraintType.NO_DEPENDENCY, Severity.CRITICAL, 2.0
                 )
             }
+
             rules += RuleFactory.packageNaming(
                 context, "mvvm", vm, "ViewModel",
                 "ViewModel packages should end with ViewModel",
                 "ViewModel packages should keep ViewModel naming",
                 Severity.INFO, 0.5
+            )
+
+            rules += RuleFactory.modifierCheck(
+                context = context,
+                prefix = "mvvm",
+                scopePackage = vm,
+                name = "ViewModel classes should be public",
+                description = "ViewModel classes should be public",
+                constraint = ConstraintType.SHOULD_BE_PUBLIC,
+                severity = Severity.INFO,
+                weight = 0.6,
+                scopeLabel = vm
+            )
+
+            rules += RuleFactory.modifierCheck(
+                context = context,
+                prefix = "mvvm",
+                scopePackage = vm,
+                name = "ViewModel classes should be final",
+                description = "ViewModel classes should be final when possible",
+                constraint = ConstraintType.SHOULD_BE_FINAL,
+                severity = Severity.WARNING,
+                weight = 0.7,
+                scopeLabel = vm
             )
         }
 
@@ -430,9 +680,21 @@ class MvvmProfileStrategy : ProfileRuleStrategy {
                 "View packages should keep View naming",
                 Severity.INFO, 0.5
             )
+
+            rules += RuleFactory.modifierCheck(
+                context = context,
+                prefix = "mvvm",
+                scopePackage = view,
+                name = "View classes should be public",
+                description = "View classes should be public",
+                constraint = ConstraintType.SHOULD_BE_PUBLIC,
+                severity = Severity.INFO,
+                weight = 0.4,
+                scopeLabel = view
+            )
         }
 
-        return rules
+        return rules.distinctBy { it.id }
     }
 }
 
@@ -483,11 +745,24 @@ class ModularProfileStrategy : ProfileRuleStrategy {
                     ConstraintType.NO_DEPENDENCY, Severity.ERROR, 1.5
                 )
             }
+
             rules += RuleFactory.packageNaming(
                 context, "modular", api, "Api",
                 "API packages should end with Api",
                 "API packages should keep Api naming",
                 Severity.INFO, 0.5
+            )
+
+            rules += RuleFactory.modifierCheck(
+                context = context,
+                prefix = "modular",
+                scopePackage = api,
+                name = "API classes should be public",
+                description = "API classes should be public",
+                constraint = ConstraintType.SHOULD_BE_PUBLIC,
+                severity = Severity.INFO,
+                weight = 0.4,
+                scopeLabel = api
             )
         }
 
@@ -498,8 +773,43 @@ class ModularProfileStrategy : ProfileRuleStrategy {
                 "Impl packages should keep Impl naming",
                 Severity.INFO, 0.5
             )
+
+            rules += RuleFactory.modifierCheck(
+                context = context,
+                prefix = "modular",
+                scopePackage = impl,
+                name = "Impl classes should be final",
+                description = "Implementation classes should be final when possible",
+                constraint = ConstraintType.SHOULD_BE_FINAL,
+                severity = Severity.WARNING,
+                weight = 0.6,
+                scopeLabel = impl
+            )
         }
 
-        return rules
+        val basePackage = context.basePackage
+        if (basePackage.isNotBlank()) {
+            rules += RuleFactory.cycleCheck(
+                context = context,
+                prefix = "modular",
+                scopePattern = "$basePackage.(*)..*",
+                name = "Feature modules should be free of cycles",
+                description = "Feature modules should not form cyclic dependencies",
+                severity = Severity.CRITICAL,
+                weight = 2.0
+            )
+        }
+
+        return rules.distinctBy { it.id }
+    }
+}
+
+private fun shouldSuggestResponseEntityRules(context: RuleGenerationContext): Boolean {
+    return context.structure.classes.any { info ->
+        info.annotations.any { ann ->
+            ann.removePrefix("@").equals("RestController", ignoreCase = true)
+        } || info.publicMethods.any { method ->
+            method.contains("ResponseEntity", ignoreCase = true)
+        }
     }
 }

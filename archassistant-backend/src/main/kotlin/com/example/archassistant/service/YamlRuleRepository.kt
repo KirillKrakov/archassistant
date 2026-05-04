@@ -1,15 +1,6 @@
 package com.example.archassistant.service
 
-import com.example.archassistant.model.ArchitecturalRule
-import com.example.archassistant.model.ConstraintType
-import com.example.archassistant.model.RuleSettings
-import com.example.archassistant.model.RuleType
-import com.example.archassistant.model.RulesConfig
-import com.example.archassistant.model.SelectorMode
-import com.example.archassistant.model.ValidationResult
-import com.example.archassistant.model.Violation
-import com.example.archassistant.model.Severity
-import com.example.archassistant.model.ProjectType
+import com.example.archassistant.model.*
 import com.example.archassistant.util.PackagePatternBuilder
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
@@ -18,10 +9,6 @@ import org.springframework.stereotype.Service
 import java.io.File
 import java.nio.file.Paths
 
-/**
- * Репозиторий для работы с YAML-конфигурацией правил
- * Хранит правила в файловой системе: .archassistant/rules.yml
- */
 @Service
 class YamlRuleRepository(
     @Qualifier("yamlObjectMapper")
@@ -31,9 +18,6 @@ class YamlRuleRepository(
 
     private val logger = LoggerFactory.getLogger(YamlRuleRepository::class.java)
 
-    /**
-     * Загрузка конфигурации правил для проекта
-     */
     fun load(projectId: String): RulesConfig? {
         val configFile = getConfigFile(projectId)
 
@@ -50,9 +34,6 @@ class YamlRuleRepository(
         }
     }
 
-    /**
-     * Сохранение конфигурации правил
-     */
     fun save(config: RulesConfig): Boolean {
         return try {
             val configFile = getConfigFile(config.projectId)
@@ -69,9 +50,6 @@ class YamlRuleRepository(
         }
     }
 
-    /**
-     * Создание конфигурации по умолчанию для проекта
-     */
     fun createDefault(projectId: String, projectType: String = "SPRING_BOOT"): RulesConfig {
         val resolvedType = runCatching { ProjectType.valueOf(projectType) }
             .getOrDefault(ProjectType.SPRING_BOOT)
@@ -84,9 +62,6 @@ class YamlRuleRepository(
         )
     }
 
-    /**
-     * Валидация структуры конфигурации
-     */
     fun validate(config: RulesConfig): ValidationResult {
         val violations = mutableListOf<Violation>()
         val ids = mutableSetOf<String>()
@@ -104,11 +79,12 @@ class YamlRuleRepository(
 
         config.rules.forEachIndexed { index, rule ->
             val ruleNo = index + 1
+            val ruleId = rule.id.ifBlank { "rule_$ruleNo" }
 
             if (rule.id.isBlank()) {
                 violations.add(
                     Violation(
-                        ruleId = "rule_$ruleNo",
+                        ruleId = ruleId,
                         description = "Rule ID cannot be empty",
                         className = "ArchitecturalRule",
                         severity = Severity.ERROR
@@ -125,6 +101,7 @@ class YamlRuleRepository(
                 )
             }
 
+            validateRuleShape(rule, ruleNo, violations)
             validateSelector(
                 rule = rule,
                 side = "from",
@@ -146,75 +123,205 @@ class YamlRuleRepository(
                 violations = violations,
                 ruleNo = ruleNo
             )
-
-            when (rule.type) {
-                RuleType.DEPENDENCY, RuleType.LAYER_ISOLATION -> {
-                    if (rule.constraint !in setOf(ConstraintType.NO_DEPENDENCY, ConstraintType.MUST_DEPEND)) {
-                        violations.add(
-                            Violation(
-                                ruleId = rule.id.ifBlank { "rule_$ruleNo" },
-                                description = "Invalid constraint for dependency rule: ${rule.constraint}",
-                                className = "ArchitecturalRule",
-                                severity = Severity.WARNING
-                            )
-                        )
-                    }
-                }
-
-                RuleType.NAMING_CONVENTION -> {
-                    if (rule.constraint !in setOf(ConstraintType.NAMING_SUFFIX, ConstraintType.NAMING_PREFIX)) {
-                        violations.add(
-                            Violation(
-                                ruleId = rule.id.ifBlank { "rule_$ruleNo" },
-                                description = "Invalid constraint for naming rule: ${rule.constraint}",
-                                className = "ArchitecturalRule",
-                                severity = Severity.WARNING
-                            )
-                        )
-                    }
-                    if (rule.pattern.isNullOrBlank()) {
-                        violations.add(
-                            Violation(
-                                ruleId = rule.id.ifBlank { "rule_$ruleNo" },
-                                description = "Naming rule pattern cannot be empty",
-                                className = "ArchitecturalRule",
-                                severity = Severity.ERROR
-                            )
-                        )
-                    }
-                }
-
-                RuleType.ANNOTATION_CHECK -> {
-                    if (rule.constraint !in setOf(ConstraintType.HAS_ANNOTATION, ConstraintType.NO_ANNOTATION)) {
-                        violations.add(
-                            Violation(
-                                ruleId = rule.id.ifBlank { "rule_$ruleNo" },
-                                description = "Invalid constraint for annotation rule: ${rule.constraint}",
-                                className = "ArchitecturalRule",
-                                severity = Severity.WARNING
-                            )
-                        )
-                    }
-                    if (rule.annotation.isNullOrBlank()) {
-                        violations.add(
-                            Violation(
-                                ruleId = rule.id.ifBlank { "rule_$ruleNo" },
-                                description = "Annotation rule annotation cannot be empty",
-                                className = "ArchitecturalRule",
-                                severity = Severity.ERROR
-                            )
-                        )
-                    }
-                }
-
-                RuleType.CUSTOM -> Unit
-            }
         }
 
         return if (violations.isEmpty()) {
             ValidationResult.success("Config is valid")
         } else {
             ValidationResult.failure(violations)
+        }
+    }
+
+    private fun validateRuleShape(
+        rule: ArchitecturalRule,
+        ruleNo: Int,
+        violations: MutableList<Violation>
+    ) {
+        val ruleId = rule.id.ifBlank { "rule_$ruleNo" }
+
+        val allowed = RuleValidationCatalog.allowedConstraints(rule.type)
+        if (rule.constraint !in allowed) {
+            violations.add(
+                Violation(
+                    ruleId = ruleId,
+                    description = "Invalid constraint '${rule.constraint}' for rule type '${rule.type}'",
+                    className = "ArchitecturalRule",
+                    severity = Severity.ERROR
+                )
+            )
+        }
+
+        RuleValidationCatalog.expectedRequiredFields(rule).forEach { field ->
+            val missing = when (field) {
+                "from_package" -> rule.fromPackage.isBlank()
+                "to_package|to_packages" -> rule.toPackage.isNullOrBlank() && rule.toPackages.isNullOrEmpty()
+                "pattern" -> rule.pattern.isNullOrBlank()
+                "annotation" -> rule.annotation.isNullOrBlank()
+                "slice_pattern" -> rule.slicePattern.isNullOrBlank()
+                else -> false
+            }
+
+            if (missing) {
+                violations.add(
+                    Violation(
+                        ruleId = ruleId,
+                        description = "Missing required field(s) for ${rule.type}/${rule.constraint}: $field",
+                        className = "ArchitecturalRule",
+                        severity = Severity.ERROR
+                    )
+                )
+            }
+        }
+
+        when (rule.type) {
+            RuleType.DEPENDENCY, RuleType.LAYER_ISOLATION -> {
+                if (rule.constraint !in setOf(ConstraintType.NO_DEPENDENCY, ConstraintType.MUST_DEPEND)) {
+                    violations.add(
+                        Violation(
+                            ruleId = ruleId,
+                            description = "Invalid constraint for dependency rule: ${rule.constraint}",
+                            className = "ArchitecturalRule",
+                            severity = Severity.WARNING
+                        )
+                    )
+                }
+            }
+
+            RuleType.NAMING_CONVENTION -> {
+                if (rule.constraint !in setOf(ConstraintType.NAMING_SUFFIX, ConstraintType.NAMING_PREFIX)) {
+                    violations.add(
+                        Violation(
+                            ruleId = ruleId,
+                            description = "Invalid constraint for naming rule: ${rule.constraint}",
+                            className = "ArchitecturalRule",
+                            severity = Severity.WARNING
+                        )
+                    )
+                }
+                if (rule.pattern.isNullOrBlank()) {
+                    violations.add(
+                        Violation(
+                            ruleId = ruleId,
+                            description = "Naming rule pattern cannot be empty",
+                            className = "ArchitecturalRule",
+                            severity = Severity.ERROR
+                        )
+                    )
+                }
+            }
+
+            RuleType.ANNOTATION_CHECK -> {
+                if (rule.constraint !in setOf(ConstraintType.HAS_ANNOTATION, ConstraintType.NO_ANNOTATION)) {
+                    violations.add(
+                        Violation(
+                            ruleId = ruleId,
+                            description = "Invalid constraint for annotation rule: ${rule.constraint}",
+                            className = "ArchitecturalRule",
+                            severity = Severity.WARNING
+                        )
+                    )
+                }
+                if (rule.annotation.isNullOrBlank()) {
+                    violations.add(
+                        Violation(
+                            ruleId = ruleId,
+                            description = "Annotation rule annotation cannot be empty",
+                            className = "ArchitecturalRule",
+                            severity = Severity.ERROR
+                        )
+                    )
+                }
+            }
+
+            RuleType.CYCLE_CHECK -> {
+                if (rule.slicePattern.isNullOrBlank()) {
+                    violations.add(
+                        Violation(
+                            ruleId = ruleId,
+                            description = "Cycle rule slice_pattern cannot be empty",
+                            className = "ArchitecturalRule",
+                            severity = Severity.ERROR
+                        )
+                    )
+                }
+                if (rule.maxCycleLength != null && rule.maxCycleLength <= 0) {
+                    violations.add(
+                        Violation(
+                            ruleId = ruleId,
+                            description = "max_cycle_length must be greater than 0",
+                            className = "ArchitecturalRule",
+                            severity = Severity.ERROR
+                        )
+                    )
+                }
+            }
+
+            RuleType.INHERITANCE_CHECK, RuleType.INTERFACE_CHECK -> {
+                if (rule.toPackage.isNullOrBlank() && rule.toPackages.isNullOrEmpty()) {
+                    violations.add(
+                        Violation(
+                            ruleId = ruleId,
+                            description = "Target package cannot be empty for ${rule.type}",
+                            className = "ArchitecturalRule",
+                            severity = Severity.ERROR
+                        )
+                    )
+                }
+            }
+
+            RuleType.MODIFIER_CHECK -> {
+                if (rule.fromPackage.isBlank()) {
+                    violations.add(
+                        Violation(
+                            ruleId = ruleId,
+                            description = "from_package cannot be empty for MODIFIER_CHECK",
+                            className = "ArchitecturalRule",
+                            severity = Severity.ERROR
+                        )
+                    )
+                }
+            }
+
+            RuleType.METHOD_SIGNATURE_CHECK -> {
+                if (rule.fromPackage.isBlank()) {
+                    violations.add(
+                        Violation(
+                            ruleId = ruleId,
+                            description = "from_package cannot be empty for METHOD_SIGNATURE_CHECK",
+                            className = "ArchitecturalRule",
+                            severity = Severity.ERROR
+                        )
+                    )
+                }
+            }
+
+            RuleType.FIELD_CHECK -> {
+                if (rule.fromPackage.isBlank()) {
+                    violations.add(
+                        Violation(
+                            ruleId = ruleId,
+                            description = "from_package cannot be empty for FIELD_CHECK",
+                            className = "ArchitecturalRule",
+                            severity = Severity.ERROR
+                        )
+                    )
+                }
+            }
+
+            RuleType.EXCEPTION_CHECK -> {
+                if (rule.fromPackage.isBlank()) {
+                    violations.add(
+                        Violation(
+                            ruleId = ruleId,
+                            description = "from_package cannot be empty for EXCEPTION_CHECK",
+                            className = "ArchitecturalRule",
+                            severity = Severity.ERROR
+                        )
+                    )
+                }
+            }
+
+            RuleType.CUSTOM -> Unit
         }
     }
 
@@ -232,9 +339,20 @@ class YamlRuleRepository(
             return
         }
 
+        if (mode !in RuleValidationCatalog.selectorModesAllowed(rule.type)) {
+            violations.add(
+                Violation(
+                    ruleId = rule.id.ifBlank { "rule_$ruleNo" },
+                    description = "Selector mode $mode is not allowed for ${rule.type}",
+                    className = "ArchitecturalRule",
+                    severity = Severity.ERROR
+                )
+            )
+        }
+
         when (mode) {
             SelectorMode.PACKAGE -> {
-                if (packageValue.isBlank()) {
+                if (packageValue.isBlank() && side == "from" && rule.type != RuleType.CYCLE_CHECK) {
                     violations.add(
                         Violation(
                             ruleId = rule.id.ifBlank { "rule_$ruleNo" },
@@ -243,7 +361,7 @@ class YamlRuleRepository(
                             severity = Severity.ERROR
                         )
                     )
-                } else if (!isValidWildcardPattern(packageValue)) {
+                } else if (packageValue.isNotBlank() && !isValidWildcardPattern(packageValue)) {
                     violations.add(
                         Violation(
                             ruleId = rule.id.ifBlank { "rule_$ruleNo" },
@@ -293,12 +411,31 @@ class YamlRuleRepository(
                     )
                 }
             }
+
+            SelectorMode.MEMBER -> {
+                if (
+                    rule.fromMethodNamePattern.isNullOrBlank() &&
+                    rule.toMethodNamePattern.isNullOrBlank() &&
+                    rule.fromFieldNamePattern.isNullOrBlank() &&
+                    rule.toFieldNamePattern.isNullOrBlank() &&
+                    rule.fromReturnType.isNullOrBlank() &&
+                    rule.toReturnType.isNullOrBlank() &&
+                    rule.fromFieldType.isNullOrBlank() &&
+                    rule.toFieldType.isNullOrBlank()
+                ) {
+                    violations.add(
+                        Violation(
+                            ruleId = rule.id.ifBlank { "rule_$ruleNo" },
+                            description = "Member selector requires method/field signature information",
+                            className = "ArchitecturalRule",
+                            severity = Severity.ERROR
+                        )
+                    )
+                }
+            }
         }
     }
 
-    /**
-     * Проверка валидности wildcard-паттерна
-     */
     private fun isValidWildcardPattern(pattern: String): Boolean {
         return try {
             PackagePatternBuilder.buildRegex(pattern)
@@ -308,24 +445,15 @@ class YamlRuleRepository(
         }
     }
 
-    /**
-     * Получение пути к конфигурационному файлу
-     */
     private fun getConfigFile(projectId: String): File {
         val safeProjectId = projectId.replace("[^a-zA-Z0-9._-]".toRegex(), "_")
         return Paths.get(configRootPath, safeProjectId, "rules.yml").toFile()
     }
 
-    /**
-     * Проверка существования конфига
-     */
     fun exists(projectId: String): Boolean {
         return getConfigFile(projectId).exists()
     }
 
-    /**
-     * Удаление конфигурации
-     */
     fun delete(projectId: String): Boolean {
         return try {
             getConfigFile(projectId).delete()
