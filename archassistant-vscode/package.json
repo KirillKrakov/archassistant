@@ -1,0 +1,111 @@
+{
+  "name": "archassistant-vscode",
+  "displayName": "ArchAssistant",
+  "description": "AI-powered code generation with architectural control",
+  "version": "0.0.1",
+  "publisher": "archassistant",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:archassistant.configureProject",
+    "onCommand:archassistant.rescanRules",
+    "onCommand:archassistant.editRule",
+    "onCommand:archassistant.toggleRule",
+    "onView:archassistant.projectInfo",
+    "onView:archassistant.rulesList"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "archassistant.configureProject",
+        "title": "ArchAssistant: Configure Project"
+      },
+      {
+        "command": "archassistant.rescanRules",
+        "title": "ArchAssistant: Re-scan Project Rules"
+      },
+      {
+        "command": "archassistant.editRule",
+        "title": "ArchAssistant: Edit Rule"
+      },
+      {
+        "command": "archassistant.toggleRule",
+        "title": "ArchAssistant: Toggle Rule"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "archassistant-sidebar",
+          "title": "ArchAssistant",
+          "icon": "resources/icon-dark.png"
+        }
+      ]
+    },
+    "views": {
+      "archassistant-sidebar": [
+        {
+          "id": "archassistant.projectInfo",
+          "name": "Project"
+        },
+        {
+          "id": "archassistant.rulesList",
+          "name": "Rules"
+        }
+      ]
+    },
+    "menus": {
+      "view/item/context": [
+        {
+          "command": "archassistant.editRule",
+          "when": "view == archassistant.rulesList && viewItem == archassistant.rule",
+          "group": "inline@1"
+        },
+        {
+          "command": "archassistant.toggleRule",
+          "when": "view == archassistant.rulesList && viewItem == archassistant.rule",
+          "group": "inline@2"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "ArchAssistant",
+      "properties": {
+        "archassistant.backendUrl": {
+          "type": "string",
+          "default": "http://localhost:8080",
+          "description": "Backend API URL"
+        },
+        "archassistant.autoSaveRules": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically save rules after editing"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.80.0",
+    "@vscode/test-electron": "^2.3.10",
+    "eslint": "^8.57.0",
+    "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "axios": "^1.7.2"
+  }
+}
