@@ -32,6 +32,7 @@ application-local.yml
 
 # VS Code Extention
 archassistant-vscode/node_modules/
+out/
 
 # Test
 test-results/
