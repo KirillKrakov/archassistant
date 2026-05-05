@@ -50,7 +50,11 @@ export class ProjectRegistry {
   async updateRulesCount(projectId: string, rulesCount: number): Promise<void> {
     const current = this.getCurrentProject();
     if (current?.projectId === projectId) {
-      await this.currentProject.set({ ...current, rulesCount, lastAccessed: new Date().toISOString() });
+      await this.currentProject.set({
+        ...current,
+        rulesCount,
+        lastAccessed: new Date().toISOString()
+      });
     }
 
     const updated = this.list().map((item) =>

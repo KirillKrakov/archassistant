@@ -3,15 +3,15 @@ import { BackendClient } from '../../backend/BackendClient';
 import { ProjectRegistry } from '../../state/projectRegistry';
 import { ExtensionState } from '../../state/ExtensionState';
 import {
+  ActionItem,
   BackendInfoItem,
-  CompileWarningItem,
+  CompileStatusItem,
   EmptyStateItem,
   ProjectInfoItem
 } from './treeItems';
+import { isProjectCompiled } from '../../utils/workspaceChecks';
 
-export class ArchAssistantSidebarProvider
-  implements vscode.TreeDataProvider<vscode.TreeItem>
-{
+export class ArchAssistantSidebarProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
   private readonly emitter = new vscode.EventEmitter<vscode.TreeItem | undefined | void>();
   readonly onDidChangeTreeData = this.emitter.event;
   private backendConnected = false;
@@ -42,39 +42,45 @@ export class ArchAssistantSidebarProvider
 
     if (!project) {
       return [
-        new EmptyStateItem(
-          'No project configured',
-          'Click to configure a project',
-          {
-            command: 'archassistant.startProject',
-            title: 'Start Project'
-          }
-        ),
+        new ActionItem('Start Project', 'archassistant.startProject', 'Start Project', 'run'),
+        new ActionItem('Configure Project', 'archassistant.configureProject', 'Configure Project', 'settings-gear'),
+        new ActionItem('Generate Code', 'archassistant.generateCode', 'Generate Code', 'sparkle'),
+        new ActionItem('Show Metrics', 'archassistant.showMetrics', 'Show Metrics', 'graph'),
         new BackendInfoItem(
           `Backend: ${this.storageManager.getBackendUrl()}`,
           `Backend URL: ${this.storageManager.getBackendUrl()}`,
           this.backendConnected
         ),
-        new CompileWarningItem()
+        new CompileStatusItem(false),
+        new EmptyStateItem(
+          'No project configured',
+          'Click Start Project or Configure Project to begin'
+        )
       ];
     }
 
+    const compiled = await isProjectCompiled(project.projectPath);
+
     return [
+      new ActionItem('Start Project', 'archassistant.startProject', 'Start Project', 'run'),
+      new ActionItem('Configure Project', 'archassistant.configureProject', 'Configure Project', 'settings-gear'),
+      new ActionItem('Generate Code', 'archassistant.generateCode', 'Generate Code', 'sparkle'),
+      new ActionItem('Show Metrics', 'archassistant.showMetrics', 'Show Metrics', 'graph'),
+      new BackendInfoItem(
+        `Backend: ${this.storageManager.getBackendUrl()}`,
+        `Backend URL: ${this.storageManager.getBackendUrl()}`,
+        this.backendConnected
+      ),
+      new CompileStatusItem(compiled),
       new ProjectInfoItem(
         `Project: ${project.projectId}`,
         `${project.rulesCount ?? 0} rules`,
         `Project: ${project.projectId}\nPath: ${project.projectPath}\nRules: ${project.rulesCount ?? 0}`,
         {
           command: 'archassistant.configureProject',
-          title: 'Reconfigure Project'
+          title: 'Configure Project'
         }
-      ),
-      new BackendInfoItem(
-        `Backend: ${this.storageManager.getBackendUrl()}`,
-        `Backend URL: ${this.storageManager.getBackendUrl()}`,
-        this.backendConnected
-      ),
-      new CompileWarningItem()
+      )
     ];
   }
 }

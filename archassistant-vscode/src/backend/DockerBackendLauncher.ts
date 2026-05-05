@@ -22,9 +22,7 @@ export class DockerBackendLauncher {
 
     const composeFile = this.findComposeFile(options.composeDirectory);
     if (!composeFile) {
-      throw new Error(
-        `docker-compose.yml or compose.yml not found in ${options.composeDirectory}`
-      );
+      throw new Error(`docker-compose.yml or compose.yml not found in ${options.composeDirectory}`);
     }
 
     const dockerBinary = options.dockerBinary ?? (process.platform === 'win32' ? 'docker.exe' : 'docker');
@@ -48,6 +46,35 @@ export class DockerBackendLauncher {
     await this.waitForHealthy(options.backendUrl);
   }
 
+  async stop(options: DockerBackendLaunchOptions): Promise<void> {
+    if (!options.composeDirectory) {
+      return;
+    }
+
+    const composeFile = this.findComposeFile(options.composeDirectory);
+    if (!composeFile) {
+      return;
+    }
+
+    const dockerBinary = options.dockerBinary ?? (process.platform === 'win32' ? 'docker.exe' : 'docker');
+
+    const env = {
+      ...process.env,
+      PROJECT_PATH: options.projectPath
+    };
+
+    await execFile(
+      dockerBinary,
+      ['compose', '-f', composeFile, 'down'],
+      {
+        cwd: options.composeDirectory,
+        env,
+        windowsHide: true,
+        maxBuffer: 10 * 1024 * 1024
+      }
+    );
+  }
+
   private async waitForHealthy(baseUrl: string, attempts = 30, delayMs = 1000): Promise<void> {
     const client = new BackendClient(baseUrl);
     let lastError: unknown;
@@ -64,9 +91,7 @@ export class DockerBackendLauncher {
     }
 
     throw new Error(
-      `Backend did not become healthy: ${
-        lastError instanceof Error ? lastError.message : 'unknown error'
-      }`
+      `Backend did not become healthy: ${lastError instanceof Error ? lastError.message : 'unknown error'}`
     );
   }
 

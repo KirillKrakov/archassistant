@@ -41,55 +41,34 @@ export class BackendClient {
     });
   }
 
-  async saveRules(
-    projectId: string,
-    config: types.RulesConfig
-  ): Promise<types.BackendSuccessResponse> {
-    return this.request<types.BackendSuccessResponse>(
-      `/api/rules/${encodeURIComponent(projectId)}`,
-      {
-        method: 'POST',
-        data: config
-      }
-    );
+  async saveRules(projectId: string, config: types.RulesConfig): Promise<types.BackendSuccessResponse> {
+    return this.request<types.BackendSuccessResponse>(`/api/rules/${encodeURIComponent(projectId)}`, {
+      method: 'POST',
+      data: config
+    });
   }
 
   async deleteRules(projectId: string): Promise<types.BackendSuccessResponse> {
-    return this.request<types.BackendSuccessResponse>(
-      `/api/rules/${encodeURIComponent(projectId)}`,
-      { method: 'DELETE' }
-    );
+    return this.request<types.BackendSuccessResponse>(`/api/rules/${encodeURIComponent(projectId)}`, {
+      method: 'DELETE'
+    });
   }
 
-  async suggestRules(
-    projectId: string,
-    projectPath: string
-  ): Promise<types.WorkspaceModuleSuggestions[]> {
-    return this.request<types.WorkspaceModuleSuggestions[]>(
-      `/api/rules/${encodeURIComponent(projectId)}/suggest`,
-      {
-        method: 'GET',
-        params: { projectPath }
-      }
-    );
+  async suggestRules(projectId: string, projectPath: string): Promise<types.WorkspaceModuleSuggestions[]> {
+    return this.request<types.WorkspaceModuleSuggestions[]>(`/api/rules/${encodeURIComponent(projectId)}/suggest`, {
+      method: 'GET',
+      params: { projectPath }
+    });
   }
 
-  async saveProjectPath(
-    projectId: string,
-    projectPath: string
-  ): Promise<types.BackendSuccessResponse> {
-    return this.request<types.BackendSuccessResponse>(
-      `/api/rules/${encodeURIComponent(projectId)}/path`,
-      {
-        method: 'POST',
-        data: { projectPath }
-      }
-    );
+  async saveProjectPath(projectId: string, projectPath: string): Promise<types.BackendSuccessResponse> {
+    return this.request<types.BackendSuccessResponse>(`/api/rules/${encodeURIComponent(projectId)}/path`, {
+      method: 'POST',
+      data: { projectPath }
+    });
   }
 
-  async generateCode(
-    request: types.CodeGenerationRequest
-  ): Promise<types.CodeGenerationResponse> {
+  async generateCode(request: types.CodeGenerationRequest): Promise<types.CodeGenerationResponse> {
     return this.request<types.CodeGenerationResponse>('/api/generate', {
       method: 'POST',
       data: request
@@ -97,10 +76,9 @@ export class BackendClient {
   }
 
   async getProjectMetrics(projectId: string): Promise<types.ProjectMetrics> {
-    return this.request<types.ProjectMetrics>(
-      `/api/metrics/${encodeURIComponent(projectId)}`,
-      { method: 'GET' }
-    );
+    return this.request<types.ProjectMetrics>(`/api/metrics/${encodeURIComponent(projectId)}`, {
+      method: 'GET'
+    });
   }
 
   async compareStrategies(projectId?: string): Promise<types.ComparisonResult> {
@@ -112,11 +90,9 @@ export class BackendClient {
 
   async exportMetrics(request: types.ExportRequest): Promise<Uint8Array> {
     try {
-      const response = await this.client.post<ArrayBuffer>(
-        '/api/metrics/export',
-        request,
-        { responseType: 'arraybuffer' }
-      );
+      const response = await this.client.post<ArrayBuffer>('/api/metrics/export', request, {
+        responseType: 'arraybuffer'
+      });
       return new Uint8Array(response.data);
     } catch (error) {
       throw this.toBackendError(error);
@@ -165,10 +141,7 @@ export class BackendClient {
     }
 
     if (anyError?.code === 'ECONNREFUSED' || anyError?.code === 'ENOTFOUND') {
-      return new BackendError(
-        `Cannot connect to backend: ${anyError.message}`,
-        'CONNECTION_ERROR'
-      );
+      return new BackendError(`Cannot connect to backend: ${anyError.message}`, 'CONNECTION_ERROR');
     }
 
     return new BackendError(anyError?.message || 'Unknown backend error');

@@ -1,3 +1,5 @@
+import * as path from 'path';
+
 export function normalizeProjectId(name: string): string {
   return name.trim().replace(/[^a-zA-Z0-9._-]/g, '_');
 }
@@ -47,4 +49,9 @@ export function ruleKey(rule: {
     rule.from_layer_type ?? '',
     rule.to_layer_type ?? ''
   ].join('|');
+}
+
+export function basenameWithoutTrailingSlash(projectPath: string): string {
+  const trimmed = projectPath.replace(/[\\/]+$/, '');
+  return path.basename(trimmed);
 }

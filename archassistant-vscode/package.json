@@ -7,7 +7,10 @@
   "engines": {
     "vscode": "^1.80.0"
   },
-  "categories": ["Programming Languages", "Other"],
+  "categories": [
+    "Programming Languages",
+    "Other"
+  ],
   "activationEvents": [
     "onStartupFinished",
     "onCommand:archassistant.startProject",
@@ -15,23 +18,63 @@
     "onCommand:archassistant.generateCode",
     "onCommand:archassistant.showMetrics",
     "onCommand:archassistant.exportMetrics",
+    "onCommand:archassistant.getActualRules",
+    "onCommand:archassistant.refreshRules",
+    "onCommand:archassistant.saveRules",
     "onView:archassistant.projectInfo",
     "onView:archassistant.rulesList"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
-      { "command": "archassistant.startProject", "title": "ArchAssistant: Start Project" },
-      { "command": "archassistant.configureProject", "title": "ArchAssistant: Configure Project" },
-      { "command": "archassistant.generateCode", "title": "ArchAssistant: Generate Code" },
-      { "command": "archassistant.showMetrics", "title": "ArchAssistant: Show Metrics" },
-      { "command": "archassistant.exportMetrics", "title": "ArchAssistant: Export Metrics" },
-      { "command": "archassistant.refreshRules", "title": "ArchAssistant: Refresh Rules" },
-      { "command": "archassistant.saveRules", "title": "ArchAssistant: Save Rules" },
-      { "command": "archassistant.toggleRule", "title": "ArchAssistant: Toggle Rule" },
-      { "command": "archassistant.editRule", "title": "ArchAssistant: Edit Rule" },
-      { "command": "archassistant.deleteRule", "title": "ArchAssistant: Delete Rule" },
-      { "command": "archassistant.addCustomRule", "title": "ArchAssistant: Add Custom Rule" }
+      {
+        "command": "archassistant.startProject",
+        "title": "ArchAssistant: Start Project"
+      },
+      {
+        "command": "archassistant.configureProject",
+        "title": "ArchAssistant: Configure Project"
+      },
+      {
+        "command": "archassistant.generateCode",
+        "title": "ArchAssistant: Generate Code"
+      },
+      {
+        "command": "archassistant.showMetrics",
+        "title": "ArchAssistant: Show Metrics"
+      },
+      {
+        "command": "archassistant.exportMetrics",
+        "title": "ArchAssistant: Export Metrics"
+      },
+      {
+        "command": "archassistant.getActualRules",
+        "title": "ArchAssistant: Get Actual Rules"
+      },
+      {
+        "command": "archassistant.refreshRules",
+        "title": "ArchAssistant: Refresh Rules"
+      },
+      {
+        "command": "archassistant.saveRules",
+        "title": "ArchAssistant: Save Rules"
+      },
+      {
+        "command": "archassistant.toggleRule",
+        "title": "ArchAssistant: Toggle Rule"
+      },
+      {
+        "command": "archassistant.editRule",
+        "title": "ArchAssistant: Edit Rule"
+      },
+      {
+        "command": "archassistant.deleteRule",
+        "title": "ArchAssistant: Delete Rule"
+      },
+      {
+        "command": "archassistant.addCustomRule",
+        "title": "ArchAssistant: Add Custom Rule"
+      }
     ],
     "viewsContainers": {
       "activitybar": [
@@ -44,31 +87,81 @@
     },
     "views": {
       "archassistant-sidebar": [
-        { "id": "archassistant.projectInfo", "name": "Project" },
-        { "id": "archassistant.rulesList", "name": "Rules" }
+        {
+          "id": "archassistant.projectInfo",
+          "name": "Project",
+          "icon": "resources/archassistant.svg"
+        },
+        {
+          "id": "archassistant.rulesList",
+          "name": "Rules",
+          "icon": "resources/archassistant.svg"
+        }
       ]
     },
     "menus": {
+      "view/title": [
+        {
+          "command": "archassistant.startProject",
+          "when": "view == archassistant.projectInfo",
+          "group": "navigation@1"
+        },
+        {
+          "command": "archassistant.configureProject",
+          "when": "view == archassistant.projectInfo",
+          "group": "navigation@2"
+        },
+        {
+          "command": "archassistant.generateCode",
+          "when": "view == archassistant.projectInfo",
+          "group": "navigation@3"
+        },
+        {
+          "command": "archassistant.showMetrics",
+          "when": "view == archassistant.projectInfo",
+          "group": "navigation@4"
+        },
+        {
+          "command": "archassistant.getActualRules",
+          "when": "view == archassistant.rulesList",
+          "group": "navigation@1"
+        },
+        {
+          "command": "archassistant.refreshRules",
+          "when": "view == archassistant.rulesList",
+          "group": "navigation@2"
+        },
+        {
+          "command": "archassistant.saveRules",
+          "when": "view == archassistant.rulesList",
+          "group": "navigation@3"
+        },
+        {
+          "command": "archassistant.addCustomRule",
+          "when": "view == archassistant.rulesList",
+          "group": "navigation@4"
+        }
+      ],
       "view/item/context": [
         {
           "command": "archassistant.toggleRule",
-          "when": "view == archassistant.rulesList && viewItem == rule",
+          "when": "view == archassistant.rulesList && viewItem == savedRule",
           "group": "inline@1"
         },
         {
           "command": "archassistant.editRule",
-          "when": "view == archassistant.rulesList && viewItem == rule",
+          "when": "view == archassistant.rulesList && viewItem == savedRule",
           "group": "inline@2"
         },
         {
           "command": "archassistant.deleteRule",
-          "when": "view == archassistant.rulesList && viewItem == rule",
+          "when": "view == archassistant.rulesList && viewItem == savedRule",
           "group": "inline@3"
         },
         {
           "command": "archassistant.addCustomRule",
           "when": "view == archassistant.rulesList && viewItem == suggestedRule",
-          "group": "inline@4"
+          "group": "inline@1"
         }
       ]
     },

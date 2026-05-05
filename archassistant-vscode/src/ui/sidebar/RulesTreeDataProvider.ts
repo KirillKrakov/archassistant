@@ -1,7 +1,13 @@
 import * as vscode from 'vscode';
 import { ProjectRegistry } from '../../state/projectRegistry';
 import { ExtensionState } from '../../state/ExtensionState';
-import { EmptyStateItem, RuleGroupItem, RuleItem, SuggestionModuleItem } from './treeItems';
+import {
+  ActionItem,
+  EmptyStateItem,
+  RuleGroupItem,
+  RuleItem,
+  SuggestionModuleItem
+} from './treeItems';
 
 export class RulesTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
   private readonly emitter = new vscode.EventEmitter<vscode.TreeItem | undefined | void>();
@@ -50,11 +56,39 @@ export class RulesTreeDataProvider implements vscode.TreeDataProvider<vscode.Tre
     }
 
     if (element instanceof RuleGroupItem && element.kind === 'saved') {
-      return (config?.rules ?? []).map((rule) => new RuleItem(rule, 'saved'));
+      const items: vscode.TreeItem[] = [
+        new ActionItem('Get Actual Rules', 'archassistant.getActualRules', 'Get Actual Rules', 'cloud-download'),
+        new ActionItem('Save Rules', 'archassistant.saveRules', 'Save Rules', 'save-all'),
+        new ActionItem('Edit Rule', 'archassistant.editRule', 'Edit Rule', 'edit'),
+        new ActionItem('Delete Rule', 'archassistant.deleteRule', 'Delete Rule', 'trash')
+      ];
+
+      const rules = config?.rules ?? [];
+      if (rules.length === 0) {
+        items.push(new EmptyStateItem('Saved rules are empty', 'Use Get Actual Rules or Add Custom Rule'));
+      } else {
+        items.push(...rules.map((rule) => new RuleItem(rule, 'saved')));
+      }
+
+      return items;
     }
 
     if (element instanceof RuleGroupItem && element.kind === 'suggested') {
-      return suggestions.map((module) => new SuggestionModuleItem(module));
+      const items: vscode.TreeItem[] = [
+        new ActionItem('Add Custom Rule', 'archassistant.addCustomRule', 'Add Custom Rule', 'plus'),
+        new ActionItem('Refresh Suggestions', 'archassistant.refreshRules', 'Refresh Suggestions', 'refresh')
+      ];
+
+      if (suggestions.length === 0) {
+        items.push(new EmptyStateItem('No suggested rules yet', 'Click Refresh Suggestions'));
+        return items;
+      }
+
+      for (const module of suggestions) {
+        items.push(new SuggestionModuleItem(module));
+      }
+
+      return items;
     }
 
     if (element instanceof SuggestionModuleItem) {

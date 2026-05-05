@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { BackendClient } from './backend/BackendClient';
+import { DockerBackendLauncher } from './backend/DockerBackendLauncher';
 import { ExtensionState } from './state/ExtensionState';
 import { ProjectRegistry } from './state/projectRegistry';
 import { ArchAssistantSidebarProvider } from './ui/sidebar/ArchAssistantSidebarProvider';
@@ -16,6 +17,7 @@ import {
 } from './commands/manageRules';
 import { refreshRulesCommand } from './commands/refreshRules';
 import { saveRulesCommand } from './commands/saveRules';
+import { getActualRulesCommand } from './commands/getActualRules';
 import { generateCodeCommand } from './commands/generateCode';
 import { showMetricsCommand } from './commands/showMetrics';
 import { exportMetricsCommand } from './commands/exportMetrics';
@@ -29,12 +31,31 @@ let ruleEditor: RuleEditor;
 let sidebarProvider: ArchAssistantSidebarProvider;
 let rulesProvider: RulesTreeDataProvider;
 let logger: Logger;
-let outputChannel: vscode.OutputChannel;
+let statusBarItem: vscode.StatusBarItem;
+let healthTimer: NodeJS.Timeout | undefined;
+
+async function updateBackendStatus(): Promise<void> {
+  try {
+    const health = await backendClient.health();
+    const connected = health.status?.toUpperCase() === 'UP';
+    sidebarProvider.setBackendConnected(connected);
+
+    statusBarItem.text = connected
+      ? '$(server) ArchAssistant: Connected'
+      : '$(circle-slash) ArchAssistant: Disconnected';
+    statusBarItem.tooltip = connected
+      ? 'Backend is reachable'
+      : 'Backend is not reachable';
+    statusBarItem.backgroundColor = undefined;
+  } catch {
+    sidebarProvider.setBackendConnected(false);
+    statusBarItem.text = '$(circle-slash) ArchAssistant: Disconnected';
+    statusBarItem.tooltip = 'Backend is not reachable';
+  }
+}
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  outputChannel = vscode.window.createOutputChannel('ArchAssistant');
   logger = createLogger('ArchAssistant');
-
   logInfo('ArchAssistant extension activated');
 
   storageManager = new ExtensionState(context.workspaceState);
@@ -52,6 +73,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
   rulesProvider = new RulesTreeDataProvider(projectRegistry, storageManager);
 
+  statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+  statusBarItem.command = 'archassistant.startProject';
+  statusBarItem.show();
+  context.subscriptions.push(statusBarItem);
+
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider('archassistant.projectInfo', sidebarProvider),
     vscode.window.registerTreeDataProvider('archassistant.rulesList', rulesProvider)
@@ -59,29 +85,45 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   context.subscriptions.push(
     vscode.commands.registerCommand('archassistant.startProject', () =>
-      startProjectCommand(storageManager, projectRegistry, logger)
+      startProjectCommand(
+        backendClient,
+        storageManager,
+        projectRegistry,
+        sidebarProvider,
+        rulesProvider,
+        logger
+      )
     ),
     vscode.commands.registerCommand('archassistant.configureProject', () =>
       configureProjectCommand(
+        backendClient,
         storageManager,
         projectRegistry,
         rulesManager,
         logger,
+        sidebarProvider,
+        rulesProvider
+      )
+    ),
+    vscode.commands.registerCommand('archassistant.getActualRules', () =>
+      getActualRulesCommand(
+        backendClient,
+        storageManager,
+        projectRegistry,
+        rulesManager,
         rulesProvider
       )
     ),
     vscode.commands.registerCommand('archassistant.refreshRules', () =>
-      refreshRulesCommand(storageManager, projectRegistry, rulesManager, logger, () =>
-        rulesProvider.refresh()
-      )
+      refreshRulesCommand(storageManager, projectRegistry, rulesManager, logger, rulesProvider)
     ),
     vscode.commands.registerCommand('archassistant.saveRules', () =>
-      saveRulesCommand(storageManager, projectRegistry, rulesManager, logger)
+      saveRulesCommand(storageManager, projectRegistry, rulesManager, logger, rulesProvider)
     ),
     vscode.commands.registerCommand('archassistant.toggleRule', (ruleId: string) =>
       toggleRuleCommand(ruleId, storageManager, rulesManager, () => rulesProvider.refresh())
     ),
-    vscode.commands.registerCommand('archassistant.editRule', (ruleId: string) =>
+    vscode.commands.registerCommand('archassistant.editRule', (ruleId?: string) =>
       editRuleCommand(
         ruleId,
         storageManager,
@@ -90,21 +132,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         () => rulesProvider.refresh()
       )
     ),
-    vscode.commands.registerCommand('archassistant.deleteRule', (ruleId: string) =>
-      deleteRuleCommand(ruleId, storageManager, rulesManager, () =>
-        rulesProvider.refresh()
+    vscode.commands.registerCommand('archassistant.deleteRule', (ruleId?: string) =>
+      deleteRuleCommand(
+        ruleId,
+        storageManager,
+        rulesManager,
+        () => rulesProvider.refresh()
       )
     ),
-    vscode.commands.registerCommand(
-      'archassistant.addCustomRule',
-      (rule?: any) =>
-        addCustomRuleCommand(
-          storageManager,
-          rulesManager,
-          ruleEditor,
-          () => rulesProvider.refresh(),
-          rule
-        )
+    vscode.commands.registerCommand('archassistant.addCustomRule', (rule?: any) =>
+      addCustomRuleCommand(
+        storageManager,
+        rulesManager,
+        ruleEditor,
+        () => rulesProvider.refresh(),
+        rule
+      )
     ),
     vscode.commands.registerCommand('archassistant.generateCode', () =>
       generateCodeCommand(backendClient, projectRegistry, storageManager)
@@ -127,24 +170,52 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         backendClient.updateBaseUrl(newUrl);
         await storageManager.setBackendUrl(newUrl);
         logInfo(`Backend URL updated: ${newUrl}`);
+        await updateBackendStatus();
       }
     })
   );
 
-  try {
-    const health = await backendClient.health();
-    logInfo(`Backend health: ${health.status}`);
-    sidebarProvider.setBackendConnected(true);
-  } catch (error: any) {
-    logError(`Backend connection failed: ${error.message}`);
-    sidebarProvider.setBackendConnected(false);
-  }
+  await updateBackendStatus();
+  healthTimer = setInterval(() => {
+    void updateBackendStatus();
+  }, 10000);
+
+  context.subscriptions.push(
+    new vscode.Disposable(() => {
+      if (healthTimer) {
+        clearInterval(healthTimer);
+        healthTimer = undefined;
+      }
+    })
+  );
 
   logInfo('ArchAssistant extension fully initialized');
 }
 
-export function deactivate(): void {
+export async function deactivate(): Promise<void> {
   logInfo('ArchAssistant extension deactivated');
-  outputChannel?.dispose();
+
+  if (healthTimer) {
+    clearInterval(healthTimer);
+    healthTimer = undefined;
+  }
+
+  const launchInfo = storageManager?.getBackendLaunchInfo();
+  if (launchInfo && storageManager?.isBackendStarted()) {
+    try {
+      const launcher = new DockerBackendLauncher();
+      await launcher.stop({
+        projectPath: launchInfo.projectPath,
+        composeDirectory: launchInfo.composeDirectory,
+        serviceName: launchInfo.serviceName,
+        backendUrl: launchInfo.backendUrl
+      });
+      logInfo('Backend stopped on extension shutdown');
+    } catch (error: any) {
+      logError(`Failed to stop backend on deactivate: ${error.message}`);
+    }
+  }
+
+  statusBarItem?.dispose();
   logger?.dispose?.();
 }

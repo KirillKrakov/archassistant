@@ -6,10 +6,15 @@ import { ProjectRegistry } from '../state/projectRegistry';
 import { Logger } from '../utils/logger';
 import { projectIdFromPath } from '../utils/helpers';
 import { toBackendProjectPath } from '../utils/projectPaths';
+import { ArchAssistantSidebarProvider } from '../ui/sidebar/ArchAssistantSidebarProvider';
+import { RulesTreeDataProvider } from '../ui/sidebar/RulesTreeDataProvider';
 
 export async function startProjectCommand(
+  backendClient: BackendClient,
   state: ExtensionState,
   registry: ProjectRegistry,
+  sidebarProvider: ArchAssistantSidebarProvider,
+  rulesProvider: RulesTreeDataProvider,
   logger: Logger
 ): Promise<void> {
   const folder = await vscode.window.showOpenDialog({
@@ -32,6 +37,7 @@ export async function startProjectCommand(
 
   await state.resetProjectData();
   await registry.setCurrentProject(projectId, projectPath);
+  await state.setBackendStarted(false);
 
   if (autoStart) {
     if (!composeDirectory) {
@@ -67,12 +73,26 @@ export async function startProjectCommand(
         });
       }
     );
+
+    await state.setBackendStarted(true);
+    await state.setBackendLaunchInfo({
+      projectPath,
+      composeDirectory,
+      serviceName,
+      backendUrl
+    });
   }
 
-  const client = new BackendClient(backendUrl);
   const backendProjectPath = toBackendProjectPath(projectPath);
-  await client.saveProjectPath(projectId, backendProjectPath);
-  await state.setBackendStarted(true);
+
+  try {
+    await backendClient.saveProjectPath(projectId, backendProjectPath);
+  } catch (error: any) {
+    logger.warn('Could not save project path to backend: {}', error.message);
+  }
+
+  sidebarProvider.refresh();
+  rulesProvider.refresh();
 
   vscode.window.showInformationMessage(`ArchAssistant started for project ${projectId}`);
   logger.info('Started project {} at {}', projectId, backendProjectPath);

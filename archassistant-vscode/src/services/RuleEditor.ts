@@ -4,8 +4,8 @@ import {
   ClassType,
   ConstraintType,
   RuleType,
-  Severity,
-  SelectorMode
+  SelectorMode,
+  Severity
 } from '../backend/types';
 import { normalizeProjectId } from '../utils/helpers';
 
@@ -87,7 +87,7 @@ export class RuleEditor {
       from_package: fromPackage,
       constraint: this.defaultConstraint(type),
       severity,
-      weight: 1.0,
+      weight: 1,
       enabled,
       suggested: false
     };
@@ -207,10 +207,7 @@ export class RuleEditor {
     }
   }
 
-  private async promptText(
-    placeHolder: string,
-    value: string
-  ): Promise<string | undefined> {
+  private async promptText(placeHolder: string, value: string): Promise<string | undefined> {
     return vscode.window.showInputBox({
       prompt: placeHolder,
       value,

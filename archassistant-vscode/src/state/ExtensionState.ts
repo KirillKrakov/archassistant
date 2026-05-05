@@ -15,11 +15,19 @@ export interface LastGenerationCache {
   score: number | null;
 }
 
+export interface BackendLaunchInfo {
+  projectPath: string;
+  composeDirectory: string;
+  serviceName: string;
+  backendUrl: string;
+}
+
 export class ExtensionState {
   private readonly backendUrl: Storage<string>;
   private readonly rulesConfig: Storage<RulesConfig | null>;
   private readonly suggestions: Storage<WorkspaceModuleSuggestions[]>;
   private readonly backendStarted: Storage<boolean>;
+  private readonly backendLaunchInfo: Storage<BackendLaunchInfo | null>;
   private readonly lastGeneration: Storage<LastGenerationCache | null>;
 
   constructor(private readonly memento: vscode.Memento) {
@@ -27,6 +35,7 @@ export class ExtensionState {
     this.rulesConfig = new Storage('archassistant.rulesConfig', this.memento);
     this.suggestions = new Storage('archassistant.suggestions', this.memento);
     this.backendStarted = new Storage('archassistant.backendStarted', this.memento);
+    this.backendLaunchInfo = new Storage('archassistant.backendLaunchInfo', this.memento);
     this.lastGeneration = new Storage('archassistant.lastGeneration', this.memento);
   }
 
@@ -64,6 +73,14 @@ export class ExtensionState {
 
   async setBackendStarted(value: boolean): Promise<void> {
     await this.backendStarted.set(value);
+  }
+
+  getBackendLaunchInfo(): BackendLaunchInfo | null {
+    return this.backendLaunchInfo.get(null);
+  }
+
+  async setBackendLaunchInfo(info: BackendLaunchInfo | null): Promise<void> {
+    await this.backendLaunchInfo.set(info);
   }
 
   getLastGenerationCache(): LastGenerationCache | null {

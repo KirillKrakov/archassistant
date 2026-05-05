@@ -5,6 +5,21 @@ import {
   WorkspaceModuleSuggestions
 } from '../../backend/types';
 
+export class ActionItem extends vscode.TreeItem {
+  constructor(
+    label: string,
+    command: string,
+    title: string,
+    icon: string,
+    contextValue = 'action'
+  ) {
+    super(label, vscode.TreeItemCollapsibleState.None);
+    this.command = { command, title };
+    this.iconPath = new vscode.ThemeIcon(icon);
+    this.contextValue = contextValue;
+  }
+}
+
 export class ProjectInfoItem extends vscode.TreeItem {
   constructor(
     label: string,
@@ -30,17 +45,20 @@ export class BackendInfoItem extends vscode.TreeItem {
   }
 }
 
-export class CompileWarningItem extends vscode.TreeItem {
-  constructor() {
+export class CompileStatusItem extends vscode.TreeItem {
+  constructor(compiled: boolean) {
     super(
-      'Project must be compiled for full validation',
+      compiled
+        ? 'Project compiled for full validation'
+        : 'Project must be compiled for full validation',
       vscode.TreeItemCollapsibleState.None
     );
-    this.tooltip = 'For full ArchUnit validation, compile your project first (mvn compile / gradle build).';
-    this.iconPath = new vscode.ThemeIcon(
-      'warning',
-      new vscode.ThemeColor('notificationsWarningIcon')
-    );
+    this.tooltip = compiled
+      ? 'Compiled classes were found and full validation should work.'
+      : 'Compile the project first (mvn compile / gradle build) for full validation.';
+    this.iconPath = compiled
+      ? new vscode.ThemeIcon('check', new vscode.ThemeColor('notificationsInfoIcon'))
+      : new vscode.ThemeIcon('warning', new vscode.ThemeColor('notificationsWarningIcon'));
   }
 }
 
@@ -87,20 +105,16 @@ export class RuleItem extends vscode.TreeItem {
     this.iconPath = rule.enabled
       ? getSeverityIcon(rule.severity)
       : new vscode.ThemeIcon('circle-slash');
-    this.contextValue = source === 'saved' ? 'rule' : 'suggestedRule';
 
-    this.command =
-      source === 'saved'
-        ? {
-            command: 'archassistant.editRule',
-            title: 'Edit Rule',
-            arguments: [rule.id]
-          }
-        : {
-            command: 'archassistant.addCustomRule',
-            title: 'Add Suggested Rule',
-            arguments: [rule]
-          };
+    this.contextValue = source === 'saved' ? 'savedRule' : 'suggestedRule';
+
+    if (source === 'saved') {
+      this.command = {
+        command: 'archassistant.toggleRule',
+        title: 'Toggle Rule',
+        arguments: [rule.id]
+      };
+    }
   }
 }
 
