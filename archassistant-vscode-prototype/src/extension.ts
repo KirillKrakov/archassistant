@@ -95,7 +95,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   register('archassistant.deleteRule', async (ruleId: string) => {
     try {
-      await deleteRuleCommand(ruleId, rulesManager(), refresh);
+      await deleteRuleCommand(ruleId, state, rulesManager(), refresh);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error(message);

@@ -31,21 +31,16 @@ export class DockerBackendLauncher {
       PROJECT_PATH: options.projectPath
     };
 
-    const args = [
-      'compose',
-      '-f',
-      composeFile,
-      'up',
-      '-d',
-      options.serviceName
-    ];
-
-    await execFile(dockerBinary, args, {
-      cwd: options.composeDirectory,
-      env,
-      windowsHide: true,
-      maxBuffer: 10 * 1024 * 1024
-    });
+    await execFile(
+      dockerBinary,
+      ['compose', '-f', composeFile, 'up', '-d', options.serviceName],
+      {
+        cwd: options.composeDirectory,
+        env,
+        windowsHide: true,
+        maxBuffer: 10 * 1024 * 1024
+      }
+    );
 
     await this.waitForHealthy(options.backendUrl);
   }
@@ -64,7 +59,11 @@ export class DockerBackendLauncher {
       await delay(delayMs);
     }
 
-    throw new Error(`Backend did not become healthy: ${lastError instanceof Error ? lastError.message : 'unknown error'}`);
+    throw new Error(
+      `Backend did not become healthy: ${
+        lastError instanceof Error ? lastError.message : 'unknown error'
+      }`
+    );
   }
 }
 

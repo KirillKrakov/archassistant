@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { ArchitecturalRule } from '../backend/types';
 import { ExtensionState } from '../state/ExtensionState';
-import { Logger } from '../utils/logger';
 import { RulesManager } from '../services/RulesManager';
 import { RuleEditor } from '../services/RuleEditor';
 
@@ -11,7 +10,8 @@ export async function toggleRuleCommand(
   rulesManager: RulesManager,
   refresh: () => void
 ): Promise<void> {
-  await rulesManager.toggleRule(ruleId);
+  const updated = await rulesManager.toggleRule(ruleId);
+  await rulesManager.saveDraft(updated.project_id);
   refresh();
 }
 
@@ -29,15 +29,23 @@ export async function editRuleCommand(
     return;
   }
 
-  const updated = await editor.editRule(rule);
-  if (!updated) return;
+  const updatedRule = await editor.editRule(rule);
+  if (!updatedRule) return;
 
-  await rulesManager.updateRule(ruleId, () => updated);
+  await rulesManager.updateRule(ruleId, () => updatedRule);
+
+  if (!config) {
+  vscode.window.showErrorMessage('No project configured');
+  return;
+  }
+
+  await rulesManager.saveDraft(config.project_id);
   refresh();
 }
 
 export async function deleteRuleCommand(
   ruleId: string,
+  state: ExtensionState,
   rulesManager: RulesManager,
   refresh: () => void
 ): Promise<void> {
@@ -49,7 +57,8 @@ export async function deleteRuleCommand(
 
   if (confirmed !== 'Delete') return;
 
-  await rulesManager.deleteRule(ruleId);
+  const updated = await rulesManager.deleteRule(ruleId);
+  await rulesManager.saveDraft(updated.project_id);
   refresh();
 }
 
@@ -78,5 +87,6 @@ export async function addCustomRuleCommand(
   if (!rule) return;
 
   await rulesManager.addCustomRule(rule);
+  await rulesManager.saveDraft(current.projectId);
   refresh();
 }

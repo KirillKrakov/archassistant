@@ -1,5 +1,9 @@
 import { BackendClient } from '../backend/BackendClient';
-import { ArchitecturalRule, RulesConfig, WorkspaceModuleSuggestions } from '../backend/types';
+import {
+  ArchitecturalRule,
+  RulesConfig,
+  WorkspaceModuleSuggestions
+} from '../backend/types';
 import { ExtensionState } from '../state/ExtensionState';
 import { toBackendProjectPath } from '../utils/projectPaths';
 
@@ -27,7 +31,7 @@ export class RulesManager {
       this.backend.suggestRules(projectId, backendProjectPath)
     ]);
 
-    const mergedRules = this.state.mergeSuggestedRules(existing.rules, suggestions)
+    const mergedRules = this.mergeBySemanticKey(existing.rules, suggestions)
       .sort((a, b) =>
         a.suggested === b.suggested
           ? a.name.localeCompare(b.name)
@@ -97,7 +101,10 @@ export class RulesManager {
     return updated;
   }
 
-  async updateRule(ruleId: string, updater: (rule: ArchitecturalRule) => ArchitecturalRule): Promise<RulesConfig> {
+  async updateRule(
+    ruleId: string,
+    updater: (rule: ArchitecturalRule) => ArchitecturalRule
+  ): Promise<RulesConfig> {
     const config = this.mustHaveConfig();
     const updated: RulesConfig = {
       ...config,
@@ -106,6 +113,44 @@ export class RulesManager {
     };
     await this.state.setRulesConfig(updated);
     return updated;
+  }
+
+  private mergeBySemanticKey(
+    existing: ArchitecturalRule[],
+    suggestions: WorkspaceModuleSuggestions[]
+  ): ArchitecturalRule[] {
+    const merged: ArchitecturalRule[] = [...existing];
+    const seen = new Set(existing.map((rule) => this.semanticKey(rule)));
+
+    for (const module of suggestions) {
+      for (const rule of module.rules) {
+        const key = this.semanticKey(rule);
+        if (!seen.has(key)) {
+          merged.push(rule);
+          seen.add(key);
+        }
+      }
+    }
+
+    return merged;
+  }
+
+  private semanticKey(rule: ArchitecturalRule): string {
+    return [
+      rule.type,
+      rule.constraint,
+      rule.from_package,
+      rule.to_package ?? '',
+      rule.to_packages?.join(',') ?? '',
+      rule.pattern ?? '',
+      rule.annotation ?? '',
+      rule.from_selector_mode ?? '',
+      rule.to_selector_mode ?? '',
+      rule.from_class_type ?? '',
+      rule.to_class_type ?? '',
+      rule.from_layer_type ?? '',
+      rule.to_layer_type ?? ''
+    ].join('|');
   }
 
   private mustHaveConfig(): RulesConfig {

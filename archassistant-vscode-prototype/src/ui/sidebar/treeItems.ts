@@ -11,6 +11,7 @@ export class RuleItem extends vscode.TreeItem {
     this.tooltip = rule.description ? `${rule.name}\n${rule.description}` : rule.name;
     this.description = `${rule.type} · ${rule.constraint} · ${rule.enabled ? 'enabled' : 'disabled'}`;
     this.iconPath = new vscode.ThemeIcon(rule.enabled ? 'check' : 'circle-slash');
+
     this.command = source === 'saved'
       ? {
           command: 'archassistant.editRule',
@@ -36,7 +37,9 @@ export class RuleGroupItem extends vscode.TreeItem {
 export class SuggestionModuleItem extends vscode.TreeItem {
   constructor(public readonly suggestion: WorkspaceModuleSuggestions) {
     super(suggestion.moduleRoot, vscode.TreeItemCollapsibleState.Expanded);
-    this.description = suggestion.profile?.primaryProfile ? `${suggestion.profile.primaryProfile} (${suggestion.rules.length})` : `${suggestion.rules.length}`;
+    this.description = suggestion.profile?.primaryProfile
+      ? `${suggestion.profile.primaryProfile} (${suggestion.rules.length})`
+      : `${suggestion.rules.length}`;
     this.contextValue = 'suggestionModule';
     this.iconPath = new vscode.ThemeIcon('package');
   }
