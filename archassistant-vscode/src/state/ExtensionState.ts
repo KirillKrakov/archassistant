@@ -24,7 +24,8 @@ export interface BackendLaunchInfo {
 
 export class ExtensionState {
   private readonly backendUrl: Storage<string>;
-  private readonly rulesConfig: Storage<RulesConfig | null>;
+  private readonly draftRulesConfig: Storage<RulesConfig | null>;
+  private readonly savedRulesConfig: Storage<RulesConfig | null>;
   private readonly suggestions: Storage<WorkspaceModuleSuggestions[]>;
   private readonly backendStarted: Storage<boolean>;
   private readonly backendLaunchInfo: Storage<BackendLaunchInfo | null>;
@@ -32,7 +33,8 @@ export class ExtensionState {
 
   constructor(private readonly memento: vscode.Memento) {
     this.backendUrl = new Storage('archassistant.backendUrl', this.memento);
-    this.rulesConfig = new Storage('archassistant.rulesConfig', this.memento);
+    this.draftRulesConfig = new Storage('archassistant.draftRulesConfig', this.memento);
+    this.savedRulesConfig = new Storage('archassistant.savedRulesConfig', this.memento);
     this.suggestions = new Storage('archassistant.suggestions', this.memento);
     this.backendStarted = new Storage('archassistant.backendStarted', this.memento);
     this.backendLaunchInfo = new Storage('archassistant.backendLaunchInfo', this.memento);
@@ -47,12 +49,20 @@ export class ExtensionState {
     await this.backendUrl.set(url);
   }
 
-  getRulesConfig(): RulesConfig | null {
-    return this.rulesConfig.get(null);
+  getDraftRulesConfig(): RulesConfig | null {
+    return this.draftRulesConfig.get(null);
   }
 
-  async setRulesConfig(config: RulesConfig | null): Promise<void> {
-    await this.rulesConfig.set(config);
+  async setDraftRulesConfig(config: RulesConfig | null): Promise<void> {
+    await this.draftRulesConfig.set(config);
+  }
+
+  getSavedRulesConfig(): RulesConfig | null {
+    return this.savedRulesConfig.get(null);
+  }
+
+  async setSavedRulesConfig(config: RulesConfig | null): Promise<void> {
+    await this.savedRulesConfig.set(config);
   }
 
   getSuggestions(): WorkspaceModuleSuggestions[] {
@@ -91,9 +101,21 @@ export class ExtensionState {
     await this.lastGeneration.set(cache);
   }
 
+  async resetSessionState(): Promise<void> {
+    await Promise.all([
+      this.setDraftRulesConfig(null),
+      this.setSavedRulesConfig(null),
+      this.clearSuggestions(),
+      this.setBackendStarted(false),
+      this.setBackendLaunchInfo(null),
+      this.setLastGenerationCache(null)
+    ]);
+  }
+
   async resetProjectData(): Promise<void> {
     await Promise.all([
-      this.setRulesConfig(null),
+      this.setDraftRulesConfig(null),
+      this.setSavedRulesConfig(null),
       this.clearSuggestions(),
       this.setLastGenerationCache(null)
     ]);

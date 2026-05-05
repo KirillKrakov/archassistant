@@ -17,32 +17,23 @@ export async function configureProjectCommand(
   sidebarProvider: ArchAssistantSidebarProvider,
   rulesProvider: RulesTreeDataProvider
 ): Promise<void> {
-  const current = registry.getCurrentProject();
+  const folder = await vscode.window.showOpenDialog({
+    canSelectFolders: true,
+    canSelectFiles: false,
+    canSelectMany: false,
+    openLabel: 'Select Project Root',
+    title: 'Select Project Root Directory'
+  });
 
-  let projectId = current?.projectId;
-  let projectPath = current?.projectPath;
+  const selected = folder?.[0];
+  if (!selected) return;
 
-  if (!projectId || !projectPath) {
-    const folder = await vscode.window.showOpenDialog({
-      canSelectFolders: true,
-      canSelectFiles: false,
-      canSelectMany: false,
-      openLabel: 'Select Project Root',
-      title: 'Select Project Root Directory'
-    });
-
-    const selected = folder?.[0];
-    if (!selected) return;
-
-    projectPath = selected.fsPath;
-    projectId = projectIdFromPath(projectPath);
-  }
-
-  const backendProjectPath = '/workspace/project';
+  const projectPath = selected.fsPath;
+  const projectId = projectIdFromPath(projectPath);
 
   await state.resetProjectData();
   await registry.setCurrentProject(projectId, projectPath);
-  await state.setRulesConfig(rulesManager.createEmptyConfig(projectId, projectPath));
+  await rulesManager.prepareProject(projectId, projectPath);
 
   await vscode.window.withProgress(
     {
@@ -53,7 +44,7 @@ export async function configureProjectCommand(
     async (progress) => {
       progress.report({ message: 'Saving project path...' });
       try {
-        await backendClient.saveProjectPath(projectId, backendProjectPath);
+        await backendClient.saveProjectPath(projectId, '/workspace/project');
       } catch (error: any) {
         logger.warn('Could not save project path before scan: {}', error.message);
       }
@@ -63,7 +54,11 @@ export async function configureProjectCommand(
       await state.setSuggestions(suggestions);
 
       progress.report({ message: 'Project prepared...' });
-      logger.info('Configured project {} with {} suggested rules', projectId, suggestions.reduce((sum, m) => sum + m.rules.length, 0));
+      logger.info(
+        'Configured project {} with {} suggested rule modules',
+        projectId,
+        suggestions.length
+      );
     }
   );
 

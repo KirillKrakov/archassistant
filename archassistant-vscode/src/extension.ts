@@ -9,12 +9,7 @@ import { RulesManager } from './services/RulesManager';
 import { RuleEditor } from './services/RuleEditor';
 import { startProjectCommand } from './commands/startProject';
 import { configureProjectCommand } from './commands/configureProject';
-import {
-  toggleRuleCommand,
-  editRuleCommand,
-  deleteRuleCommand,
-  addCustomRuleCommand
-} from './commands/manageRules';
+import { editRuleCommand, deleteRuleCommand, addCustomRuleCommand } from './commands/manageRules';
 import { refreshRulesCommand } from './commands/refreshRules';
 import { saveRulesCommand } from './commands/saveRules';
 import { getActualRulesCommand } from './commands/getActualRules';
@@ -43,10 +38,7 @@ async function updateBackendStatus(): Promise<void> {
     statusBarItem.text = connected
       ? '$(server) ArchAssistant: Connected'
       : '$(circle-slash) ArchAssistant: Disconnected';
-    statusBarItem.tooltip = connected
-      ? 'Backend is reachable'
-      : 'Backend is not reachable';
-    statusBarItem.backgroundColor = undefined;
+    statusBarItem.tooltip = connected ? 'Backend is reachable' : 'Backend is not reachable';
   } catch {
     sidebarProvider.setBackendConnected(false);
     statusBarItem.text = '$(circle-slash) ArchAssistant: Disconnected';
@@ -61,16 +53,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   storageManager = new ExtensionState(context.workspaceState);
   projectRegistry = new ProjectRegistry(context.workspaceState);
 
+  await storageManager.resetSessionState();
+
   const backendUrl = storageManager.getBackendUrl();
   backendClient = new BackendClient(backendUrl);
   rulesManager = new RulesManager(backendClient, storageManager);
   ruleEditor = new RuleEditor();
 
-  sidebarProvider = new ArchAssistantSidebarProvider(
-    backendClient,
-    projectRegistry,
-    storageManager
-  );
+  sidebarProvider = new ArchAssistantSidebarProvider(backendClient, projectRegistry, storageManager);
   rulesProvider = new RulesTreeDataProvider(projectRegistry, storageManager);
 
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
@@ -107,7 +97,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand('archassistant.getActualRules', () =>
       getActualRulesCommand(
-        backendClient,
         storageManager,
         projectRegistry,
         rulesManager,
@@ -120,39 +109,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('archassistant.saveRules', () =>
       saveRulesCommand(storageManager, projectRegistry, rulesManager, logger, rulesProvider)
     ),
-    vscode.commands.registerCommand('archassistant.toggleRule', (ruleId: string) =>
-      toggleRuleCommand(ruleId, storageManager, rulesManager, () => rulesProvider.refresh())
-    ),
     vscode.commands.registerCommand('archassistant.editRule', (ruleId?: string) =>
-      editRuleCommand(
-        ruleId,
-        storageManager,
-        rulesManager,
-        ruleEditor,
-        () => rulesProvider.refresh()
-      )
+      editRuleCommand(ruleId, storageManager, rulesManager, ruleEditor, () => rulesProvider.refresh())
     ),
     vscode.commands.registerCommand('archassistant.deleteRule', (ruleId?: string) =>
-      deleteRuleCommand(
-        ruleId,
-        storageManager,
-        rulesManager,
-        () => rulesProvider.refresh()
-      )
+      deleteRuleCommand(ruleId, storageManager, rulesManager, () => rulesProvider.refresh())
     ),
     vscode.commands.registerCommand('archassistant.addCustomRule', (rule?: any) =>
-      addCustomRuleCommand(
-        storageManager,
-        rulesManager,
-        ruleEditor,
-        () => rulesProvider.refresh(),
-        rule
-      )
+      addCustomRuleCommand(storageManager, rulesManager, ruleEditor, () => rulesProvider.refresh(), rule)
     ),
     vscode.commands.registerCommand('archassistant.generateCode', () =>
       generateCodeCommand(backendClient, projectRegistry, storageManager)
     ),
     vscode.commands.registerCommand('archassistant.showMetrics', () =>
+      showMetricsCommand(backendClient, projectRegistry)
+    ),
+    vscode.commands.registerCommand('archassistant.compareStrategies', () =>
       showMetricsCommand(backendClient, projectRegistry)
     ),
     vscode.commands.registerCommand('archassistant.exportMetrics', () =>

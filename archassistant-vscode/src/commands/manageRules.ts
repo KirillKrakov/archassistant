@@ -4,13 +4,9 @@ import { ProjectRegistry } from '../state/projectRegistry';
 import { RulesManager } from '../services/RulesManager';
 import { RuleEditor } from '../services/RuleEditor';
 import { ExtensionState } from '../state/ExtensionState';
-import { isBlank } from '../utils/helpers';
 
-async function pickSavedRule(
-  state: ExtensionState,
-  title: string
-): Promise<ArchitecturalRule | null> {
-  const config = state.getRulesConfig();
+async function pickSavedRule(state: ExtensionState, title: string): Promise<ArchitecturalRule | null> {
+  const config = state.getDraftRulesConfig();
   const rules = config?.rules ?? [];
   if (rules.length === 0) {
     vscode.window.showWarningMessage('Saved rules are empty. Use Get Actual Rules first.');
@@ -32,17 +28,6 @@ async function pickSavedRule(
   return picked?.rule ?? null;
 }
 
-export async function toggleRuleCommand(
-  ruleId: string,
-  state: ExtensionState,
-  rulesManager: RulesManager,
-  refresh: () => void
-): Promise<void> {
-  const updated = await rulesManager.toggleRule(ruleId);
-  await rulesManager.saveDraft(updated.project_id);
-  refresh();
-}
-
 export async function editRuleCommand(
   ruleId: string | undefined,
   state: ExtensionState,
@@ -51,22 +36,19 @@ export async function editRuleCommand(
   refresh: () => void
 ): Promise<void> {
   let rule = ruleId
-    ? state.getRulesConfig()?.rules.find((item) => item.id === ruleId)
+    ? state.getDraftRulesConfig()?.rules.find((item) => item.id === ruleId)
     : null;
 
   if (!rule) {
     rule = await pickSavedRule(state, 'Select a rule to edit');
   }
 
-  if (!rule) {
-    return;
-  }
+  if (!rule) return;
 
   const updatedRule = await editor.editRule(rule);
   if (!updatedRule) return;
 
-  const updated = await rulesManager.updateRule(rule.id, () => updatedRule);
-  await rulesManager.saveDraft(updated.project_id);
+  await rulesManager.updateDraftRule(rule.id, () => updatedRule);
   refresh();
 }
 
@@ -77,7 +59,7 @@ export async function deleteRuleCommand(
   refresh: () => void
 ): Promise<void> {
   let rule = ruleId
-    ? state.getRulesConfig()?.rules.find((item) => item.id === ruleId)
+    ? state.getDraftRulesConfig()?.rules.find((item) => item.id === ruleId)
     : null;
 
   if (!rule) {
@@ -94,8 +76,7 @@ export async function deleteRuleCommand(
 
   if (confirmed !== 'Delete') return;
 
-  const updated = await rulesManager.deleteRule(rule.id);
-  await rulesManager.saveDraft(updated.project_id);
+  await rulesManager.removeDraftRule(rule.id);
   refresh();
 }
 
@@ -106,7 +87,7 @@ export async function addCustomRuleCommand(
   refresh: () => void,
   suggestedRule?: ArchitecturalRule
 ): Promise<void> {
-  const currentConfig = state.getRulesConfig();
+  const currentConfig = state.getDraftRulesConfig();
   if (!currentConfig) {
     vscode.window.showWarningMessage('No project selected. Use Start/Configure first.');
     return;
@@ -115,15 +96,21 @@ export async function addCustomRuleCommand(
   let rule: ArchitecturalRule | null = suggestedRule ?? null;
 
   if (!rule) {
-    const suggestions = state.getSuggestions().flatMap((module) => module.rules);
+    const savedRules = currentConfig.rules;
+    const savedKeys = new Set(savedRules.map((r) => r.id));
+
+    const availableSuggestions = state.getSuggestions()
+      .flatMap((module) => module.rules)
+      .filter((s) => !savedKeys.has(s.id));
+
     const quickPickItems = [
-      ...suggestions.map((s) => ({
+      ...availableSuggestions.map((s) => ({
         label: s.name,
         description: `${s.type} · ${s.constraint}`,
         rule: s
       })),
       {
-        label: 'Create manual custom rule',
+        label: 'Create Manual Custom Rule',
         description: 'Open rule editor',
         rule: null as ArchitecturalRule | null
       }
@@ -135,18 +122,11 @@ export async function addCustomRuleCommand(
     });
 
     if (!picked) return;
-
     rule = picked.rule ?? (await editor.createRule(currentConfig.project_id));
   }
 
   if (!rule) return;
 
-  if (isBlank(rule.name)) {
-    vscode.window.showErrorMessage('Cannot add a rule without a name.');
-    return;
-  }
-
-  const updated = await rulesManager.addCustomRule(rule);
-  await rulesManager.saveDraft(updated.project_id);
+  await rulesManager.addCustomRule(rule);
   refresh();
 }

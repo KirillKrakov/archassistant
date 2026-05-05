@@ -46,6 +46,8 @@ export class ArchAssistantSidebarProvider implements vscode.TreeDataProvider<vsc
         new ActionItem('Configure Project', 'archassistant.configureProject', 'Configure Project', 'settings-gear'),
         new ActionItem('Generate Code', 'archassistant.generateCode', 'Generate Code', 'sparkle'),
         new ActionItem('Show Metrics', 'archassistant.showMetrics', 'Show Metrics', 'graph'),
+        new ActionItem('Export Metrics', 'archassistant.exportMetrics', 'Export Metrics', 'export'),
+        new ActionItem('Compare Strategies', 'archassistant.compareStrategies', 'Compare Strategies', 'graph-line'),
         new BackendInfoItem(
           `Backend: ${this.storageManager.getBackendUrl()}`,
           `Backend URL: ${this.storageManager.getBackendUrl()}`,
@@ -66,6 +68,8 @@ export class ArchAssistantSidebarProvider implements vscode.TreeDataProvider<vsc
       new ActionItem('Configure Project', 'archassistant.configureProject', 'Configure Project', 'settings-gear'),
       new ActionItem('Generate Code', 'archassistant.generateCode', 'Generate Code', 'sparkle'),
       new ActionItem('Show Metrics', 'archassistant.showMetrics', 'Show Metrics', 'graph'),
+      new ActionItem('Export Metrics', 'archassistant.exportMetrics', 'Export Metrics', 'export'),
+      new ActionItem('Compare Strategies', 'archassistant.compareStrategies', 'Compare Strategies', 'graph-line'),
       new BackendInfoItem(
         `Backend: ${this.storageManager.getBackendUrl()}`,
         `Backend URL: ${this.storageManager.getBackendUrl()}`,

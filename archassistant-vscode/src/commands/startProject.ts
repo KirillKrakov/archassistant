@@ -35,9 +35,8 @@ export async function startProjectCommand(
   const serviceName = cfg.get<string>('composeServiceName', 'backend');
   const autoStart = cfg.get<boolean>('autoStartBackend', true);
 
-  await state.resetProjectData();
+  await state.resetSessionState();
   await registry.setCurrentProject(projectId, projectPath);
-  await state.setBackendStarted(false);
 
   if (autoStart) {
     if (!composeDirectory) {

@@ -13,7 +13,7 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-archassistant}"]
       interval: 10s
-      timeout: 10s
+      timeout: 5s
       retries: 5
 
   backend:
@@ -29,6 +29,7 @@ services:
       MISTRAL_MODEL: ${MISTRAL_MODEL:-}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
       PROJECTS_ROOT: /workspace/project
+      ARCHASSISTANT_CONFIG_ROOT: /data/archassistant
     ports:
       - "8080:8080"
     depends_on:
@@ -41,6 +42,8 @@ services:
       retries: 3
     volumes:
       - "${PROJECT_PATH:?Set PROJECT_PATH before starting backend}:/workspace/project:ro"
+      - archassistant_config:/data/archassistant
 
 volumes:
   postgres_data:
+  archassistant_config:

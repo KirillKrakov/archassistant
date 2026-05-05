@@ -21,7 +21,6 @@ export async function exportMetricsCommand(
     ],
     { placeHolder: 'Select export format' }
   );
-
   if (!formatPick) return;
 
   const violationsPick = await vscode.window.showQuickPick(
@@ -31,7 +30,6 @@ export async function exportMetricsCommand(
     ],
     { placeHolder: 'Include violations in export?' }
   );
-
   if (!violationsPick) return;
 
   const datePick = await vscode.window.showQuickPick(
@@ -41,7 +39,6 @@ export async function exportMetricsCommand(
     ],
     { placeHolder: 'Apply date filter?' }
   );
-
   if (!datePick) return;
 
   let fromDate: string | undefined;
@@ -73,10 +70,7 @@ export async function exportMetricsCommand(
 
   const extension = formatPick.value === ExportFormat.CSV ? 'csv' : 'json';
   const defaultUri = vscode.workspace.workspaceFolders?.[0]
-    ? vscode.Uri.joinPath(
-        vscode.workspace.workspaceFolders[0].uri,
-        `archassistant-metrics-${project.projectId}.${extension}`
-      )
+    ? vscode.Uri.joinPath(vscode.workspace.workspaceFolders[0].uri, `archassistant-metrics-${project.projectId}.${extension}`)
     : undefined;
 
   const saveUri = await vscode.window.showSaveDialog({

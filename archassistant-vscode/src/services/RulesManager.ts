@@ -24,18 +24,25 @@ export class RulesManager {
 
   async prepareProject(projectId: string, hostProjectPath: string): Promise<RulesConfig> {
     const config = this.createEmptyConfig(projectId, hostProjectPath);
-    await this.state.setRulesConfig(config);
+    await this.state.setDraftRulesConfig(config);
+    await this.state.setSavedRulesConfig(config);
     return config;
   }
 
   getDraftConfig(): RulesConfig | null {
-    return this.state.getRulesConfig();
+    return this.state.getDraftRulesConfig();
+  }
+
+  getSavedConfig(): RulesConfig | null {
+    return this.state.getSavedRulesConfig();
   }
 
   async loadActualRules(projectId: string): Promise<RulesConfig> {
     const loaded = await this.backend.getRules(projectId);
-    await this.state.setRulesConfig(loaded);
-    return loaded;
+    const normalized = this.normalizeConfigForStorage(loaded);
+    await this.state.setSavedRulesConfig(normalized);
+    await this.state.setDraftRulesConfig(normalized);
+    return normalized;
   }
 
   async refreshSuggestions(
@@ -49,7 +56,7 @@ export class RulesManager {
   }
 
   async saveDraft(projectId: string): Promise<void> {
-    const config = this.state.getRulesConfig();
+    const config = this.state.getDraftRulesConfig();
     if (!config) {
       throw new Error('No rules config loaded');
     }
@@ -61,36 +68,42 @@ export class RulesManager {
     });
 
     await this.backend.saveRules(projectId, normalized);
-    await this.state.setRulesConfig(normalized);
+    await this.state.setSavedRulesConfig(normalized);
+    await this.state.setDraftRulesConfig(normalized);
   }
 
-  async toggleRule(ruleId: string): Promise<RulesConfig> {
-    return this.updateRule(ruleId, (rule) => ({ ...rule, enabled: !rule.enabled }));
+  async updateDraftRule(ruleId: string, updater: (rule: ArchitecturalRule) => ArchitecturalRule): Promise<RulesConfig> {
+    const config = this.mustHaveDraftConfig();
+    const updated: RulesConfig = {
+      ...config,
+      rules: config.rules.map((rule) => (rule.id === ruleId ? updater(rule) : rule)),
+      updated_at: new Date().toISOString()
+    };
+
+    await this.state.setDraftRulesConfig(updated);
+    return updated;
   }
 
-  async deleteRule(ruleId: string): Promise<RulesConfig> {
-    const config = this.mustHaveConfig();
-
+  async removeDraftRule(ruleId: string): Promise<RulesConfig> {
+    const config = this.mustHaveDraftConfig();
     const updated: RulesConfig = {
       ...config,
       rules: config.rules.filter((rule) => rule.id !== ruleId),
       updated_at: new Date().toISOString()
     };
-
-    await this.state.setRulesConfig(updated);
+    await this.state.setDraftRulesConfig(updated);
     return updated;
   }
 
   async addCustomRule(rule: ArchitecturalRule): Promise<RulesConfig> {
-    const config = this.mustHaveConfig();
+    const config = this.mustHaveDraftConfig();
     const normalizedRule = this.normalizeRuleForSave({
       ...rule,
-      suggested: false,
-      enabled: true
+      suggested: false
     });
 
-    const duplicates = config.rules.some((r) => ruleKey(this.normalizeRuleForSave(r)) === ruleKey(normalizedRule));
-    if (duplicates) {
+    const duplicate = config.rules.some((r) => ruleKey(this.normalizeRuleForSave(r)) === ruleKey(normalizedRule));
+    if (duplicate) {
       throw new Error(`Rule already exists: ${normalizedRule.name}`);
     }
 
@@ -100,37 +113,39 @@ export class RulesManager {
       updated_at: new Date().toISOString()
     };
 
-    await this.state.setRulesConfig(updated);
+    await this.state.setDraftRulesConfig(updated);
     return updated;
   }
 
-  async updateRule(
-    ruleId: string,
-    updater: (rule: ArchitecturalRule) => ArchitecturalRule
-  ): Promise<RulesConfig> {
-    const config = this.mustHaveConfig();
-
-    const updated: RulesConfig = {
-      ...config,
-      rules: config.rules.map((rule) => (rule.id === ruleId ? updater(rule) : rule)),
-      updated_at: new Date().toISOString()
-    };
-
-    await this.state.setRulesConfig(updated);
-    return updated;
+  async replaceDraftWithActual(projectId: string): Promise<RulesConfig> {
+    return this.loadActualRules(projectId);
   }
 
-  async replaceRulesWithActual(projectId: string): Promise<RulesConfig> {
-    const loaded = await this.loadActualRules(projectId);
-    return loaded;
+  getSuggestedRulesExcludingSaved(): WorkspaceModuleSuggestions[] {
+    const draft = this.state.getDraftRulesConfig();
+    const savedKeys = new Set((draft?.rules ?? []).map((rule) => ruleKey(this.normalizeRuleForSave(rule))));
+
+    return this.state.getSuggestions()
+      .map((module) => ({
+        ...module,
+        rules: module.rules.filter((rule) => !savedKeys.has(ruleKey(this.normalizeRuleForSave(rule))))
+      }))
+      .filter((module) => module.rules.length > 0);
   }
 
-  private mustHaveConfig(): RulesConfig {
-    const config = this.state.getRulesConfig();
+  private mustHaveDraftConfig(): RulesConfig {
+    const config = this.state.getDraftRulesConfig();
     if (!config) {
       throw new Error('No rules config loaded. Use Start/Configure Project first.');
     }
     return config;
+  }
+
+  private normalizeConfigForStorage(config: RulesConfig): RulesConfig {
+    return {
+      ...config,
+      rules: config.rules.map((rule) => this.normalizeRuleForSave(rule))
+    };
   }
 
   private normalizeConfigForSave(config: RulesConfig): RulesConfig {
@@ -169,14 +184,15 @@ export class RulesManager {
 
     return {
       ...rule,
+      id: rule.id.trim(),
       name: rule.name.trim(),
       description: rule.description ?? null,
       to_package: rule.to_package ?? null,
       to_packages: rule.to_packages ?? null,
       pattern: rule.pattern ?? null,
       annotation: rule.annotation ?? null,
-      from_selector_mode: rule.from_selector_mode ?? undefined,
-      to_selector_mode: rule.to_selector_mode ?? undefined,
+      from_selector_mode: rule.from_selector_mode,
+      to_selector_mode: rule.to_selector_mode,
       from_class_type: rule.from_class_type ?? null,
       to_class_type: rule.to_class_type ?? null,
       from_layer_type: rule.from_layer_type ?? null,

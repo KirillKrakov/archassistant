@@ -1,12 +1,10 @@
 import * as vscode from 'vscode';
-import { BackendClient } from '../backend/BackendClient';
 import { ExtensionState } from '../state/ExtensionState';
 import { ProjectRegistry } from '../state/projectRegistry';
 import { RulesManager } from '../services/RulesManager';
 import { RulesTreeDataProvider } from '../ui/sidebar/RulesTreeDataProvider';
 
 export async function getActualRulesCommand(
-  backendClient: BackendClient,
   state: ExtensionState,
   registry: ProjectRegistry,
   rulesManager: RulesManager,
@@ -20,6 +18,7 @@ export async function getActualRulesCommand(
 
   const actual = await rulesManager.loadActualRules(current.projectId);
   await registry.updateRulesCount(current.projectId, actual.rules.length);
+  await state.setDraftRulesConfig(actual);
   rulesProvider.refresh();
 
   vscode.window.showInformationMessage(

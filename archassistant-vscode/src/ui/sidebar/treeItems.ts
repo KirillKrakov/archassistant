@@ -11,22 +11,18 @@ export class ActionItem extends vscode.TreeItem {
     command: string,
     title: string,
     icon: string,
-    contextValue = 'action'
+    contextValue = 'action',
+    args: any[] = []
   ) {
     super(label, vscode.TreeItemCollapsibleState.None);
-    this.command = { command, title };
+    this.command = { command, title, arguments: args };
     this.iconPath = new vscode.ThemeIcon(icon);
     this.contextValue = contextValue;
   }
 }
 
 export class ProjectInfoItem extends vscode.TreeItem {
-  constructor(
-    label: string,
-    description: string,
-    tooltip: string,
-    command?: vscode.Command
-  ) {
+  constructor(label: string, description: string, tooltip: string, command?: vscode.Command) {
     super(label, vscode.TreeItemCollapsibleState.None);
     this.description = description;
     this.tooltip = tooltip;
@@ -48,9 +44,7 @@ export class BackendInfoItem extends vscode.TreeItem {
 export class CompileStatusItem extends vscode.TreeItem {
   constructor(compiled: boolean) {
     super(
-      compiled
-        ? 'Project compiled for full validation'
-        : 'Project must be compiled for full validation',
+      compiled ? 'Project compiled for full validation' : 'Project must be compiled for full validation',
       vscode.TreeItemCollapsibleState.None
     );
     this.tooltip = compiled
@@ -102,19 +96,8 @@ export class RuleItem extends vscode.TreeItem {
     super(label(rule), vscode.TreeItemCollapsibleState.None);
     this.description = `${rule.type} · ${rule.constraint} · ${rule.enabled ? 'enabled' : 'disabled'}`;
     this.tooltip = buildRuleTooltip(rule);
-    this.iconPath = rule.enabled
-      ? getSeverityIcon(rule.severity)
-      : new vscode.ThemeIcon('circle-slash');
-
+    this.iconPath = rule.enabled ? getSeverityIcon(rule.severity) : new vscode.ThemeIcon('circle-slash');
     this.contextValue = source === 'saved' ? 'savedRule' : 'suggestedRule';
-
-    if (source === 'saved') {
-      this.command = {
-        command: 'archassistant.toggleRule',
-        title: 'Toggle Rule',
-        arguments: [rule.id]
-      };
-    }
   }
 }
 
@@ -130,13 +113,28 @@ function buildRuleTooltip(rule: ArchitecturalRule): string {
     `Constraint: ${rule.constraint}`,
     `Severity: ${rule.severity}`,
     `Enabled: ${rule.enabled ? 'Yes' : 'No'}`,
-    `From: ${rule.from_package}`,
-    rule.to_package ? `To: ${rule.to_package}` : '',
+    `From package: ${rule.from_package}`,
+    rule.to_package ? `To package: ${rule.to_package}` : '',
+    rule.to_packages?.length ? `To packages: ${rule.to_packages.join(', ')}` : '',
     rule.pattern ? `Pattern: ${rule.pattern}` : '',
-    rule.annotation ? `Annotation: ${rule.annotation}` : ''
-  ]
-    .filter(Boolean)
-    .join('\n');
+    rule.annotation ? `Annotation: ${rule.annotation}` : '',
+    rule.from_selector_mode ? `From selector: ${rule.from_selector_mode}` : '',
+    rule.to_selector_mode ? `To selector: ${rule.to_selector_mode}` : '',
+    rule.from_class_type ? `From class type: ${rule.from_class_type}` : '',
+    rule.to_class_type ? `To class type: ${rule.to_class_type}` : '',
+    rule.from_layer_type ? `From layer type: ${rule.from_layer_type}` : '',
+    rule.to_layer_type ? `To layer type: ${rule.to_layer_type}` : '',
+    rule.from_method_name_pattern ? `From method pattern: ${rule.from_method_name_pattern}` : '',
+    rule.to_method_name_pattern ? `To method pattern: ${rule.to_method_name_pattern}` : '',
+    rule.from_field_name_pattern ? `From field pattern: ${rule.from_field_name_pattern}` : '',
+    rule.to_field_name_pattern ? `To field pattern: ${rule.to_field_name_pattern}` : '',
+    rule.from_return_type ? `From return type: ${rule.from_return_type}` : '',
+    rule.to_return_type ? `To return type: ${rule.to_return_type}` : '',
+    rule.from_field_type ? `From field type: ${rule.from_field_type}` : '',
+    rule.to_field_type ? `To field type: ${rule.to_field_type}` : '',
+    rule.slice_pattern ? `Slice pattern: ${rule.slice_pattern}` : '',
+    rule.max_cycle_length ? `Max cycle length: ${rule.max_cycle_length}` : ''
+  ].filter(Boolean).join('\n');
 }
 
 function getSeverityIcon(severity: Severity): vscode.ThemeIcon {

@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
+import * as fs from 'fs/promises';
 import { GeneratedFile } from '../backend/types';
 
 export interface SavedGeneratedFile {
@@ -9,46 +11,30 @@ export interface SavedGeneratedFile {
 }
 
 export class CodeSaver {
-  async saveToFile(
-    file: GeneratedFile,
-    workspaceFolder: vscode.WorkspaceFolder
-  ): Promise<vscode.Uri> {
+  async saveToProject(file: GeneratedFile, projectPath: string): Promise<vscode.Uri> {
     const isKotlin = this.detectKotlin(file.code);
     const sourceRoot = isKotlin ? 'kotlin' : 'java';
     const extension = isKotlin ? 'kt' : 'java';
-
-    const packageSegments = file.packageName
-      ? file.packageName.split('.').filter(Boolean)
-      : [];
-
-    const dirUri = vscode.Uri.joinPath(
-      workspaceFolder.uri,
+    const packagePath = file.packageName ? file.packageName.replace(/\./g, path.sep) : '';
+    const filePath = path.join(
+      projectPath,
       'src',
       'main',
       sourceRoot,
-      ...packageSegments
-    );
-
-    await vscode.workspace.fs.createDirectory(dirUri);
-
-    const fileUri = vscode.Uri.joinPath(
-      dirUri,
+      packagePath,
       `${file.className}.${extension}`
     );
 
-    await vscode.workspace.fs.writeFile(fileUri, new TextEncoder().encode(file.code));
-    return fileUri;
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, file.code, 'utf-8');
+    return vscode.Uri.file(filePath);
   }
 
-  async saveMultipleFiles(
-    files: GeneratedFile[],
-    workspaceFolder: vscode.WorkspaceFolder
-  ): Promise<SavedGeneratedFile[]> {
+  async saveMultipleFiles(files: GeneratedFile[], projectPath: string): Promise<SavedGeneratedFile[]> {
     const results: SavedGeneratedFile[] = [];
-
     for (const file of files) {
       try {
-        const uri = await this.saveToFile(file, workspaceFolder);
+        const uri = await this.saveToProject(file, projectPath);
         results.push({ file, uri, success: true });
       } catch (error: any) {
         results.push({
@@ -58,7 +44,6 @@ export class CodeSaver {
         });
       }
     }
-
     return results;
   }
 
@@ -67,7 +52,6 @@ export class CodeSaver {
       content: file.code,
       language: this.detectKotlin(file.code) ? 'kotlin' : 'java'
     });
-
     await vscode.window.showTextDocument(document, {
       preview: false,
       viewColumn: vscode.ViewColumn.One

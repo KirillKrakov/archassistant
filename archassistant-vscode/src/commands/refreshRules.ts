@@ -18,7 +18,7 @@ export async function refreshRulesCommand(
     return;
   }
 
-  const merged = await vscode.window.withProgress(
+  const suggestions = await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
       title: 'Refreshing ArchAssistant suggestions...',
@@ -27,9 +27,9 @@ export async function refreshRulesCommand(
     async () => rulesManager.refreshSuggestions(current.projectId, current.projectPath)
   );
 
-  await state.setSuggestions(merged);
+  await state.setSuggestions(suggestions);
   rulesProvider.refresh();
 
-  logger.info('Refreshed project {} with {} suggested rule modules', current.projectId, merged.length);
+  logger.info('Refreshed project {} with {} suggested rule modules', current.projectId, suggestions.length);
   vscode.window.showInformationMessage(`Suggestions refreshed for ${current.projectId}`);
 }

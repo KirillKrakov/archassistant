@@ -103,11 +103,7 @@ export class BackendClient {
     projectId: string,
     page = 0,
     size = 20
-  ): Promise<{
-    totalRecords: number;
-    totalPages: number;
-    records: types.GenerationHistoryItem[];
-  }> {
+  ): Promise<{ totalRecords: number; totalPages: number; records: types.GenerationHistoryItem[] }> {
     return this.request(`/api/metrics/${encodeURIComponent(projectId)}/history`, {
       method: 'GET',
       params: { page, size }

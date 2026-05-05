@@ -29,7 +29,7 @@ export async function saveRulesCommand(
     }
   );
 
-  const config = state.getRulesConfig();
+  const config = state.getDraftRulesConfig();
   await registry.updateRulesCount(current.projectId, config?.rules.length ?? 0);
   rulesProvider.refresh();
 
