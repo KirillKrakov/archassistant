@@ -57,7 +57,9 @@ export class RulesTreeDataProvider implements vscode.TreeDataProvider<vscode.Tre
     if (element instanceof RuleGroupItem && element.kind === 'saved') {
       const items: vscode.TreeItem[] = [
         new ActionItem('Get Actual Rules', 'archassistant.getActualRules', 'Get Actual Rules', 'cloud-download'),
-        new ActionItem('Save Rules', 'archassistant.saveRules', 'Save Rules', 'save-all')
+        new ActionItem('Save Rules', 'archassistant.saveRules', 'Save Rules', 'save-all'),
+        new ActionItem('Edit Rule', 'archassistant.editRule', 'Edit Rule', 'edit'),
+        new ActionItem('Delete Rule', 'archassistant.deleteRule', 'Delete Rule', 'trash')
       ];
 
       const rules = draft?.rules ?? [];

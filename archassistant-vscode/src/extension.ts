@@ -9,7 +9,7 @@ import { RulesManager } from './services/RulesManager';
 import { RuleEditor } from './services/RuleEditor';
 import { startProjectCommand } from './commands/startProject';
 import { configureProjectCommand } from './commands/configureProject';
-import { editRuleCommand, deleteRuleCommand, addCustomRuleCommand } from './commands/manageRules';
+import { editRuleCommand, deleteRuleCommand, addCustomRuleCommand, toggleRuleCommand} from './commands/manageRules';
 import { refreshRulesCommand } from './commands/refreshRules';
 import { saveRulesCommand } from './commands/saveRules';
 import { getActualRulesCommand } from './commands/getActualRules';
@@ -129,6 +129,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand('archassistant.exportMetrics', () =>
       exportMetricsCommand(backendClient, projectRegistry)
+    ),
+    vscode.commands.registerCommand('archassistant.toggleRule', (ruleId?: string) =>
+      toggleRuleCommand(ruleId, storageManager, rulesManager, () => rulesProvider.refresh())
     )
   );
 
