@@ -61,7 +61,8 @@
       "activitybar": [
         {
           "id": "archassistantContainer",
-          "title": "ArchAssistant"
+          "title": "ArchAssistant",
+          "icon": "resources/archunit.svg"
         }
       ]
     },
@@ -69,7 +70,8 @@
       "archassistantContainer": [
         {
           "id": "archassistantRulesView",
-          "name": "Rules"
+          "name": "Rules",
+          "icon": "resources/archunit.svg"
         }
       ]
     },

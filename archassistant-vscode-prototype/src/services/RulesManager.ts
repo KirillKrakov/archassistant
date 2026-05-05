@@ -59,7 +59,16 @@ export class RulesManager {
     if (!config) {
       throw new Error('No rules config loaded');
     }
-    await this.backend.saveRules(projectId, config);
+
+    const normalized: RulesConfig = {
+      ...config,
+      project_id: projectId,
+      project_path: toBackendProjectPath(config.project_path ?? ''),
+      updated_at: new Date().toISOString()
+    };
+
+    await this.backend.saveRules(projectId, normalized);
+    await this.state.setRulesConfig(normalized);
   }
 
   async toggleRule(ruleId: string): Promise<RulesConfig> {

@@ -71,9 +71,10 @@ export async function startCommand(
   }
 
   const client = new BackendClient(backendUrl);
-  await client.saveProjectPath(projectId, projectPath);
+  const backendProjectPath = toBackendProjectPath(projectPath);
+  await client.saveProjectPath(projectId, backendProjectPath);
   await state.setBackendStarted(true);
 
   vscode.window.showInformationMessage(`ArchAssistant started for project ${projectId}`);
-  logger.info('Started project {} at {}', projectId, toBackendProjectPath(projectPath));
+  logger.info('Started project {} at {}', projectId, backendProjectPath);
 }

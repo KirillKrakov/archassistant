@@ -11,13 +11,9 @@ export class BackendClient {
   constructor(private readonly baseUrl: string) {}
 
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10_000);
-
     try {
       const response = await fetch(`${this.baseUrl}${path}`, {
         ...init,
-        signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
           ...(init?.headers ?? {})
@@ -37,12 +33,7 @@ export class BackendClient {
       if (error instanceof BackendError) {
         throw error;
       }
-      if (error instanceof DOMException && error.name === 'AbortError') {
-        throw new BackendError('Request timed out');
-      }
       throw new BackendError(error instanceof Error ? error.message : 'Unknown backend error');
-    } finally {
-      clearTimeout(timeout);
     }
   }
 
