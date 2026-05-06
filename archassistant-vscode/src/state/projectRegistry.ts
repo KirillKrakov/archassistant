@@ -74,4 +74,8 @@ export class ProjectRegistry {
       await this.currentProject.clear();
     }
   }
+
+  async clearCurrentProject(): Promise<void> {
+    await this.currentProject.clear();
+  }
 }

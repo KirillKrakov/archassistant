@@ -160,6 +160,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
   <button id="generateBtn" onclick="generate()">Generate</button>
 
+  <div id="status" class="small" style="margin-top: 10px;"></div>
+
   <div id="result" class="result" style="display:none;">
     <h3>Result</h3>
     <div id="summary" class="small"></div>
@@ -177,6 +179,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 const vscode = acquireVsCodeApi();
 let generatedFiles = [];
 
+function setStatus(message) {
+  document.getElementById('status').textContent = message || '';
+}
+
 function generate() {
   const prompt = document.getElementById('prompt').value;
   const strategy = document.getElementById('strategy').value;
@@ -187,6 +193,9 @@ function generate() {
     alert('Please enter a prompt');
     return;
   }
+
+  document.getElementById('status').textContent =
+    'The generation request has been sent, wait for a response.';
 
   vscode.postMessage({
     command: 'generate',
@@ -200,6 +209,7 @@ function generate() {
 }
 
 function renderResult(response) {
+  setStatus('');
   const resultDiv = document.getElementById('result');
   const metricsDiv = document.getElementById('metrics');
   const warningsDiv = document.getElementById('warnings');
@@ -277,8 +287,10 @@ window.addEventListener('message', event => {
   if (message?.type === 'result') {
     renderResult(message.response);
   } else if (message?.type === 'error') {
+    setStatus('');
     document.getElementById('result').style.display = 'block';
-    document.getElementById('summary').innerHTML = '<div class="error">' + (message.message || 'Generation failed') + '</div>';
+    document.getElementById('summary').innerHTML =
+      '<div class="error">' + (message.message || 'Generation failed') + '</div>';
   }
 });
 </script>

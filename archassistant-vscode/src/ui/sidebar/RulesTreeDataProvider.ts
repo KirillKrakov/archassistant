@@ -77,6 +77,7 @@ export class RulesTreeDataProvider implements vscode.TreeDataProvider<vscode.Tre
 
       const items: vscode.TreeItem[] = [
         new ActionItem('Add Custom Rule', 'archassistant.addCustomRule', 'Add Custom Rule', 'plus'),
+        new ActionItem('Add Suggested Rule', 'archassistant.addSuggestedRule', 'Add Suggested Rule', 'plus'),
         new ActionItem('Refresh Suggestions', 'archassistant.refreshRules', 'Refresh Suggestions', 'refresh')
       ];
 

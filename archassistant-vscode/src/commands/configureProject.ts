@@ -6,6 +6,7 @@ import { RulesManager } from '../services/RulesManager';
 import { RulesTreeDataProvider } from '../ui/sidebar/RulesTreeDataProvider';
 import { ProjectRegistry } from '../state/projectRegistry';
 import { projectIdFromPath } from '../utils/helpers';
+import { toBackendProjectPath } from '../utils/projectPaths';
 import { ArchAssistantSidebarProvider } from '../ui/sidebar/ArchAssistantSidebarProvider';
 
 export async function configureProjectCommand(
@@ -17,23 +18,38 @@ export async function configureProjectCommand(
   sidebarProvider: ArchAssistantSidebarProvider,
   rulesProvider: RulesTreeDataProvider
 ): Promise<void> {
-  const folder = await vscode.window.showOpenDialog({
-    canSelectFolders: true,
-    canSelectFiles: false,
-    canSelectMany: false,
-    openLabel: 'Select Project Root',
-    title: 'Select Project Root Directory'
-  });
+  let current = registry.getCurrentProject();
 
-  const selected = folder?.[0];
-  if (!selected) return;
+  if (!current) {
+    const folder = await vscode.window.showOpenDialog({
+      canSelectFolders: true,
+      canSelectFiles: false,
+      canSelectMany: false,
+      openLabel: 'Select Project Root',
+      title: 'Select Project Root Directory'
+    });
 
-  const projectPath = selected.fsPath;
-  const projectId = projectIdFromPath(projectPath);
+    const selected = folder?.[0];
+    if (!selected) return;
 
-  await state.resetProjectData();
-  await registry.setCurrentProject(projectId, projectPath);
-  await rulesManager.prepareProject(projectId, projectPath);
+    const projectPath = selected.fsPath;
+    const projectId = projectIdFromPath(projectPath);
+
+    await registry.setCurrentProject(projectId, projectPath);
+    await rulesManager.prepareProject(projectId, projectPath);
+    current = { projectId, projectPath, rulesCount: 0 };
+  } else {
+    const hasLocalRulesConfig =
+      state.getDraftRulesConfig() !== null || state.getSavedRulesConfig() !== null;
+
+    if (!hasLocalRulesConfig) {
+      await rulesManager.prepareProject(current.projectId, current.projectPath);
+    }
+  }
+
+  const projectId = current.projectId;
+  const projectPath = current.projectPath;
+  const backendProjectPath = toBackendProjectPath(projectPath);
 
   await vscode.window.withProgress(
     {
@@ -44,14 +60,26 @@ export async function configureProjectCommand(
     async (progress) => {
       progress.report({ message: 'Saving project path...' });
       try {
-        await backendClient.saveProjectPath(projectId, '/workspace/project');
+        await backendClient.saveProjectPath(projectId, backendProjectPath);
       } catch (error: any) {
         logger.warn('Could not save project path before scan: {}', error.message);
+      }
+
+      const localConfig = state.getSavedRulesConfig() ?? state.getDraftRulesConfig();
+      if (localConfig) {
+        try {
+          await rulesManager.saveDraft(projectId);
+        } catch (error: any) {
+          logger.warn('Could not restore rules config before scan: {}', error.message);
+        }
       }
 
       progress.report({ message: 'Scanning project structure...' });
       const suggestions = await rulesManager.refreshSuggestions(projectId, projectPath);
       await state.setSuggestions(suggestions);
+
+      const draft = state.getDraftRulesConfig();
+      await registry.updateRulesCount(projectId, draft?.rules.length ?? 0);
 
       progress.report({ message: 'Project prepared...' });
       logger.info(
@@ -62,7 +90,6 @@ export async function configureProjectCommand(
     }
   );
 
-  await registry.updateRulesCount(projectId, 0);
   sidebarProvider.refresh();
   rulesProvider.refresh();
 

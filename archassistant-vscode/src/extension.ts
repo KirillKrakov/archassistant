@@ -6,10 +6,9 @@ import { ProjectRegistry } from './state/projectRegistry';
 import { ArchAssistantSidebarProvider } from './ui/sidebar/ArchAssistantSidebarProvider';
 import { RulesTreeDataProvider } from './ui/sidebar/RulesTreeDataProvider';
 import { RulesManager } from './services/RulesManager';
-import { RuleEditor } from './services/RuleEditor';
 import { startProjectCommand } from './commands/startProject';
 import { configureProjectCommand } from './commands/configureProject';
-import { editRuleCommand, deleteRuleCommand, addCustomRuleCommand, toggleRuleCommand} from './commands/manageRules';
+import { editRuleCommand, deleteRuleCommand, addCustomRuleCommand, addSuggestedRuleCommand, toggleRuleCommand} from './commands/manageRules';
 import { refreshRulesCommand } from './commands/refreshRules';
 import { saveRulesCommand } from './commands/saveRules';
 import { getActualRulesCommand } from './commands/getActualRules';
@@ -17,17 +16,39 @@ import { generateCodeCommand } from './commands/generateCode';
 import { showMetricsCommand } from './commands/showMetrics';
 import { exportMetricsCommand } from './commands/exportMetrics';
 import { createLogger, logError, logInfo, Logger } from './utils/logger';
+import { toBackendProjectPath } from './utils/projectPaths';
 
 let backendClient: BackendClient;
 let storageManager: ExtensionState;
 let projectRegistry: ProjectRegistry;
 let rulesManager: RulesManager;
-let ruleEditor: RuleEditor;
 let sidebarProvider: ArchAssistantSidebarProvider;
 let rulesProvider: RulesTreeDataProvider;
 let logger: Logger;
 let statusBarItem: vscode.StatusBarItem;
 let healthTimer: NodeJS.Timeout | undefined;
+let lastBackendConnected = false;
+
+async function syncCurrentProjectToBackend(): Promise<void> {
+  const project = projectRegistry.getCurrentProject();
+  if (!project) return;
+
+  const config = storageManager.getSavedRulesConfig() ?? storageManager.getDraftRulesConfig();
+  if (!config) return;
+
+  const backendProjectPath = toBackendProjectPath(project.projectPath);
+
+  await backendClient.saveProjectPath(project.projectId, backendProjectPath);
+  await backendClient.saveRules(project.projectId, {
+    ...config,
+    project_id: project.projectId,
+    project_path: backendProjectPath,
+    updated_at: new Date().toISOString()
+  });
+
+  await projectRegistry.updateRulesCount(project.projectId, config.rules.length);
+  sidebarProvider.refresh();
+}
 
 async function updateBackendStatus(): Promise<void> {
   try {
@@ -39,10 +60,21 @@ async function updateBackendStatus(): Promise<void> {
       ? '$(server) ArchAssistant: Connected'
       : '$(circle-slash) ArchAssistant: Disconnected';
     statusBarItem.tooltip = connected ? 'Backend is reachable' : 'Backend is not reachable';
+
+    if (connected && !lastBackendConnected) {
+      try {
+        await syncCurrentProjectToBackend();
+      } catch (error: any) {
+        logError(`Failed to sync project after reconnect: ${error.message}`);
+      }
+    }
+
+    lastBackendConnected = connected;
   } catch {
     sidebarProvider.setBackendConnected(false);
     statusBarItem.text = '$(circle-slash) ArchAssistant: Disconnected';
     statusBarItem.tooltip = 'Backend is not reachable';
+    lastBackendConnected = false;
   }
 }
 
@@ -54,11 +86,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   projectRegistry = new ProjectRegistry(context.workspaceState);
 
   await storageManager.resetSessionState();
+  await projectRegistry.clearCurrentProject();
 
   const backendUrl = storageManager.getBackendUrl();
   backendClient = new BackendClient(backendUrl);
   rulesManager = new RulesManager(backendClient, storageManager);
-  ruleEditor = new RuleEditor();
 
   sidebarProvider = new ArchAssistantSidebarProvider(backendClient, projectRegistry, storageManager);
   rulesProvider = new RulesTreeDataProvider(projectRegistry, storageManager);
@@ -109,14 +141,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('archassistant.saveRules', () =>
       saveRulesCommand(storageManager, projectRegistry, rulesManager, logger, rulesProvider)
     ),
-    vscode.commands.registerCommand('archassistant.editRule', (ruleId?: string) =>
-      editRuleCommand(ruleId, storageManager, rulesManager, ruleEditor, () => rulesProvider.refresh())
+    vscode.commands.registerCommand('archassistant.editRule', (rule?: unknown) =>
+      editRuleCommand(rule, storageManager, rulesManager, () => rulesProvider.refresh())
     ),
-    vscode.commands.registerCommand('archassistant.deleteRule', (ruleId?: string) =>
-      deleteRuleCommand(ruleId, storageManager, rulesManager, () => rulesProvider.refresh())
+    vscode.commands.registerCommand('archassistant.deleteRule', (rule?: unknown) =>
+      deleteRuleCommand(rule, storageManager, rulesManager, () => rulesProvider.refresh())
     ),
-    vscode.commands.registerCommand('archassistant.addCustomRule', (rule?: any) =>
-      addCustomRuleCommand(storageManager, rulesManager, ruleEditor, () => rulesProvider.refresh(), rule)
+    vscode.commands.registerCommand('archassistant.addCustomRule', () =>
+      addCustomRuleCommand(storageManager, rulesManager, () => rulesProvider.refresh())
+    ),
+    vscode.commands.registerCommand('archassistant.addSuggestedRule', (rule?: unknown) =>
+      addSuggestedRuleCommand(storageManager, rulesManager, () => rulesProvider.refresh(), rule)
     ),
     vscode.commands.registerCommand('archassistant.generateCode', () =>
       generateCodeCommand(backendClient, projectRegistry, storageManager)
@@ -130,9 +165,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('archassistant.exportMetrics', () =>
       exportMetricsCommand(backendClient, projectRegistry)
     ),
-    vscode.commands.registerCommand('archassistant.toggleRule', (ruleId?: string) =>
-      toggleRuleCommand(ruleId, storageManager, rulesManager, () => rulesProvider.refresh())
-    )
+    vscode.commands.registerCommand('archassistant.toggleRule', (rule?: unknown) =>
+      toggleRuleCommand(rule, storageManager, rulesManager, () => rulesProvider.refresh())
+    ),
   );
 
   context.subscriptions.push(

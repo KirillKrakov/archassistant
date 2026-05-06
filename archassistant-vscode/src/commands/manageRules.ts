@@ -1,15 +1,21 @@
 import * as vscode from 'vscode';
-import { ArchitecturalRule } from '../backend/types';
+import {
+  ArchitecturalRule,
+  ConstraintType,
+  RuleType,
+  SelectorMode,
+  Severity
+} from '../backend/types';
 import { RulesManager } from '../services/RulesManager';
-import { RuleEditor } from '../services/RuleEditor';
 import { ExtensionState } from '../state/ExtensionState';
-import { normalizeProjectId } from '../utils/helpers';
+import { normalizeProjectId, ruleKey } from '../utils/helpers';
+import { RuleEditorPanel } from '../ui/webviews/RuleEditorPanel';
 
-type RuleArg =
-  | string
-  | ArchitecturalRule
-  | { id?: string; rule?: ArchitecturalRule }
-  | undefined;
+type RuleArg = unknown;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
 
 function resolveRuleFromArg(state: ExtensionState, arg: RuleArg): ArchitecturalRule | null {
   const draftRules = state.getDraftRulesConfig()?.rules ?? [];
@@ -19,39 +25,106 @@ function resolveRuleFromArg(state: ExtensionState, arg: RuleArg): ArchitecturalR
     return draftRules.find((rule) => rule.id === arg) ?? null;
   }
 
-  if (typeof arg !== 'object') return null;
+  if (!isRecord(arg)) return null;
 
-  const candidate = arg as Record<string, unknown>;
-
-  if (candidate.rule && typeof candidate.rule === 'object') {
-    return resolveRuleFromArg(state, candidate.rule as ArchitecturalRule);
+  if (isRecord(arg.rule)) {
+    return resolveRuleFromArg(state, arg.rule);
   }
 
-  if (typeof candidate.id === 'string') {
-    return draftRules.find((rule) => rule.id === candidate.id) ?? (arg as ArchitecturalRule);
+  const looksLikeRule =
+    typeof arg.name === 'string' &&
+    typeof arg.type === 'string' &&
+    typeof arg.constraint === 'string' &&
+    typeof arg.from_package === 'string';
+
+  if (looksLikeRule) {
+    return arg as unknown as ArchitecturalRule;
   }
 
-  if (
-    typeof candidate.name === 'string' &&
-    typeof candidate.type === 'string' &&
-    typeof candidate.constraint === 'string' &&
-    typeof candidate.from_package === 'string'
-  ) {
-    return arg as ArchitecturalRule;
+  if (typeof arg.id === 'string') {
+    const found = draftRules.find((rule) => rule.id === arg.id);
+    if (found) return found;
+
+    if (looksLikeRule) {
+      return arg as unknown as ArchitecturalRule;
+    }
   }
 
   return null;
 }
 
-function ensureRuleId(rule: ArchitecturalRule, projectId: string): ArchitecturalRule {
-  if (rule.id?.trim()) return rule;
+function createBlankCustomRule(projectId: string): ArchitecturalRule {
+  const safeProjectId = normalizeProjectId(projectId || 'project');
 
-  const safeProjectId = normalizeProjectId(projectId);
-  const safeName = normalizeProjectId(rule.name || 'custom_rule');
+  return {
+    id: `${safeProjectId}_custom_${Date.now()}`,
+    name: 'Custom rule',
+    description: null,
+    type: RuleType.CUSTOM,
+    from_package: '',
+    to_package: null,
+    to_packages: null,
+    constraint: ConstraintType.CUSTOM,
+    pattern: null,
+    annotation: null,
+    from_selector_mode: SelectorMode.PACKAGE,
+    to_selector_mode: SelectorMode.PACKAGE,
+    from_class_type: null,
+    to_class_type: null,
+    from_layer_type: null,
+    to_layer_type: null,
+    from_name_pattern: null,
+    to_name_pattern: null,
+    from_method_name_pattern: null,
+    to_method_name_pattern: null,
+    from_field_name_pattern: null,
+    to_field_name_pattern: null,
+    from_return_type: null,
+    to_return_type: null,
+    from_parameter_types: null,
+    to_parameter_types: null,
+    from_throws_types: null,
+    to_throws_types: null,
+    from_modifiers: null,
+    to_modifiers: null,
+    from_field_type: null,
+    to_field_type: null,
+    slice_pattern: null,
+    max_cycle_length: null,
+    severity: Severity.WARNING,
+    weight: 1,
+    enabled: true,
+    suggested: false
+  };
+}
+
+function ensureRuleId(rule: ArchitecturalRule, projectId: string): ArchitecturalRule {
+  if (typeof rule.id === 'string' && rule.id.trim()) {
+    return rule;
+  }
+
+  const safeName =
+    typeof rule.name === 'string' && rule.name.trim()
+      ? rule.name
+      : typeof rule.type === 'string'
+        ? rule.type
+        : 'custom_rule';
+
   return {
     ...rule,
-    id: `${safeProjectId}_${safeName}_${Date.now()}`
+    id: `${normalizeProjectId(projectId || 'project')}_${normalizeProjectId(safeName)}_${Date.now()}`
   };
+}
+
+function getUnaddedSuggestedRules(state: ExtensionState): ArchitecturalRule[] {
+  const draft = state.getDraftRulesConfig();
+  const savedRules = draft?.rules ?? [];
+  const savedKeys = new Set(savedRules.map((rule) => ruleKey(rule)));
+
+  return state
+    .getSuggestions()
+    .flatMap((module) => module.rules)
+    .filter((rule) => !savedKeys.has(ruleKey(rule)));
 }
 
 async function pickSavedRule(state: ExtensionState, title: string): Promise<ArchitecturalRule | null> {
@@ -103,7 +176,6 @@ export async function editRuleCommand(
   ruleArg: RuleArg,
   state: ExtensionState,
   rulesManager: RulesManager,
-  editor: RuleEditor,
   refresh: () => void
 ): Promise<void> {
   let rule = resolveRuleFromArg(state, ruleArg);
@@ -114,7 +186,7 @@ export async function editRuleCommand(
 
   if (!rule) return;
 
-  const updatedRule = await editor.editRule(rule);
+  const updatedRule = await RuleEditorPanel.open(rule, 'Edit Rule');
   if (!updatedRule) return;
 
   await rulesManager.updateDraftRule(rule.id, () => updatedRule);
@@ -147,10 +219,9 @@ export async function deleteRuleCommand(
   refresh();
 }
 
-export async function addCustomRuleCommand(
+export async function addSuggestedRuleCommand(
   state: ExtensionState,
   rulesManager: RulesManager,
-  editor: RuleEditor,
   refresh: () => void,
   suggestedRule?: RuleArg
 ): Promise<void> {
@@ -162,42 +233,50 @@ export async function addCustomRuleCommand(
 
   let rule = resolveRuleFromArg(state, suggestedRule);
 
-  if (rule) {
-    rule = ensureRuleId(rule, currentConfig.project_id);
-  }
-
   if (!rule) {
-    const savedRules = currentConfig.rules;
-    const savedKeys = new Set(savedRules.map((r) => r.id));
+    const availableSuggestions = getUnaddedSuggestedRules(state);
 
-    const availableSuggestions = state.getSuggestions()
-      .flatMap((module) => module.rules)
-      .filter((s) => !savedKeys.has(s.id));
+    if (availableSuggestions.length === 0) {
+      vscode.window.showInformationMessage('No suggested rules are available.');
+      return;
+    }
 
-    const quickPickItems = [
-      ...availableSuggestions.map((s) => ({
-        label: s.name,
-        description: `${s.type} · ${s.constraint}`,
-        rule: s
+    const picked = await vscode.window.showQuickPick(
+      availableSuggestions.map((item) => ({
+        label: item.name,
+        description: `${item.type} · ${item.constraint}`,
+        rule: item
       })),
       {
-        label: 'Create Manual Custom Rule',
-        description: 'Open rule editor',
-        rule: null as ArchitecturalRule | null
+        title: 'Add Suggested Rule',
+        placeHolder: 'Choose a suggested rule to add'
       }
-    ];
-
-    const picked = await vscode.window.showQuickPick(quickPickItems, {
-      title: 'Add custom rule',
-      placeHolder: 'Choose a suggested rule or create one manually'
-    });
+    );
 
     if (!picked) return;
-
-    rule = picked.rule
-      ? ensureRuleId(picked.rule, currentConfig.project_id)
-      : await editor.createRule(currentConfig.project_id);
+    rule = picked.rule;
   }
+
+  rule = ensureRuleId(rule, currentConfig.project_id);
+  await rulesManager.addCustomRule(rule);
+  refresh();
+}
+
+export async function addCustomRuleCommand(
+  state: ExtensionState,
+  rulesManager: RulesManager,
+  refresh: () => void
+): Promise<void> {
+  const currentConfig = state.getDraftRulesConfig();
+  if (!currentConfig) {
+    vscode.window.showWarningMessage('No project selected. Use Start/Configure first.');
+    return;
+  }
+
+  const rule = await RuleEditorPanel.open(
+    createBlankCustomRule(currentConfig.project_id),
+    'Create Custom Rule'
+  );
 
   if (!rule) return;
 

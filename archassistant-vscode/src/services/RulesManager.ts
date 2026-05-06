@@ -166,55 +166,77 @@ export class RulesManager {
   }
 
   private normalizeRuleForSave(rule: ArchitecturalRule): ArchitecturalRule {
-    if (isBlank(rule.id)) {
+    const id = typeof rule.id === 'string' ? rule.id.trim() : '';
+    const name = typeof rule.name === 'string' ? rule.name.trim() : '';
+    const fromPackage = typeof rule.from_package === 'string' ? rule.from_package.trim() : '';
+
+    if (!id) {
       throw new Error('Rule is missing an id');
     }
-    if (isBlank(rule.name)) {
-      throw new Error(`Rule ${rule.id} is missing a name`);
+    if (!name) {
+      throw new Error(`Rule ${id} is missing a name`);
     }
-    if (isBlank(rule.from_package)) {
-      throw new Error(`Rule ${rule.id} is missing from_package`);
+    if (!fromPackage) {
+      throw new Error(`Rule ${id} is missing from_package`);
     }
     if (!rule.type) {
-      throw new Error(`Rule ${rule.id} is missing type`);
+      throw new Error(`Rule ${id} is missing type`);
     }
     if (!rule.constraint) {
-      throw new Error(`Rule ${rule.id} is missing constraint`);
+      throw new Error(`Rule ${id} is missing constraint`);
     }
+
+    const trimText = (value: unknown): string | null => {
+      if (typeof value !== 'string') return null;
+      const v = value.trim();
+      return v ? v : null;
+    };
+
+    const trimList = (value: unknown): string[] | null => {
+      if (!Array.isArray(value)) return null;
+      const list = value
+        .map((item) => (typeof item === 'string' ? item.trim() : ''))
+        .filter(Boolean);
+      return list.length > 0 ? list : null;
+    };
 
     return {
       ...rule,
-      id: rule.id.trim(),
-      name: rule.name.trim(),
-      description: rule.description ?? null,
-      to_package: rule.to_package ?? null,
-      to_packages: rule.to_packages ?? null,
-      pattern: rule.pattern ?? null,
-      annotation: rule.annotation ?? null,
+      id,
+      name,
+      from_package: fromPackage,
+      description: trimText(rule.description),
+      to_package: trimText(rule.to_package),
+      to_packages: trimList(rule.to_packages),
+      pattern: trimText(rule.pattern),
+      annotation: trimText(rule.annotation),
       from_selector_mode: rule.from_selector_mode,
       to_selector_mode: rule.to_selector_mode,
       from_class_type: rule.from_class_type ?? null,
       to_class_type: rule.to_class_type ?? null,
       from_layer_type: rule.from_layer_type ?? null,
       to_layer_type: rule.to_layer_type ?? null,
-      from_name_pattern: rule.from_name_pattern ?? null,
-      to_name_pattern: rule.to_name_pattern ?? null,
-      from_method_name_pattern: rule.from_method_name_pattern ?? null,
-      to_method_name_pattern: rule.to_method_name_pattern ?? null,
-      from_field_name_pattern: rule.from_field_name_pattern ?? null,
-      to_field_name_pattern: rule.to_field_name_pattern ?? null,
-      from_return_type: rule.from_return_type ?? null,
-      to_return_type: rule.to_return_type ?? null,
-      from_parameter_types: rule.from_parameter_types ?? null,
-      to_parameter_types: rule.to_parameter_types ?? null,
-      from_throws_types: rule.from_throws_types ?? null,
-      to_throws_types: rule.to_throws_types ?? null,
-      from_modifiers: rule.from_modifiers ?? null,
-      to_modifiers: rule.to_modifiers ?? null,
-      from_field_type: rule.from_field_type ?? null,
-      to_field_type: rule.to_field_type ?? null,
-      slice_pattern: rule.slice_pattern ?? null,
-      max_cycle_length: rule.max_cycle_length ?? null,
+      from_name_pattern: trimText(rule.from_name_pattern),
+      to_name_pattern: trimText(rule.to_name_pattern),
+      from_method_name_pattern: trimText(rule.from_method_name_pattern),
+      to_method_name_pattern: trimText(rule.to_method_name_pattern),
+      from_field_name_pattern: trimText(rule.from_field_name_pattern),
+      to_field_name_pattern: trimText(rule.to_field_name_pattern),
+      from_return_type: trimText(rule.from_return_type),
+      to_return_type: trimText(rule.to_return_type),
+      from_parameter_types: trimList(rule.from_parameter_types),
+      to_parameter_types: trimList(rule.to_parameter_types),
+      from_throws_types: trimList(rule.from_throws_types),
+      to_throws_types: trimList(rule.to_throws_types),
+      from_modifiers: trimList(rule.from_modifiers),
+      to_modifiers: trimList(rule.to_modifiers),
+      from_field_type: trimText(rule.from_field_type),
+      to_field_type: trimText(rule.to_field_type),
+      slice_pattern: trimText(rule.slice_pattern),
+      max_cycle_length:
+        typeof rule.max_cycle_length === 'number' && Number.isFinite(rule.max_cycle_length)
+          ? rule.max_cycle_length
+          : null,
       weight: Number.isFinite(rule.weight) ? rule.weight : 1,
       enabled: Boolean(rule.enabled),
       suggested: Boolean(rule.suggested)

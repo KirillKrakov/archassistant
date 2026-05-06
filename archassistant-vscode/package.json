@@ -12,17 +12,7 @@
     "Other"
   ],
   "activationEvents": [
-    "onStartupFinished",
-    "onCommand:archassistant.startProject",
-    "onCommand:archassistant.configureProject",
-    "onCommand:archassistant.generateCode",
-    "onCommand:archassistant.showMetrics",
-    "onCommand:archassistant.exportMetrics",
-    "onCommand:archassistant.getActualRules",
-    "onCommand:archassistant.refreshRules",
-    "onCommand:archassistant.saveRules",
-    "onView:archassistant.projectInfo",
-    "onView:archassistant.rulesList"
+    "onStartupFinished"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -74,6 +64,10 @@
       {
         "command": "archassistant.addCustomRule",
         "title": "ArchAssistant: Add Custom Rule"
+      },
+      {
+        "command": "archassistant.addSuggestedRule",
+        "title": "ArchAssistant: Add Suggested Rule"
       }
     ],
     "viewsContainers": {
@@ -81,7 +75,7 @@
         {
           "id": "archassistant-sidebar",
           "title": "ArchAssistant",
-          "icon": "resources/archassistant.svg"
+          "icon": "resources/archunit.svg"
         }
       ]
     },
@@ -90,12 +84,12 @@
         {
           "id": "archassistant.projectInfo",
           "name": "Project",
-          "icon": "resources/archassistant.svg"
+          "icon": "resources/archunit.svg"
         },
         {
           "id": "archassistant.rulesList",
           "name": "Rules",
-          "icon": "resources/archassistant.svg"
+          "icon": "resources/archunit.svg"
         }
       ]
     },
@@ -140,6 +134,11 @@
           "command": "archassistant.addCustomRule",
           "when": "view == archassistant.rulesList",
           "group": "navigation@4"
+        },
+        {
+          "command": "archassistant.addSuggestedRule",
+          "when": "view == archassistant.rulesList",
+          "group": "navigation@5"
         }
       ],
       "view/item/context": [
@@ -159,7 +158,7 @@
           "group": "inline@3"
         },
         {
-          "command": "archassistant.addCustomRule",
+          "command": "archassistant.addSuggestedRule",
           "when": "view == archassistant.rulesList && viewItem == suggestedRule",
           "group": "inline@1"
         }
