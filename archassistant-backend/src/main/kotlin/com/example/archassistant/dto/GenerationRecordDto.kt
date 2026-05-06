@@ -4,6 +4,8 @@ data class GenerationRecordDto(
     val id: String? = null,
     val projectId: String,
     val strategy: com.example.archassistant.model.StrategyType,
+    val prompt: String? = null,
+    val generatedCode: String? = null,
     val success: Boolean,
     val scoreTotal: Double? = null,
     val scoreRulesPass: Double? = null,

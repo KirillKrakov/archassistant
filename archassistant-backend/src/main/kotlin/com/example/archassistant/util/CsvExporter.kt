@@ -14,7 +14,7 @@ class CsvExporter {
      */
     fun export(records: List<GenerationRecord>, includeViolations: Boolean): String {
         val headers = listOf(
-            "id", "projectId", "strategy", "success", "scoreTotal", "scoreRulesPass",
+            "id", "projectId", "strategy", "prompt", "generatedCode", "success", "scoreTotal", "scoreRulesPass",
             "scorePatternMatch", "scoreDependencyCorrect", "iterations", "generationTimeMs",
             "validationTimeMs", "violationsCount", "createdAt"
         ) + if (includeViolations) listOf("violationsJson") else emptyList()
@@ -24,6 +24,8 @@ class CsvExporter {
                 record.id,
                 record.projectId,
                 record.strategy.name,
+                record.prompt ?: "",
+                record.generatedCode ?: "",
                 record.success.toString(),
                 record.scoreTotal?.toString() ?: "N/A",
                 record.scoreRulesPass?.toString() ?: "N/A",

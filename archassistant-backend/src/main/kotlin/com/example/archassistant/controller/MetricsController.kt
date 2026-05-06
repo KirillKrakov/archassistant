@@ -63,7 +63,9 @@ class MetricsController(
                     "score" to record.scoreTotal,
                     "iterations" to record.iterations,
                     "success" to record.success,
-                    "timestamp" to record.createdAt.toString()
+                    "timestamp" to record.createdAt.toString(),
+                    "prompt" to record.prompt,
+                    "generatedCode" to record.generatedCode
                 )
             }
         ))
@@ -79,6 +81,8 @@ class MetricsController(
                 id = record.id ?: java.util.UUID.randomUUID().toString(),
                 projectId = record.projectId,
                 strategy = record.strategy,
+                prompt = record.prompt,
+                generatedCode = record.generatedCode,
                 success = record.success,
                 scoreTotal = record.scoreTotal,
                 scoreRulesPass = record.scoreRulesPass,

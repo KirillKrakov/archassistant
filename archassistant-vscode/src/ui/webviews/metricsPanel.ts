@@ -227,6 +227,12 @@ function fmtDate(isoString) {
   return date.toLocaleString();
 }
 
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.appendChild(document.createTextNode(text || ''));
+  return div.innerHTML;
+}
+
 window.addEventListener('message', event => {
   const message = event.data;
 
@@ -297,7 +303,7 @@ function renderMetrics() {
   history.slice(0, 10).forEach(item => {
     const li = document.createElement('li');
     li.className = 'history-item';
-    li.innerHTML = \`
+    const summary = \`
       <div>
         <strong>\${item.strategy}</strong>
         <div class="small">\${fmtDate(item.timestamp)}</div>
@@ -307,6 +313,20 @@ function renderMetrics() {
         <div class="small">\${item.iterations} iter</div>
       </div>
     \`;
+    const hasPrompt = item.prompt && item.prompt.trim().length > 0;
+    const hasCode = item.generatedCode && item.generatedCode.trim().length > 0;
+    if (hasPrompt || hasCode) {
+      let details = '';
+      if (hasPrompt) {
+        details += \`<p><strong>Prompt:</strong><pre>\${escapeHtml(item.prompt)}</pre></p>\`;
+      }
+      if (hasCode) {
+        details += \`<p><strong>Generated Code:</strong><pre>\${escapeHtml(item.generatedCode)}</pre></p>\`;
+      }
+      li.innerHTML = \`<details><summary>\${summary}</summary>\${details}</details>\`;
+    } else {
+      li.innerHTML = summary;
+    }
     historyList.appendChild(li);
   });
 }

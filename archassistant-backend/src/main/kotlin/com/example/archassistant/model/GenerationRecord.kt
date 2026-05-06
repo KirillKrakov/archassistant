@@ -20,6 +20,12 @@ data class GenerationRecord(
     @Enumerated(EnumType.STRING)
     val strategy: StrategyType = StrategyType.HYBRID,
 
+    @Column(columnDefinition = "TEXT")
+    val prompt: String? = null,
+
+    @Column(columnDefinition = "TEXT")
+    val generatedCode: String? = null,
+
     @Column(nullable = false)
     val success: Boolean = false,
 
