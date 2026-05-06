@@ -2,7 +2,7 @@ package com.example.archassistant.service
 
 import com.example.archassistant.model.*
 import com.example.archassistant.util.ProjectLayerClassifier
-import com.tngtech.archunit.core.domain.JavaClasses
+import com.tngtech.archunit.core.domain.JavaClass
 import com.tngtech.archunit.core.domain.JavaModifier
 import com.tngtech.archunit.core.importer.ClassFileImporter
 import org.slf4j.LoggerFactory
@@ -18,18 +18,37 @@ class ProjectStructureScanner(
 
     private val logger = LoggerFactory.getLogger(ProjectStructureScanner::class.java)
 
-    fun scanProject(projectPath: String, projectId: String): ProjectStructure {
+    fun scanProject(
+        projectPath: String,
+        projectId: String,
+        additionalClassesDirs: List<Path> = emptyList()
+    ): ProjectStructure {
         logger.info("Scanning project: {} at path: {}", projectId, projectPath)
 
         val classesDir = findClassesDirectory(projectPath)
             ?: throw IllegalArgumentException("Cannot find compiled classes in $projectPath")
 
-        val classes: JavaClasses = ClassFileImporter().importPath(classesDir)
+        val candidateDirs = buildList {
+            add(classesDir)
+            additionalClassesDirs
+                .filter { Files.exists(it) && Files.isDirectory(it) }
+                .forEach { add(it) }
+        }.distinctBy { it.toAbsolutePath().normalize().toString() }
 
-        val classInfos = extractClassInfos(classes)
+        val mergedClasses = linkedMapOf<String, JavaClass>()
+        candidateDirs.forEach { dir ->
+            val imported = ClassFileImporter().importPath(dir)
+            imported.forEach { javaClass ->
+                mergedClasses[javaClass.name] = javaClass
+            }
+        }
+
+        val importedClasses = mergedClasses.values.toList()
+
+        val classInfos = extractClassInfos(importedClasses)
         val packages = classInfos.map { it.packageName }.distinct()
-        val annotations = extractAnnotations(classes)
-        val dependencies = extractDependencies(classes)
+        val annotations = extractAnnotations(importedClasses)
+        val dependencies = extractDependencies(importedClasses)
         val namingConventions = extractNamingConventions(classInfos)
         val layers = extractLegacyLayerStructure(classInfos)
         val layerMap = extractLayerMap(classInfos)
@@ -80,7 +99,7 @@ class ProjectStructureScanner(
         return possiblePaths.firstOrNull { Files.exists(it) && Files.isDirectory(it) }
     }
 
-    private fun extractClassInfos(classes: JavaClasses): List<ClassInfo> {
+    private fun extractClassInfos(classes: Iterable<JavaClass>): List<ClassInfo> {
         return classes.map { javaClass ->
             val simpleName = javaClass.name.substringAfterLast('.')
             val annotations = javaClass.annotations
@@ -102,9 +121,7 @@ class ProjectStructureScanner(
                 .map { method ->
                     val params = method.rawParameterTypes.joinToString(", ") { it.name.substringAfterLast('.') }
                     val returnType = method.rawReturnType.name.substringAfterLast('.')
-                    "${
-                        method.name
-                    }($params): $returnType"
+                    "${method.name}($params): $returnType"
                 }
                 .distinct()
 
@@ -120,7 +137,7 @@ class ProjectStructureScanner(
         }
     }
 
-    private fun extractAnnotations(classes: JavaClasses): Map<String, Int> {
+    private fun extractAnnotations(classes: Iterable<JavaClass>): Map<String, Int> {
         return classes
             .flatMap { javaClass ->
                 javaClass.annotations.map { annotation ->
@@ -131,7 +148,7 @@ class ProjectStructureScanner(
             .eachCount()
     }
 
-    private fun extractDependencies(classes: JavaClasses): List<Dependency> {
+    private fun extractDependencies(classes: Iterable<JavaClass>): List<Dependency> {
         return classes
             .flatMap { sourceClass ->
                 sourceClass.directDependenciesFromSelf.mapNotNull { dep ->

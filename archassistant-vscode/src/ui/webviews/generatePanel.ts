@@ -7,6 +7,26 @@ import { MultiFileParser } from '../../services/MultiFileParser';
 import { CodeSaver } from '../../services/CodeSaver';
 import { logError, logInfo } from '../../utils/logger';
 
+type GeneratedContextSyncResult = {
+  success: boolean;
+  savedCount?: number;
+  totalCount?: number;
+  cleared?: boolean;
+  sync?: {
+    success: boolean;
+    projectId: string;
+    projectPath?: string;
+    syncedFiles?: number;
+    compiledSources?: number;
+    overlaySourceDir?: string;
+    overlayClassesDir?: string;
+    contextRefreshed?: boolean;
+    warnings?: string[];
+    error?: string;
+  };
+  error?: string;
+};
+
 export class GenerateCodePanel {
   private static currentPanel: GenerateCodePanel | undefined;
   private readonly panel: vscode.WebviewPanel;
@@ -84,6 +104,7 @@ button {
   cursor: pointer;
   font-weight: 600;
   margin-right: 8px;
+  margin-top: 4px;
 }
 button:hover { background: var(--vscode-button-hoverBackground); }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -129,6 +150,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   border-radius: 4px;
 }
 .small { opacity: 0.85; font-size: 0.9rem; }
+.actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
 </style>
 </head>
 <body>
@@ -169,9 +196,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     <div id="warnings"></div>
     <div id="violations" class="violations"></div>
     <div id="files"></div>
-    <div style="margin-top: 12px;">
+
+    <div class="actions-row">
       <button onclick="openSelected()">Open Selected</button>
       <button onclick="saveSelected()">Save Selected</button>
+      <button onclick="saveAndAddToContext()">Save & Add to Context</button>
+      <button onclick="clearProjectContext()">Clear Project Context</button>
     </div>
   </div>
 
@@ -194,8 +224,7 @@ function generate() {
     return;
   }
 
-  document.getElementById('status').textContent =
-    'The generation request has been sent, wait for a response.';
+  setStatus('The generation request has been sent, wait for a response.');
 
   vscode.postMessage({
     command: 'generate',
@@ -270,6 +299,58 @@ function renderResult(response) {
     : '<div class="error">No files generated</div>';
 }
 
+function renderContextResult(message) {
+  const resultDiv = document.getElementById('result');
+  const summaryDiv = document.getElementById('summary');
+  const warningsDiv = document.getElementById('warnings');
+  const filesDiv = document.getElementById('files');
+
+  resultDiv.style.display = 'block';
+
+  if (message?.error) {
+    setStatus('');
+    summaryDiv.innerHTML = '<div class="error">' + message.error + '</div>';
+    return;
+  }
+
+  setStatus('');
+  summaryDiv.innerHTML = [
+    '<div class="success">Selected files were added to the project context.</div>',
+    message?.savedCount != null ? '<div>Saved files: ' + message.savedCount + '</div>' : '',
+    message?.sync?.syncedFiles != null ? '<div>Synced files: ' + message.sync.syncedFiles + '</div>' : '',
+    message?.sync?.overlayClassesDir ? '<div>Overlay classes dir: ' + message.sync.overlayClassesDir + '</div>' : '',
+    message?.sync?.contextRefreshed ? '<div>Backend project context refreshed.</div>' : ''
+  ].filter(Boolean).join('');
+
+  warningsDiv.innerHTML = (message?.sync?.warnings || [])
+    .map(w => \`<div class="warning">⚠️ \${w}</div>\`)
+    .join('');
+
+  filesDiv.innerHTML = '';
+}
+
+function renderClearResult(message) {
+  const resultDiv = document.getElementById('result');
+  const summaryDiv = document.getElementById('summary');
+  const warningsDiv = document.getElementById('warnings');
+  const filesDiv = document.getElementById('files');
+
+  resultDiv.style.display = 'block';
+
+  if (message?.error) {
+    setStatus('');
+    summaryDiv.innerHTML = '<div class="error">' + message.error + '</div>';
+    return;
+  }
+
+  setStatus('');
+  summaryDiv.innerHTML = '<div class="success">Project context overlay was cleared.</div>' +
+    (message?.contextRefreshed ? '<div>Backend project context refreshed.</div>' : '');
+
+  warningsDiv.innerHTML = '';
+  filesDiv.innerHTML = '';
+}
+
 function openSelected() {
   vscode.postMessage({ command: 'openFiles', files: getSelectedFiles() });
 }
@@ -278,12 +359,23 @@ function saveSelected() {
   vscode.postMessage({ command: 'saveFiles', files: getSelectedFiles() });
 }
 
+function saveAndAddToContext() {
+  setStatus('Saving selected files and updating project context...');
+  vscode.postMessage({ command: 'addToContext', files: getSelectedFiles() });
+}
+
+function clearProjectContext() {
+  setStatus('Clearing generated-file overlay from project context...');
+  vscode.postMessage({ command: 'clearContext' });
+}
+
 function getSelectedFiles() {
   return generatedFiles.filter((_, i) => document.getElementById('file-' + i)?.checked);
 }
 
 window.addEventListener('message', event => {
   const message = event.data;
+
   if (message?.type === 'result') {
     renderResult(message.response);
   } else if (message?.type === 'error') {
@@ -291,6 +383,10 @@ window.addEventListener('message', event => {
     document.getElementById('result').style.display = 'block';
     document.getElementById('summary').innerHTML =
       '<div class="error">' + (message.message || 'Generation failed') + '</div>';
+  } else if (message?.type === 'contextResult') {
+    renderContextResult(message.result);
+  } else if (message?.type === 'contextClearResult') {
+    renderClearResult(message.result);
   }
 });
 </script>
@@ -308,6 +404,12 @@ window.addEventListener('message', event => {
         break;
       case 'saveFiles':
         await this.handleSaveFiles(message.files || []);
+        break;
+      case 'addToContext':
+        await this.handleSaveAndSyncFiles(message.files || []);
+        break;
+      case 'clearContext':
+        await this.handleClearContext();
         break;
     }
   }
@@ -405,6 +507,104 @@ window.addEventListener('message', event => {
       }
     } catch (error: any) {
       vscode.window.showErrorMessage(`Failed to save files: ${error.message}`);
+    }
+  }
+
+  private async handleSaveAndSyncFiles(files: GeneratedFile[]): Promise<void> {
+    try {
+      const project = this.projectRegistry.getCurrentProject();
+      if (!project) {
+        throw new Error('No project configured');
+      }
+
+      const backendBaseUrl = this.storageManager.getBackendUrl();
+      if (!backendBaseUrl) {
+        throw new Error('Backend URL is not configured');
+      }
+
+      if (files.length === 0) {
+        vscode.window.showWarningMessage('No files selected.');
+        this.panel.webview.postMessage({
+          type: 'contextResult',
+          result: { success: false, error: 'No files selected.' } satisfies GeneratedContextSyncResult
+        });
+        return;
+      }
+
+      const { saved, sync } = await this.codeSaver.saveMultipleFilesAndSync(
+        files,
+        project.projectPath,
+        project.projectId,
+        backendBaseUrl
+      );
+
+      const savedCount = saved.filter((item) => item.success).length;
+
+      this.panel.webview.postMessage({
+        type: 'contextResult',
+        result: {
+          success: true,
+          savedCount,
+          totalCount: files.length,
+          cleared: false,
+          sync
+        } satisfies GeneratedContextSyncResult
+      });
+
+      if (sync?.success) {
+        const warnings = sync.warnings?.length ? ` Warnings: ${sync.warnings.join(' | ')}` : '';
+        vscode.window.showInformationMessage(
+          `Added ${savedCount}/${files.length} file(s) to project context.${warnings}`
+        );
+      } else {
+        vscode.window.showWarningMessage(
+          `Files saved locally, but backend context sync failed${sync?.error ? `: ${sync.error}` : '.'}`
+        );
+      }
+    } catch (error: any) {
+      vscode.window.showErrorMessage(`Failed to add files to context: ${error.message}`);
+      this.panel.webview.postMessage({
+        type: 'contextResult',
+        result: {
+          success: false,
+          error: error.message || 'Failed to add files to context'
+        } satisfies GeneratedContextSyncResult
+      });
+    }
+  }
+
+  private async handleClearContext(): Promise<void> {
+    try {
+      const project = this.projectRegistry.getCurrentProject();
+      if (!project) {
+        throw new Error('No project configured');
+      }
+
+      const backendBaseUrl = this.storageManager.getBackendUrl();
+      if (!backendBaseUrl) {
+        throw new Error('Backend URL is not configured');
+      }
+
+      const result = await this.codeSaver.clearBackendOverlay(project.projectId, backendBaseUrl);
+
+      this.panel.webview.postMessage({
+        type: 'contextClearResult',
+        result: {
+          success: result.success,
+          cleared: true
+        } satisfies GeneratedContextSyncResult
+      });
+
+      vscode.window.showInformationMessage(`Project context overlay cleared for ${project.projectId}`);
+    } catch (error: any) {
+      vscode.window.showErrorMessage(`Failed to clear project context: ${error.message}`);
+      this.panel.webview.postMessage({
+        type: 'contextClearResult',
+        result: {
+          success: false,
+          error: error.message || 'Failed to clear project context'
+        } satisfies GeneratedContextSyncResult
+      });
     }
   }
 
