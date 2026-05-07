@@ -16,6 +16,11 @@ class ProjectStructureScanner(
     private val architectureDetector: ArchitectureDetector
 ) {
 
+    private data class ImportedClassEntry(
+        val javaClass: JavaClass,
+        val origin: ClassOrigin
+    )
+
     private val logger = LoggerFactory.getLogger(ProjectStructureScanner::class.java)
 
     fun scanProject(
@@ -28,24 +33,24 @@ class ProjectStructureScanner(
         val classesDir = findClassesDirectory(projectPath)
             ?: throw IllegalArgumentException("Cannot find compiled classes in $projectPath")
 
-        val candidateDirs = buildList {
-            add(classesDir)
-            additionalClassesDirs
-                .filter { Files.exists(it) && Files.isDirectory(it) }
-                .forEach { add(it) }
-        }.distinctBy { it.toAbsolutePath().normalize().toString() }
+        val mergedClasses = linkedMapOf<String, ImportedClassEntry>()
 
-        val mergedClasses = linkedMapOf<String, JavaClass>()
-        candidateDirs.forEach { dir ->
+        fun importFrom(dir: Path, origin: ClassOrigin) {
+            if (!Files.exists(dir) || !Files.isDirectory(dir)) return
             val imported = ClassFileImporter().importPath(dir)
             imported.forEach { javaClass ->
-                mergedClasses[javaClass.name] = javaClass
+                mergedClasses[javaClass.name] = ImportedClassEntry(javaClass, origin)
             }
         }
 
-        val importedClasses = mergedClasses.values.toList()
+        importFrom(classesDir, ClassOrigin.BASE)
+        additionalClassesDirs
+            .distinctBy { it.toAbsolutePath().normalize().toString() }
+            .forEach { importFrom(it, ClassOrigin.OVERLAY) }
 
-        val classInfos = extractClassInfos(importedClasses)
+        val importedClasses = mergedClasses.values.map { it.javaClass }
+
+        val classInfos = extractClassInfos(mergedClasses.values)
         val packages = classInfos.map { it.packageName }.distinct()
         val annotations = extractAnnotations(importedClasses)
         val dependencies = extractDependencies(importedClasses)
@@ -99,9 +104,11 @@ class ProjectStructureScanner(
         return possiblePaths.firstOrNull { Files.exists(it) && Files.isDirectory(it) }
     }
 
-    private fun extractClassInfos(classes: Iterable<JavaClass>): List<ClassInfo> {
-        return classes.map { javaClass ->
+    private fun extractClassInfos(entries: Iterable<ImportedClassEntry>): List<ClassInfo> {
+        return entries.map { entry ->
+            val javaClass = entry.javaClass
             val simpleName = javaClass.name.substringAfterLast('.')
+
             val annotations = javaClass.annotations
                 .map { annotation -> annotation.type.name.substringAfterLast('.') }
                 .distinct()
@@ -125,17 +132,52 @@ class ProjectStructureScanner(
                 }
                 .distinct()
 
+            val fields = javaClass.fields
+                .map { field ->
+                    FieldInfo(
+                        name = field.name,
+                        type = field.rawType.name,
+                        modifiers = field.modifiers.map { it.name }
+                    )
+                }
+                .sortedBy { it.name }
+
+            val constructors = javaClass.constructors
+                .map { constructor ->
+                    ConstructorInfo(
+                        parameters = constructor.rawParameterTypes.map { it.name },
+                        modifiers = constructor.modifiers.map { it.name }
+                    )
+                }
+                .sortedBy { it.parameters.size }
+
+            val kind = when {
+                javaClass.isInterface -> ClassKind.INTERFACE
+                javaClass.isEnum -> ClassKind.ENUM
+                javaClass.isAnnotation -> ClassKind.ANNOTATION
+                else -> ClassKind.CLASS
+            }
+
             ClassInfo(
                 fullName = javaClass.name,
                 simpleName = simpleName,
                 packageName = javaClass.packageName,
+                kind = kind,
+                superClass = javaClass.rawSuperclass.orElse(null)?.name,
+                interfaces = javaClass.rawInterfaces.map { it.name }.distinct(),
                 annotations = annotations,
                 dependencies = dependencies,
-                modifiers = emptyList(),
-                publicMethods = publicMethods
+                modifiers = javaClass.modifiers.map { it.name },
+                fields = fields,
+                constructors = constructors,
+                publicMethods = publicMethods,
+                origin = entry.origin
             )
         }
     }
+
+    private fun modifiersToText(modifiers: List<String>): String =
+        if (modifiers.isEmpty()) "" else modifiers.joinToString(" ")
 
     private fun extractAnnotations(classes: Iterable<JavaClass>): Map<String, Int> {
         return classes

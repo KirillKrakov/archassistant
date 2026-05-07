@@ -4,10 +4,7 @@ import com.example.archassistant.dto.CodeGenerationRequest
 import com.example.archassistant.dto.CodeGenerationResponse
 import com.example.archassistant.dto.GenerationResponseFactory
 import com.example.archassistant.model.*
-import com.example.archassistant.util.CodeCleaner
-import com.example.archassistant.util.ErrorFormatter
-import com.example.archassistant.util.GeneratedTypeNameExtractor
-import com.example.archassistant.util.PromptFormatter
+import com.example.archassistant.util.*
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import kotlin.system.measureTimeMillis
@@ -50,11 +47,19 @@ class HybridGenerationStrategy(
             ?: ruleRepository.load(request.projectId)?.getEnabledRules()
             ?: emptyList()
 
-        val baseSystemPrompt = PromptFormatter.formatSystemPrompt(rules)
+        val baseSystemPrompt = PromptFormatter.formatSystemPrompt(
+            rules = rules,
+            languageHint = projectContext.preferredLanguageHint()
+        )
         val baseUserPrompt = PromptFormatter.formatUserPrompt(
             originalRequest = request.prompt,
             previousErrors = emptyList(),
-            projectContext = projectContext.promptContext(),
+            projectContext = projectContext.promptContext(
+                requestText = request.prompt,
+                targetPackage = request.context?.targetPackage,
+                expectedClassName = request.expectedClassName,
+                existingTypes = request.context?.existingTypes.orEmpty()
+            ),
             codeContext = request.context?.codeSnippet
         )
 
@@ -77,7 +82,12 @@ class HybridGenerationStrategy(
                 val enhancedUserPrompt = PromptFormatter.formatUserPrompt(
                     originalRequest = request.prompt,
                     previousErrors = emptyList(),
-                    projectContext = projectContext.promptContext(),
+                    projectContext = projectContext.promptContext(
+                        requestText = request.prompt,
+                        targetPackage = request.context?.targetPackage,
+                        expectedClassName = request.expectedClassName,
+                        existingTypes = request.context?.existingTypes.orEmpty()
+                    ),
                     codeContext = request.context?.codeSnippet
                 )
                 baseSystemPrompt to "$enhancedUserPrompt\n\n$errorSection"
@@ -103,7 +113,11 @@ class HybridGenerationStrategy(
                     )
                 }
             }
-            val generatedCode = CodeCleaner.cleanCode(rawCode)
+            val generatedCode = ProjectImportNormalizer.normalize(
+                code = CodeCleaner.cleanCode(rawCode),
+                projectContext = projectContext,
+                primaryTypeName = request.expectedClassName ?: GeneratedTypeNameExtractor.extract(rawCode)
+            )
             totalGenerationTime += generationTime
             lastCode = generatedCode
 

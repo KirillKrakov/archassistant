@@ -42,6 +42,15 @@ class CodeCompiler {
                     )
                 )
             }
+            .map { generated ->
+                generated.copy(
+                    sourceCode = ProjectImportNormalizer.normalize(
+                        code = generated.sourceCode,
+                        projectContext = projectContext,
+                        primaryTypeName = generated.className
+                    )
+                )
+            }
 
         val writtenFiles = sourceFiles.map { generated ->
             val target = tempRoot.resolve(generated.relativePath)
