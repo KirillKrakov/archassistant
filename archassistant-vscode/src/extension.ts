@@ -8,13 +8,20 @@ import { RulesTreeDataProvider } from './ui/sidebar/RulesTreeDataProvider';
 import { RulesManager } from './services/RulesManager';
 import { startProjectCommand } from './commands/startProject';
 import { configureProjectCommand } from './commands/configureProject';
-import { editRuleCommand, deleteRuleCommand, addCustomRuleCommand, addSuggestedRuleCommand, toggleRuleCommand} from './commands/manageRules';
+import {
+  editRuleCommand,
+  deleteRuleCommand,
+  addCustomRuleCommand,
+  addSuggestedRuleCommand,
+  toggleRuleCommand
+} from './commands/manageRules';
 import { refreshRulesCommand } from './commands/refreshRules';
 import { saveRulesCommand } from './commands/saveRules';
 import { getActualRulesCommand } from './commands/getActualRules';
 import { generateCodeCommand } from './commands/generateCode';
 import { showMetricsCommand } from './commands/showMetrics';
 import { exportMetricsCommand } from './commands/exportMetrics';
+import { importRulesYamlCommand, exportRulesYamlCommand } from './commands/rulesYaml';
 import { createLogger, logError, logInfo, Logger } from './utils/logger';
 import { toBackendProjectPath } from './utils/projectPaths';
 
@@ -28,6 +35,7 @@ let logger: Logger;
 let statusBarItem: vscode.StatusBarItem;
 let healthTimer: NodeJS.Timeout | undefined;
 let lastBackendConnected = false;
+let commandsRegistered = false;
 
 async function syncCurrentProjectToBackend(): Promise<void> {
   const project = projectRegistry.getCurrentProject();
@@ -165,9 +173,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('archassistant.exportMetrics', () =>
       exportMetricsCommand(backendClient, projectRegistry)
     ),
+    vscode.commands.registerCommand('archassistant.importRulesYaml', () =>
+      importRulesYamlCommand(storageManager, projectRegistry, rulesManager, sidebarProvider, rulesProvider, logger)
+    ),
+    vscode.commands.registerCommand('archassistant.exportRulesYaml', () =>
+      exportRulesYamlCommand(storageManager, projectRegistry, logger)
+    ),
     vscode.commands.registerCommand('archassistant.toggleRule', (rule?: unknown) =>
       toggleRuleCommand(rule, storageManager, rulesManager, () => rulesProvider.refresh())
-    ),
+    )
   );
 
   context.subscriptions.push(

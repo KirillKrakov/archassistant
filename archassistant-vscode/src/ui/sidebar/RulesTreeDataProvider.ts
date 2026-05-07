@@ -58,6 +58,8 @@ export class RulesTreeDataProvider implements vscode.TreeDataProvider<vscode.Tre
       const items: vscode.TreeItem[] = [
         new ActionItem('Get Actual Rules', 'archassistant.getActualRules', 'Get Actual Rules', 'cloud-download'),
         new ActionItem('Save Rules', 'archassistant.saveRules', 'Save Rules', 'save-all'),
+        new ActionItem('Import YAML', 'archassistant.importRulesYaml', 'Import YAML', 'cloud-upload'),
+        new ActionItem('Export YAML', 'archassistant.exportRulesYaml', 'Export YAML', 'cloud-download'),
         new ActionItem('Edit Rule', 'archassistant.editRule', 'Edit Rule', 'edit'),
         new ActionItem('Delete Rule', 'archassistant.deleteRule', 'Delete Rule', 'trash')
       ];

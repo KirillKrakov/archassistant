@@ -12,7 +12,9 @@
     "Other"
   ],
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "onCommand:archassistant.importRulesYaml",
+    "onCommand:archassistant.exportRulesYaml"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -68,6 +70,14 @@
       {
         "command": "archassistant.addSuggestedRule",
         "title": "ArchAssistant: Add Suggested Rule"
+      },
+      {
+        "command": "archassistant.importRulesYaml",
+        "title": "ArchAssistant: Import Rules from YAML"
+      },
+      {
+        "command": "archassistant.exportRulesYaml",
+        "title": "ArchAssistant: Export Rules to YAML"
       }
     ],
     "viewsContainers": {
@@ -139,6 +149,16 @@
           "command": "archassistant.addSuggestedRule",
           "when": "view == archassistant.rulesList",
           "group": "navigation@5"
+        },
+        {
+          "command": "archassistant.importRulesYaml",
+          "when": "view == archassistant.rulesList",
+          "group": "navigation@6"
+        },
+        {
+          "command": "archassistant.exportRulesYaml",
+          "when": "view == archassistant.rulesList",
+          "group": "navigation@7"
         }
       ],
       "view/item/context": [
@@ -205,6 +225,7 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "axios": "^1.7.2"
+    "axios": "^1.7.2",
+    "yaml": "^2.6.1"
   }
 }
