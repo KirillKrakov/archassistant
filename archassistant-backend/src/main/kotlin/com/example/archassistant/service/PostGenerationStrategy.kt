@@ -51,15 +51,18 @@ class PostGenerationStrategy(
             rules = emptyList(),
             languageHint = projectContext.preferredLanguageHint()
         )
+
+        val requestContextText = projectContext.promptContext(
+            requestText = request.prompt,
+            targetPackage = request.context?.targetPackage,
+            expectedClassName = request.expectedClassName,
+            existingTypes = request.context?.existingTypes.orEmpty()
+        )
+
         val baseUserPrompt = PromptFormatter.formatUserPrompt(
             originalRequest = request.prompt,
             previousErrors = emptyList(),
-            projectContext = projectContext.promptContext(
-                requestText = request.prompt,
-                targetPackage = request.context?.targetPackage,
-                expectedClassName = request.expectedClassName,
-                existingTypes = request.context?.existingTypes.orEmpty()
-            ),
+            projectContext = requestContextText,
             codeContext = request.context?.codeSnippet
         )
 
@@ -82,7 +85,7 @@ class PostGenerationStrategy(
                 val enhancedUserPrompt = PromptFormatter.formatUserPrompt(
                     originalRequest = request.prompt,
                     previousErrors = emptyList(),
-                    projectContext = projectContext.promptContext(),
+                    projectContext = requestContextText,
                     codeContext = request.context?.codeSnippet
                 )
                 baseSystemPrompt to "$enhancedUserPrompt\n\n$errorSection"
