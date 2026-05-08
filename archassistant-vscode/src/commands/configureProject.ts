@@ -1,50 +1,27 @@
 import * as vscode from 'vscode';
 import { BackendClient } from '../backend/BackendClient';
-import { ProjectRegistry } from '../state/projectRegistry';
-import { ArchitecturalRule, RulesConfig, RuleSettings } from '../backend/types';
+import { ExtensionState } from '../state/ExtensionState';
+import { Logger } from '../utils/logger';
+import { RulesManager } from '../services/RulesManager';
 import { RulesTreeDataProvider } from '../ui/sidebar/RulesTreeDataProvider';
+import { ProjectRegistry } from '../state/projectRegistry';
+import { projectIdFromPath } from '../utils/helpers';
+import { toBackendProjectPath } from '../utils/projectPaths';
 import { ArchAssistantSidebarProvider } from '../ui/sidebar/ArchAssistantSidebarProvider';
-import { getWorkspaceFolderName } from '../utils/helpers';
-import { logError, logInfo } from '../utils/logger';
-
-function createDefaultRulesConfig(projectId: string, projectPath: string): RulesConfig {
-  return {
-    version: '2.0',
-    project_id: projectId,
-    project_type: 'SPRING_BOOT',
-    project_path: projectPath,
-    rules: [],
-    settings: {
-      max_iterations: 3,
-      timeout_seconds: 30,
-      default_strategy: 'HYBRID',
-      fail_on_critical: true,
-      auto_fix_naming: false
-    } satisfies RuleSettings
-  };
-}
-
-function mergeSuggestedRules(rules: ArchitecturalRule[]): ArchitecturalRule[] {
-  const seen = new Set<string>();
-  const result: ArchitecturalRule[] = [];
-
-  for (const rule of rules) {
-    if (!rule?.id || seen.has(rule.id)) continue;
-    seen.add(rule.id);
-    result.push(rule);
-  }
-
-  return result;
-}
 
 export async function configureProjectCommand(
   backendClient: BackendClient,
-  projectRegistry: ProjectRegistry,
-  rulesProvider: RulesTreeDataProvider,
-  sidebarProvider?: ArchAssistantSidebarProvider
+  state: ExtensionState,
+  registry: ProjectRegistry,
+  rulesManager: RulesManager,
+  logger: Logger,
+  sidebarProvider: ArchAssistantSidebarProvider,
+  rulesProvider: RulesTreeDataProvider
 ): Promise<void> {
-  try {
-    const projectPathUris = await vscode.window.showOpenDialog({
+  let current = registry.getCurrentProject();
+
+  if (!current) {
+    const folder = await vscode.window.showOpenDialog({
       canSelectFolders: true,
       canSelectFiles: false,
       canSelectMany: false,
@@ -52,42 +29,69 @@ export async function configureProjectCommand(
       title: 'Select Project Root Directory'
     });
 
-    if (!projectPathUris?.length) return;
+    const selected = folder?.[0];
+    if (!selected) return;
 
-    const projectPath = projectPathUris[0].fsPath;
-    const projectId = getWorkspaceFolderName() || projectPath.split(/[\\/]/).filter(Boolean).pop() || `project-${Date.now()}`;
+    const projectPath = selected.fsPath;
+    const projectId = projectIdFromPath(projectPath);
 
-    await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: 'Configuring project...',
-        cancellable: false
-      },
-      async progress => {
-        progress.report({ message: 'Saving project path...' });
-        await backendClient.saveProjectPath(projectId, projectPath);
+    await registry.setCurrentProject(projectId, projectPath);
+    await rulesManager.prepareProject(projectId, projectPath);
+    current = { projectId, projectPath, rulesCount: 0 };
+  } else {
+    const hasLocalRulesConfig =
+      state.getDraftRulesConfig() !== null || state.getSavedRulesConfig() !== null;
 
-        progress.report({ message: 'Scanning project structure...' });
-        const suggestions = await backendClient.suggestRules(projectId, projectPath);
-        const mergedRules = mergeSuggestedRules(suggestions.flatMap(s => s.rules || []));
-
-        progress.report({ message: 'Saving rules...' });
-        const config = createDefaultRulesConfig(projectId, projectPath);
-        config.rules = mergedRules.map(rule => ({ ...rule, enabled: rule.enabled ?? true, suggested: true }));
-
-        await backendClient.saveRules(config);
-
-        await projectRegistry.setCurrentProject(projectId, projectPath, mergedRules.length);
-        await rulesProvider.refresh();
-        sidebarProvider?.refresh();
-
-        vscode.window.showInformationMessage(
-          `Project configured successfully. ${mergedRules.length} rule(s) loaded.`
-        );
-      }
-    );
-  } catch (error: any) {
-    logError(`Configure project failed: ${error.message}`);
-    vscode.window.showErrorMessage(`Failed to configure project: ${error.message}`);
+    if (!hasLocalRulesConfig) {
+      await rulesManager.prepareProject(current.projectId, current.projectPath);
+    }
   }
+
+  const projectId = current.projectId;
+  const projectPath = current.projectPath;
+  const backendProjectPath = toBackendProjectPath(projectPath);
+
+  await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: 'Configuring project...',
+      cancellable: false
+    },
+    async (progress) => {
+      progress.report({ message: 'Saving project path...' });
+      try {
+        await backendClient.saveProjectPath(projectId, backendProjectPath);
+      } catch (error: any) {
+        logger.warn('Could not save project path before scan: {}', error.message);
+      }
+
+      const localConfig = state.getSavedRulesConfig() ?? state.getDraftRulesConfig();
+      if (localConfig) {
+        try {
+          await rulesManager.saveDraft(projectId);
+        } catch (error: any) {
+          logger.warn('Could not restore rules config before scan: {}', error.message);
+        }
+      }
+
+      progress.report({ message: 'Scanning project structure...' });
+      const suggestions = await rulesManager.refreshSuggestions(projectId, projectPath);
+      await state.setSuggestions(suggestions);
+
+      const draft = state.getDraftRulesConfig();
+      await registry.updateRulesCount(projectId, draft?.rules.length ?? 0);
+
+      progress.report({ message: 'Project prepared...' });
+      logger.info(
+        'Configured project {} with {} suggested rule modules',
+        projectId,
+        suggestions.length
+      );
+    }
+  );
+
+  sidebarProvider.refresh();
+  rulesProvider.refresh();
+
+  vscode.window.showInformationMessage(`Project configured successfully: ${projectId}`);
 }

@@ -2,7 +2,7 @@ package com.example.archassistant.service
 
 import com.example.archassistant.model.*
 import com.example.archassistant.util.ProjectLayerClassifier
-import com.tngtech.archunit.core.domain.JavaClasses
+import com.tngtech.archunit.core.domain.JavaClass
 import com.tngtech.archunit.core.domain.JavaModifier
 import com.tngtech.archunit.core.importer.ClassFileImporter
 import org.slf4j.LoggerFactory
@@ -16,20 +16,44 @@ class ProjectStructureScanner(
     private val architectureDetector: ArchitectureDetector
 ) {
 
+    private data class ImportedClassEntry(
+        val javaClass: JavaClass,
+        val origin: ClassOrigin
+    )
+
     private val logger = LoggerFactory.getLogger(ProjectStructureScanner::class.java)
 
-    fun scanProject(projectPath: String, projectId: String): ProjectStructure {
+    fun scanProject(
+        projectPath: String,
+        projectId: String,
+        additionalClassesDirs: List<Path> = emptyList()
+    ): ProjectStructure {
         logger.info("Scanning project: {} at path: {}", projectId, projectPath)
 
         val classesDir = findClassesDirectory(projectPath)
             ?: throw IllegalArgumentException("Cannot find compiled classes in $projectPath")
 
-        val classes: JavaClasses = ClassFileImporter().importPath(classesDir)
+        val mergedClasses = linkedMapOf<String, ImportedClassEntry>()
 
-        val classInfos = extractClassInfos(classes)
+        fun importFrom(dir: Path, origin: ClassOrigin) {
+            if (!Files.exists(dir) || !Files.isDirectory(dir)) return
+            val imported = ClassFileImporter().importPath(dir)
+            imported.forEach { javaClass ->
+                mergedClasses[javaClass.name] = ImportedClassEntry(javaClass, origin)
+            }
+        }
+
+        importFrom(classesDir, ClassOrigin.BASE)
+        additionalClassesDirs
+            .distinctBy { it.toAbsolutePath().normalize().toString() }
+            .forEach { importFrom(it, ClassOrigin.OVERLAY) }
+
+        val importedClasses = mergedClasses.values.map { it.javaClass }
+
+        val classInfos = extractClassInfos(mergedClasses.values)
         val packages = classInfos.map { it.packageName }.distinct()
-        val annotations = extractAnnotations(classes)
-        val dependencies = extractDependencies(classes)
+        val annotations = extractAnnotations(importedClasses)
+        val dependencies = extractDependencies(importedClasses)
         val namingConventions = extractNamingConventions(classInfos)
         val layers = extractLegacyLayerStructure(classInfos)
         val layerMap = extractLayerMap(classInfos)
@@ -80,9 +104,11 @@ class ProjectStructureScanner(
         return possiblePaths.firstOrNull { Files.exists(it) && Files.isDirectory(it) }
     }
 
-    private fun extractClassInfos(classes: JavaClasses): List<ClassInfo> {
-        return classes.map { javaClass ->
+    private fun extractClassInfos(entries: Iterable<ImportedClassEntry>): List<ClassInfo> {
+        return entries.map { entry ->
+            val javaClass = entry.javaClass
             val simpleName = javaClass.name.substringAfterLast('.')
+
             val annotations = javaClass.annotations
                 .map { annotation -> annotation.type.name.substringAfterLast('.') }
                 .distinct()
@@ -102,25 +128,58 @@ class ProjectStructureScanner(
                 .map { method ->
                     val params = method.rawParameterTypes.joinToString(", ") { it.name.substringAfterLast('.') }
                     val returnType = method.rawReturnType.name.substringAfterLast('.')
-                    "${
-                        method.name
-                    }($params): $returnType"
+                    "${method.name}($params): $returnType"
                 }
                 .distinct()
+
+            val fields = javaClass.fields
+                .map { field ->
+                    FieldInfo(
+                        name = field.name,
+                        type = field.rawType.name,
+                        modifiers = field.modifiers.map { it.name }
+                    )
+                }
+                .sortedBy { it.name }
+
+            val constructors = javaClass.constructors
+                .map { constructor ->
+                    ConstructorInfo(
+                        parameters = constructor.rawParameterTypes.map { it.name },
+                        modifiers = constructor.modifiers.map { it.name }
+                    )
+                }
+                .sortedBy { it.parameters.size }
+
+            val kind = when {
+                javaClass.isInterface -> ClassKind.INTERFACE
+                javaClass.isEnum -> ClassKind.ENUM
+                javaClass.isAnnotation -> ClassKind.ANNOTATION
+                else -> ClassKind.CLASS
+            }
 
             ClassInfo(
                 fullName = javaClass.name,
                 simpleName = simpleName,
                 packageName = javaClass.packageName,
+                kind = kind,
+                superClass = javaClass.rawSuperclass.orElse(null)?.name,
+                interfaces = javaClass.rawInterfaces.map { it.name }.distinct(),
                 annotations = annotations,
                 dependencies = dependencies,
-                modifiers = emptyList(),
-                publicMethods = publicMethods
+                modifiers = javaClass.modifiers.map { it.name },
+                fields = fields,
+                constructors = constructors,
+                publicMethods = publicMethods,
+                origin = entry.origin
             )
         }
     }
 
-    private fun extractAnnotations(classes: JavaClasses): Map<String, Int> {
+    private fun modifiersToText(modifiers: List<String>): String =
+        if (modifiers.isEmpty()) "" else modifiers.joinToString(" ")
+
+    private fun extractAnnotations(classes: Iterable<JavaClass>): Map<String, Int> {
         return classes
             .flatMap { javaClass ->
                 javaClass.annotations.map { annotation ->
@@ -131,7 +190,7 @@ class ProjectStructureScanner(
             .eachCount()
     }
 
-    private fun extractDependencies(classes: JavaClasses): List<Dependency> {
+    private fun extractDependencies(classes: Iterable<JavaClass>): List<Dependency> {
         return classes
             .flatMap { sourceClass ->
                 sourceClass.directDependenciesFromSelf.mapNotNull { dep ->

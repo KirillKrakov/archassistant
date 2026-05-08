@@ -5,6 +5,7 @@ import com.example.archassistant.util.PackagePatternBuilder
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.io.File
 import java.nio.file.Paths
@@ -13,7 +14,8 @@ import java.nio.file.Paths
 class YamlRuleRepository(
     @Qualifier("yamlObjectMapper")
     private val objectMapper: ObjectMapper,
-    private val configRootPath: String = ".archassistant"
+    @Value("\${archassistant.config-root:.archassistant}")
+    private val configRootPath: String
 ) {
 
     private val logger = LoggerFactory.getLogger(YamlRuleRepository::class.java)
@@ -269,51 +271,15 @@ class YamlRuleRepository(
                 }
             }
 
-            RuleType.MODIFIER_CHECK -> {
-                if (rule.fromPackage.isBlank()) {
-                    violations.add(
-                        Violation(
-                            ruleId = ruleId,
-                            description = "from_package cannot be empty for MODIFIER_CHECK",
-                            className = "ArchitecturalRule",
-                            severity = Severity.ERROR
-                        )
-                    )
-                }
-            }
-
-            RuleType.METHOD_SIGNATURE_CHECK -> {
-                if (rule.fromPackage.isBlank()) {
-                    violations.add(
-                        Violation(
-                            ruleId = ruleId,
-                            description = "from_package cannot be empty for METHOD_SIGNATURE_CHECK",
-                            className = "ArchitecturalRule",
-                            severity = Severity.ERROR
-                        )
-                    )
-                }
-            }
-
-            RuleType.FIELD_CHECK -> {
-                if (rule.fromPackage.isBlank()) {
-                    violations.add(
-                        Violation(
-                            ruleId = ruleId,
-                            description = "from_package cannot be empty for FIELD_CHECK",
-                            className = "ArchitecturalRule",
-                            severity = Severity.ERROR
-                        )
-                    )
-                }
-            }
-
+            RuleType.MODIFIER_CHECK,
+            RuleType.METHOD_SIGNATURE_CHECK,
+            RuleType.FIELD_CHECK,
             RuleType.EXCEPTION_CHECK -> {
                 if (rule.fromPackage.isBlank()) {
                     violations.add(
                         Violation(
                             ruleId = ruleId,
-                            description = "from_package cannot be empty for EXCEPTION_CHECK",
+                            description = "from_package cannot be empty for ${rule.type}",
                             className = "ArchitecturalRule",
                             severity = Severity.ERROR
                         )
@@ -440,7 +406,7 @@ class YamlRuleRepository(
         return try {
             PackagePatternBuilder.buildRegex(pattern)
             true
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             false
         }
     }
@@ -450,9 +416,7 @@ class YamlRuleRepository(
         return Paths.get(configRootPath, safeProjectId, "rules.yml").toFile()
     }
 
-    fun exists(projectId: String): Boolean {
-        return getConfigFile(projectId).exists()
-    }
+    fun exists(projectId: String): Boolean = getConfigFile(projectId).exists()
 
     fun delete(projectId: String): Boolean {
         return try {

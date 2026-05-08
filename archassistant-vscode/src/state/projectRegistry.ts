@@ -1,47 +1,81 @@
-import { StorageManager, ProjectRegistryEntry } from './storage';
+import * as vscode from 'vscode';
+import { Storage } from './storage';
+
+export interface StoredProjectInfo {
+  projectId: string;
+  projectPath: string;
+  rulesCount?: number;
+  lastAccessed?: string;
+}
 
 export class ProjectRegistry {
-  constructor(private readonly storage: StorageManager) {}
+  private readonly currentProject: Storage<StoredProjectInfo | null>;
+  private readonly recentProjects: Storage<StoredProjectInfo[]>;
 
-  async getCurrentProject(): Promise<ProjectRegistryEntry | null> {
-    const projectId = this.storage.getCurrentProjectId();
-    if (!projectId) return null;
-    return this.storage.getProjectRegistry().find(p => p.projectId === projectId) || null;
+  constructor(private readonly memento: vscode.Memento) {
+    this.currentProject = new Storage('archassistant.currentProject', this.memento);
+    this.recentProjects = new Storage('archassistant.recentProjects', this.memento);
   }
 
-  async setCurrentProject(projectId: string, projectPath: string, rulesCount = 0): Promise<void> {
-    await this.storage.setCurrentProjectId(projectId);
-    await this.storage.setCurrentProjectPath(projectPath);
+  getCurrentProject(): StoredProjectInfo | null {
+    return this.currentProject.get(null);
+  }
 
-    await this.storage.addOrUpdateProject({
+  async setCurrentProject(projectId: string, projectPath: string): Promise<void> {
+    const existing = this.getCurrentProject();
+    const entry: StoredProjectInfo = {
       projectId,
       projectPath,
-      lastAccessed: new Date().toISOString(),
-      rulesCount
+      rulesCount: existing?.rulesCount ?? 0,
+      lastAccessed: new Date().toISOString()
+    };
+
+    await this.currentProject.set(entry);
+    await this.upsert(entry);
+  }
+
+  list(): StoredProjectInfo[] {
+    return this.recentProjects.get([]);
+  }
+
+  async upsert(project: StoredProjectInfo): Promise<void> {
+    const filtered = this.list().filter((item) => item.projectId !== project.projectId);
+    filtered.unshift({
+      ...project,
+      lastAccessed: project.lastAccessed ?? new Date().toISOString()
     });
-  }
-
-  async getAllProjects(): Promise<ProjectRegistryEntry[]> {
-    return this.storage.getProjectRegistry();
-  }
-
-  async removeProject(projectId: string): Promise<void> {
-    const filtered = this.storage.getProjectRegistry().filter(p => p.projectId !== projectId);
-    await this.storage.setProjectRegistry(filtered);
-
-    if (this.storage.getCurrentProjectId() === projectId) {
-      await this.storage.setCurrentProjectId(null);
-      await this.storage.setCurrentProjectPath(null);
-    }
+    await this.recentProjects.set(filtered.slice(0, 10));
   }
 
   async updateRulesCount(projectId: string, rulesCount: number): Promise<void> {
-    const registry = this.storage.getProjectRegistry();
-    const entry = registry.find(p => p.projectId === projectId);
-    if (!entry) return;
+    const current = this.getCurrentProject();
+    if (current?.projectId === projectId) {
+      await this.currentProject.set({
+        ...current,
+        rulesCount,
+        lastAccessed: new Date().toISOString()
+      });
+    }
 
-    entry.rulesCount = rulesCount;
-    entry.lastAccessed = new Date().toISOString();
-    await this.storage.setProjectRegistry(registry);
+    const updated = this.list().map((item) =>
+      item.projectId === projectId
+        ? { ...item, rulesCount, lastAccessed: new Date().toISOString() }
+        : item
+    );
+    await this.recentProjects.set(updated);
+  }
+
+  async remove(projectId: string): Promise<void> {
+    const filtered = this.list().filter((item) => item.projectId !== projectId);
+    await this.recentProjects.set(filtered);
+
+    const current = this.getCurrentProject();
+    if (current?.projectId === projectId) {
+      await this.currentProject.clear();
+    }
+  }
+
+  async clearCurrentProject(): Promise<void> {
+    await this.currentProject.clear();
   }
 }

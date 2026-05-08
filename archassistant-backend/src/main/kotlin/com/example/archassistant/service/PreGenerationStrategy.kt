@@ -6,6 +6,7 @@ import com.example.archassistant.dto.GenerationResponseFactory
 import com.example.archassistant.model.*
 import com.example.archassistant.util.CodeCleaner
 import com.example.archassistant.util.GeneratedTypeNameExtractor
+import com.example.archassistant.util.ProjectImportNormalizer
 import com.example.archassistant.util.PromptFormatter
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -49,11 +50,19 @@ class PreGenerationStrategy(
             ?: ruleRepository.load(request.projectId)?.getEnabledRules()
             ?: emptyList()
 
-        val systemPrompt = PromptFormatter.formatSystemPrompt(rules)
+        val systemPrompt = PromptFormatter.formatSystemPrompt(
+            rules = rules,
+            languageHint = projectContext.preferredLanguageHint()
+        )
         val userPrompt = PromptFormatter.formatUserPrompt(
             originalRequest = request.prompt,
             previousErrors = emptyList(),
-            projectContext = projectContext.promptContext(),
+            projectContext = projectContext.promptContext(
+                requestText = request.prompt,
+                targetPackage = request.context?.targetPackage,
+                expectedClassName = request.expectedClassName,
+                existingTypes = request.context?.existingTypes.orEmpty()
+            ),
             codeContext = request.context?.codeSnippet
         )
 
@@ -99,7 +108,11 @@ class PreGenerationStrategy(
         }
 
         val rawCode = result.data!!.code
-        val generatedCode = CodeCleaner.cleanCode(rawCode)
+        val generatedCode = ProjectImportNormalizer.normalize(
+            code = CodeCleaner.cleanCode(rawCode),
+            projectContext = projectContext,
+            primaryTypeName = request.expectedClassName ?: GeneratedTypeNameExtractor.extract(rawCode)
+        )
 
         var validationTime: Long = 0
         var score: ComplianceScore? = null

@@ -38,7 +38,7 @@ export class MultiFileParser {
         files.push({
           packageName,
           className: current.name,
-          code: header ? `${header}\n\n${body}` : body,
+          code: header ? `${header}\n${body}` : body,
           artifactKind: current.kind
         });
       }
@@ -57,6 +57,7 @@ export class MultiFileParser {
       const end = i + 1 < matches.length ? (matches[i + 1].index ?? code.length) : code.length;
       blocks.push(code.slice(start, end).trim());
     }
+
     return blocks.filter(Boolean);
   }
 

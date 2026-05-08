@@ -1,67 +1,22 @@
-export interface HealthResponse {
-  status: string;
-  version?: string;
-  timestamp?: string;
+export enum Severity {
+  INFO = 'INFO',
+  WARNING = 'WARNING',
+  ERROR = 'ERROR',
+  CRITICAL = 'CRITICAL'
 }
 
-export interface RulesConfig {
-  version?: string;
-  project_id: string;
-  project_type?: string;
-  rules: ArchitecturalRule[];
-  settings?: RuleSettings;
-  project_path?: string;
-  created_at?: string;
-  updated_at?: string;
+export enum StrategyType {
+  PRE = 'PRE',
+  POST = 'POST',
+  HYBRID = 'HYBRID'
 }
 
-export interface RuleSettings {
-  max_iterations?: number;
-  timeout_seconds?: number;
-  default_strategy?: string;
-  fail_on_critical?: boolean;
-  auto_fix_naming?: boolean;
-}
-
-export interface ArchitecturalRule {
-  id: string;
-  name: string;
-  description?: string;
-  type: RuleType;
-  from_package: string;
-  to_package?: string;
-  to_packages?: string[];
-  constraint: ConstraintType;
-  pattern?: string;
-  annotation?: string;
-  from_selector_mode?: SelectorMode;
-  to_selector_mode?: SelectorMode;
-  from_class_type?: ClassType;
-  to_class_type?: ClassType;
-  from_layer_type?: LayerType;
-  to_layer_type?: LayerType;
-  from_name_pattern?: string;
-  to_name_pattern?: string;
-  from_method_name_pattern?: string;
-  to_method_name_pattern?: string;
-  from_field_name_pattern?: string;
-  to_field_name_pattern?: string;
-  from_return_type?: string;
-  to_return_type?: string;
-  from_parameter_types?: string[];
-  to_parameter_types?: string[];
-  from_throws_types?: string[];
-  to_throws_types?: string[];
-  from_modifiers?: string[];
-  to_modifiers?: string[];
-  from_field_type?: string;
-  to_field_type?: string;
-  slice_pattern?: string;
-  max_cycle_length?: number;
-  severity: Severity;
-  weight: number;
-  enabled: boolean;
-  suggested: boolean;
+export enum ArtifactKind {
+  CLASS = 'CLASS',
+  INTERFACE = 'INTERFACE',
+  RECORD = 'RECORD',
+  ENUM = 'ENUM',
+  MULTI_FILE = 'MULTI_FILE'
 }
 
 export enum RuleType {
@@ -150,29 +105,6 @@ export enum LayerType {
   OTHER = 'OTHER'
 }
 
-export enum Severity {
-  INFO = 'INFO',
-  WARNING = 'WARNING',
-  ERROR = 'ERROR',
-  CRITICAL = 'CRITICAL'
-}
-
-export interface WorkspaceModuleSuggestions {
-  moduleId: string;
-  moduleRoot: string;
-  profile: ProjectProfileDetection;
-  rules: ArchitecturalRule[];
-}
-
-export interface ProjectProfileDetection {
-  primaryProfile: ProjectProfile;
-  confidence: number;
-  scores: Record<string, number>;
-  reasons: string[];
-  candidateProfiles: ProjectProfile[];
-  isConfident: boolean;
-}
-
 export enum ProjectProfile {
   SPRING_LAYERED = 'SPRING_LAYERED',
   SPRING_FEATURED = 'SPRING_FEATURED',
@@ -183,45 +115,99 @@ export enum ProjectProfile {
   UNKNOWN = 'UNKNOWN'
 }
 
-export interface CodeGenerationRequest {
-  prompt: string;
-  projectId: string;
-  strategy: StrategyType;
-  maxIterations?: number;
-  context?: GenerationContext;
-  rules?: string[];
-  collectMetrics?: boolean;
-  expectedClassName?: string;
-  classpath?: string;
+export enum ExportFormat {
+  CSV = 'CSV',
+  JSON = 'JSON',
+  JSON_PRETTY = 'JSON_PRETTY'
 }
 
-export enum StrategyType {
-  PRE = 'PRE',
-  POST = 'POST',
-  HYBRID = 'HYBRID'
+export interface ArchitecturalRule {
+  id: string;
+  name: string;
+  description?: string | null;
+  type: RuleType;
+  from_package: string;
+  to_package?: string | null;
+  to_packages?: string[] | null;
+  constraint: ConstraintType;
+  pattern?: string | null;
+  annotation?: string | null;
+  from_selector_mode?: SelectorMode;
+  to_selector_mode?: SelectorMode;
+  from_class_type?: ClassType | null;
+  to_class_type?: ClassType | null;
+  from_layer_type?: LayerType | null;
+  to_layer_type?: LayerType | null;
+  from_name_pattern?: string | null;
+  to_name_pattern?: string | null;
+  from_method_name_pattern?: string | null;
+  to_method_name_pattern?: string | null;
+  from_field_name_pattern?: string | null;
+  to_field_name_pattern?: string | null;
+  from_return_type?: string | null;
+  to_return_type?: string | null;
+  from_parameter_types?: string[] | null;
+  to_parameter_types?: string[] | null;
+  from_throws_types?: string[] | null;
+  to_throws_types?: string[] | null;
+  from_modifiers?: string[] | null;
+  to_modifiers?: string[] | null;
+  from_field_type?: string | null;
+  to_field_type?: string | null;
+  slice_pattern?: string | null;
+  max_cycle_length?: number | null;
+  severity: Severity;
+  weight: number;
+  enabled: boolean;
+  suggested: boolean;
 }
 
-export interface GenerationContext {
-  targetPackage?: string;
-  existingTypes?: string[];
-  codeSnippet?: string;
-  module?: string;
-  artifactKind?: ArtifactKind;
+export interface RuleSettings {
+  max_iterations: number;
+  timeout_seconds: number;
+  default_strategy: string;
+  fail_on_critical: boolean;
+  auto_fix_naming: boolean;
 }
 
-export enum ArtifactKind {
-  CLASS = 'CLASS',
-  INTERFACE = 'INTERFACE',
-  RECORD = 'RECORD',
-  ENUM = 'ENUM',
-  MULTI_FILE = 'MULTI_FILE'
+export interface RulesConfig {
+  version?: string | null;
+  project_id: string;
+  project_type?: string | null;
+  rules: ArchitecturalRule[];
+  settings?: RuleSettings | null;
+  project_path?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 }
 
-export interface CodeGenerationResponse {
+export interface ProjectProfileDetection {
+  primaryProfile: ProjectProfile | string;
+  confidence: number;
+  scores: Record<string, number>;
+  reasons: string[];
+  candidateProfiles: (ProjectProfile | string)[];
+  isConfident: boolean;
+}
+
+export interface WorkspaceModuleSuggestions {
+  moduleId: string;
+  moduleRoot: string;
+  profile: ProjectProfileDetection;
+  rules: ArchitecturalRule[];
+}
+
+export interface HealthResponse {
+  status: string;
+  timestamp?: string;
+  [key: string]: unknown;
+}
+
+export interface BackendSuccessResponse {
   success: boolean;
-  data?: GenerationData;
-  error?: ErrorDetails;
-  metadata: ResponseMetadata;
+  projectId?: string;
+  projectPath?: string;
+  error?: string;
 }
 
 export interface GeneratedFile {
@@ -231,6 +217,27 @@ export interface GeneratedFile {
   artifactKind: ArtifactKind;
 }
 
+export interface ValidationViolation {
+  ruleId: string;
+  description: string;
+  className: string;
+  lineNumber?: number | null;
+  severity: Severity;
+}
+
+export interface ComplianceScore {
+  total: number;
+  rulesPass: number;
+  patternMatch: number;
+  dependencyCorrect: number;
+  weights: {
+    rulesPass: number;
+    patternMatch: number;
+    dependencyCorrect: number;
+  };
+  violations: ValidationViolation[];
+  calculatedAt?: string;
+}
 
 export interface GenerationData {
   code: string;
@@ -242,42 +249,35 @@ export interface GenerationData {
   suggestions: string[];
 }
 
-export interface ComplianceScore {
-  total: number;
-  rulesPass: number;
-  patternMatch: number;
-  dependencyCorrect: number;
-  weights: ScoreWeights;
-  violations: Violation[];
-  calculatedAt?: string;
+export interface CodeGenerationRequest {
+  prompt: string;
+  projectId: string;
+  strategy?: StrategyType;
+  maxIterations?: number;
+  context?: {
+    targetPackage?: string | null;
+    existingTypes?: string[];
+    codeSnippet?: string | null;
+    module?: string | null;
+    artifactKind?: ArtifactKind | null;
+  } | null;
+  rules?: string[] | null;
+  collectMetrics?: boolean;
+  expectedClassName?: string | null;
+  classpath?: string | null;
 }
 
-export interface ScoreWeights {
-  rulesPass: number;
-  patternMatch: number;
-  dependencyCorrect: number;
-}
-
-export interface Violation {
-  ruleId: string;
-  description: string;
-  className: string;
-  lineNumber?: number | null;
-  severity: Severity;
-}
-
-export interface ErrorDetails {
-  code: string;
-  message: string;
-  details?: Record<string, unknown>;
-}
-
-export interface ResponseMetadata {
-  generationTimeMs: number;
-  validationTimeMs: number;
-  totalTimeMs: number;
-  timestamp: string;
-  model?: string | null;
+export interface CodeGenerationResponse {
+  success: boolean;
+  data?: GenerationData;
+  error?: { code: string; message: string; details?: Record<string, unknown> } | null;
+  metadata: {
+    generationTimeMs: number;
+    validationTimeMs: number;
+    totalTimeMs: number;
+    timestamp: string;
+    model?: string | null;
+  };
 }
 
 export interface ProjectMetrics {
@@ -329,67 +329,9 @@ export interface ExportRequest {
   includeViolations: boolean;
 }
 
-export enum ExportFormat {
-  CSV = 'CSV',
-  JSON = 'JSON',
-  JSON_PRETTY = 'JSON_PRETTY'
-}
-
-export interface ValidationRequest {
-  code: string;
-  className?: string;
-  projectId?: string;
-  classpath?: string;
-  rules?: RuleDefinition[];
-}
-
-export interface RuleDefinition {
-  id?: string;
-  name?: string;
-  description?: string;
-  type: string;
-  from_package: string;
-  to_package?: string;
-  to_packages?: string[];
-  constraint?: string;
-  from_selector_mode?: string;
-  to_selector_mode?: string;
-  from_class_type?: string;
-  to_class_type?: string;
-  from_layer_type?: string;
-  to_layer_type?: string;
-  from_name_pattern?: string;
-  to_name_pattern?: string;
-  from_method_name_pattern?: string;
-  to_method_name_pattern?: string;
-  from_field_name_pattern?: string;
-  to_field_name_pattern?: string;
-  from_return_type?: string;
-  to_return_type?: string;
-  from_parameter_types?: string[];
-  to_parameter_types?: string[];
-  from_throws_types?: string[];
-  to_throws_types?: string[];
-  from_modifiers?: string[];
-  to_modifiers?: string[];
-  from_field_type?: string;
-  to_field_type?: string;
-  pattern?: string;
-  annotation?: string;
-  slice_pattern?: string;
-  max_cycle_length?: number;
-  severity?: string;
-  weight?: number;
-  enabled: boolean;
-}
-
 export interface ValidationResult {
   passed: boolean;
-  violations: Violation[];
-  message?: string;
+  violations: ValidationViolation[];
+  message?: string | null;
   executionTimeMs: number;
-}
-
-export interface ValidationResponse {
-  result: ValidationResult;
 }

@@ -31,7 +31,7 @@ Thumbs.db
 application-local.yml
 
 # VS Code Extention
-archassistant-vscode/node_modules/
+*/node_modules/
 out/
 
 # Test

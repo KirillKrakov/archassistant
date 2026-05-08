@@ -1,46 +1,49 @@
 services:
-  # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
     container_name: archassistant-db
     environment:
-      POSTGRES_DB: archassistant
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-archassistant}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-archassistant}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # Backend Application
   backend:
     build:
       context: ./archassistant-backend
       dockerfile: Dockerfile
     container_name: archassistant-backend
     environment:
-      DB_USERNAME: ${POSTGRES_USER}
-      DB_PASSWORD: ${POSTGRES_PASSWORD}
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
-      MISTRAL_API_KEY: ${MISTRAL_API_KEY}
-      MISTRAL_MODEL: ${MISTRAL_MODEL}
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
+      DB_USERNAME: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-archassistant}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
+      MISTRAL_MODEL: ${MISTRAL_MODEL:-}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      PROJECTS_ROOT: /workspace/project
+      ARCHASSISTANT_CONFIG_ROOT: /data/archassistant
     ports:
       - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
-    # ← ИСПРАВЛЕНО: healthcheck теперь работает т.к. curl установлен в Dockerfile
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/api/health >/dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
+    volumes:
+      - "${PROJECT_PATH:?Set PROJECT_PATH before starting backend}:/workspace/project:ro"
+      - archassistant_config:/data/archassistant
 
 volumes:
   postgres_data:
+  archassistant_config:

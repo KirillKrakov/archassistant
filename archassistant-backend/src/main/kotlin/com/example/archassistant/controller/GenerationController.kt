@@ -59,7 +59,7 @@ class GenerationController(
         return try {
             val response = strategyOrchestrator.generate(request)
 
-            saveMetricsAsync(request.projectId, response)
+            saveMetricsAsync(request.projectId, request.prompt, response)
 
             when {
                 response.success -> ResponseEntity.ok(response)
@@ -105,12 +105,14 @@ class GenerationController(
         ))
     }
 
-    private fun saveMetricsAsync(projectId: String, response: CodeGenerationResponse) {
+    private fun saveMetricsAsync(projectId: String, prompt: String, response: CodeGenerationResponse) {
         try {
             val violations = response.data?.score?.violations.orEmpty()
             val record = GenerationRecord(
                 projectId = projectId,
                 strategy = response.data?.strategy ?: StrategyType.HYBRID,
+                prompt = prompt,
+                generatedCode = response.data?.code,
                 success = response.success,
                 scoreTotal = response.data?.score?.total,
                 scoreRulesPass = response.data?.score?.rulesPass,
