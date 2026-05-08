@@ -104,44 +104,14 @@ data class LayerStructure(
     val other: List<ClassInfo> = emptyList()
 )
 
-enum class ClassKind {
-    CLASS,
-    INTERFACE,
-    ENUM,
-    ANNOTATION,
-    OTHER
-}
-
-enum class ClassOrigin {
-    BASE,
-    OVERLAY
-}
-
-data class FieldInfo(
-    val name: String,
-    val type: String,
-    val modifiers: List<String> = emptyList()
-)
-
-data class ConstructorInfo(
-    val parameters: List<String> = emptyList(),
-    val modifiers: List<String> = emptyList()
-)
-
 data class ClassInfo(
     val fullName: String,
     val simpleName: String,
     val packageName: String,
-    val kind: ClassKind = ClassKind.CLASS,
-    val superClass: String? = null,
-    val interfaces: List<String> = emptyList(),
     val annotations: List<String> = emptyList(),
     val dependencies: List<String> = emptyList(),
     val modifiers: List<String> = emptyList(),
-    val fields: List<FieldInfo> = emptyList(),
-    val constructors: List<ConstructorInfo> = emptyList(),
-    val publicMethods: List<String> = emptyList(),
-    val origin: ClassOrigin = ClassOrigin.BASE
+    val publicMethods: List<String> = emptyList()
 )
 
 enum class ClassType {

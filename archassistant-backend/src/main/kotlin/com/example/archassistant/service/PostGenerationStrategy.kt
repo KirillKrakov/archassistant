@@ -4,7 +4,10 @@ import com.example.archassistant.dto.CodeGenerationRequest
 import com.example.archassistant.dto.CodeGenerationResponse
 import com.example.archassistant.dto.GenerationResponseFactory
 import com.example.archassistant.model.*
-import com.example.archassistant.util.*
+import com.example.archassistant.util.CodeCleaner
+import com.example.archassistant.util.ErrorFormatter
+import com.example.archassistant.util.GeneratedTypeNameExtractor
+import com.example.archassistant.util.PromptFormatter
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import kotlin.system.measureTimeMillis
@@ -47,22 +50,11 @@ class PostGenerationStrategy(
             ?: ruleRepository.load(request.projectId)?.getEnabledRules()
             ?: emptyList()
 
-        val baseSystemPrompt = PromptFormatter.formatSystemPrompt(
-            rules = emptyList(),
-            languageHint = projectContext.preferredLanguageHint()
-        )
-
-        val requestContextText = projectContext.promptContext(
-            requestText = request.prompt,
-            targetPackage = request.context?.targetPackage,
-            expectedClassName = request.expectedClassName,
-            existingTypes = request.context?.existingTypes.orEmpty()
-        )
-
+        val baseSystemPrompt = PromptFormatter.formatSystemPrompt(emptyList())
         val baseUserPrompt = PromptFormatter.formatUserPrompt(
             originalRequest = request.prompt,
             previousErrors = emptyList(),
-            projectContext = requestContextText,
+            projectContext = projectContext.promptContext(),
             codeContext = request.context?.codeSnippet
         )
 
@@ -85,7 +77,7 @@ class PostGenerationStrategy(
                 val enhancedUserPrompt = PromptFormatter.formatUserPrompt(
                     originalRequest = request.prompt,
                     previousErrors = emptyList(),
-                    projectContext = requestContextText,
+                    projectContext = projectContext.promptContext(),
                     codeContext = request.context?.codeSnippet
                 )
                 baseSystemPrompt to "$enhancedUserPrompt\n\n$errorSection"
@@ -111,11 +103,7 @@ class PostGenerationStrategy(
                     )
                 }
             }
-            val generatedCode = ProjectImportNormalizer.normalize(
-                code = CodeCleaner.cleanCode(rawCode),
-                projectContext = projectContext,
-                primaryTypeName = request.expectedClassName ?: GeneratedTypeNameExtractor.extract(rawCode)
-            )
+            val generatedCode = CodeCleaner.cleanCode(rawCode)
             totalGenerationTime += generationTime
             lastCode = generatedCode
 
