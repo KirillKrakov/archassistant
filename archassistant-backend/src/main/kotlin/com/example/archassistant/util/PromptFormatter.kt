@@ -7,103 +7,95 @@ import com.example.archassistant.model.Severity
 
 object PromptFormatter {
 
-    fun formatSystemPrompt(
-        rules: List<ArchitecturalRule>,
-        languageHint: String? = null
-    ): String {
-        val language = languageHint?.takeIf { it.isNotBlank() } ?: "Java/Kotlin"
-
+    fun formatSystemPrompt(rules: List<ArchitecturalRule>): String {
         val rulesSection = if (rules.isNotEmpty()) {
             """
-            |PROJECT ARCHITECTURAL RULES (mandatory to follow):
+            |АРХИТЕКТУРНЫЕ ПРАВИЛА ПРОЕКТА (обязательны к соблюдению):
             |${rules.joinToString("\n") { formatRule(it) }}
             |
-            |If the generated code violates these rules, it will be rejected.
+            |Если сгенерированный код нарушает эти правила, он будет отклонён.
             """.trimMargin()
         } else {
             ""
         }
 
         return """
-            You are an experienced $language developer.
-            Your task is to generate clean, efficient code while following the project's architectural standards.
+            Ты опытный разработчик на Java/Kotlin.
+            Твоя задача — генерировать чистый, эффективный код, соблюдая архитектурные стандарты проекта.
 
             $rulesSection
 
-            INSTRUCTIONS:
-            1. Return ONLY pure code, without explanations, comments, or markdown.
-            2. Use best practices for $language projects.
-            3. If a rule conflicts with the request, the architectural rule has priority.
-            4. If the request is incomplete, make reasonable assumptions only within the existing project context.
-            5. If the solution requires multiple classes, return them as separate complete source files.
-            6. Each source file must start with its own package declaration.
-            7. Never combine multiple package declarations in a single file.
-            8. If the user prompt contains project context, use only existing packages, classes, and methods from it.
-            9. Do not invent project-specific package roots that do not exist in the project context.
-            10. If you implement an existing interface or repository contract, include all abstract methods with exact signatures from the context.
-            11. Never generate a partial interface implementation: if an interface is selected, it must compile without missing abstract methods.
-            12. For simple immutable DTO/value objects in Java 16+, prefer record when it does not conflict with the project context.
-            13. If record is not suitable, use final fields + all-args constructor + getters.
-            14. Standard JDK/Spring/Jakarta imports are allowed when needed.
-            15. Do not invent project-specific imports outside knownPackages.
-            16. If the context defines a class contract, do not add extra fields, constructor parameters, or methods beyond that contract.
+            ИНСТРУКЦИИ:
+            1. Возвращай ТОЛЬКО чистый код, без объяснений, комментариев или markdown.
+            2. Используй лучшие практики для Java/Kotlin проектов.
+            3. Если правило противоречит запросу, приоритет у архитектурного правила.
+            4. Если запрос неполный, делай разумные предположения только внутри существующего контекста проекта.
+            5. Если для решения нужны несколько классов, возвращай их как отдельные полноценные source files.
+            6. Каждый source file должен начинаться со своей собственной package declaration.
+            7. Никогда не объединяй несколько package declaration в один файл.
+            8. Если в user prompt есть контекст проекта, используй только существующие пакеты, классы и методы из него.
+            9. Не выдумывай package roots, которых нет в контексте проекта.
+            10. Если ты реализуешь существующий интерфейс или repository contract, включи все abstract methods с точными сигнатурами из контекста.
+            11. Не генерируй частичную реализацию интерфейса: если интерфейс выбран, он должен компилироваться без пропусков abstract methods.
+            12. Не меняй тип артефакта без явной необходимости: сохраняй исходный intent запроса и применяй правила к нему.
         """.trimIndent()
     }
 
     private fun formatRule(rule: ArchitecturalRule): String {
         val prefix = when (rule.severity) {
-            Severity.CRITICAL -> "[MANDATORY] "
-            Severity.ERROR -> "[REQUIRED] "
-            Severity.WARNING -> "[RECOMMENDED] "
+            Severity.CRITICAL -> "[ОБЯЗАТЕЛЬНО] "
+            Severity.ERROR -> "[ТРЕБУЕТСЯ] "
+            Severity.WARNING -> "[РЕКОМЕНДУЕТСЯ] "
             else -> ""
         }
 
         return when (rule.type) {
-            RuleType.DEPENDENCY -> {
+            RuleType.DEPENDENCY, RuleType.LAYER_ISOLATION -> {
                 val target = rule.toPackage ?: rule.toPackages?.joinToString(", ") ?: "*"
-                "$prefix${rule.name}: classes in `${rule.fromPackage}` must not depend on `$target`"
-            }
-
-            RuleType.LAYER_ISOLATION -> {
-                val target = rule.toPackage ?: rule.toPackages?.joinToString(", ") ?: "*"
-                "$prefix${rule.name}: classes in `${rule.fromPackage}` must not depend on `$target`"
+                "$prefix${rule.name}: классы в `${rule.fromPackage}` не должны зависеть от `$target`"
             }
 
             RuleType.NAMING_CONVENTION -> {
-                "$prefix${rule.name}: classes in `${rule.fromPackage}` must ${
-                    if (rule.constraint == ConstraintType.NAMING_SUFFIX) "end with" else "start with"
-                } `${rule.pattern}`"
+                val action = if (rule.constraint == ConstraintType.NAMING_SUFFIX) {
+                    "заканчиваться на"
+                } else {
+                    "начинаться с"
+                }
+                "$prefix${rule.name}: классы в `${rule.fromPackage}` должны $action `${rule.pattern}`"
             }
 
             RuleType.ANNOTATION_CHECK -> {
-                "$prefix${rule.name}: classes in `${rule.fromPackage}` must ${
-                    if (rule.constraint == ConstraintType.HAS_ANNOTATION) "have" else "not have"
-                } annotation `${rule.annotation}`"
+                val action = if (rule.constraint == ConstraintType.HAS_ANNOTATION) {
+                    "иметь"
+                } else {
+                    "не иметь"
+                }
+                "$prefix${rule.name}: классы в `${rule.fromPackage}` должны $action аннотацию `${rule.annotation}`"
             }
 
             RuleType.CYCLE_CHECK -> {
                 val slice = rule.slicePattern ?: rule.fromPackage
-                "$prefix${rule.name}: package slices `$slice` must be free of cyclic dependencies"
+                "$prefix${rule.name}: package slices `$slice` должны быть без циклических зависимостей"
             }
 
             RuleType.INHERITANCE_CHECK -> {
                 val target = rule.toPackage ?: rule.toPackages?.joinToString(", ") ?: rule.toClassType?.name ?: "*"
                 val action = if (rule.constraint == ConstraintType.SHOULD_NOT_EXTEND) {
-                    "must not extend"
+                    "не должны наследоваться от"
                 } else {
-                    "must extend"
+                    "должны наследоваться от"
                 }
-                "$prefix${rule.name}: classes in `${rule.fromPackage}` $action `$target`"
+                "$prefix${rule.name}: классы в `${rule.fromPackage}` $action `$target`"
             }
 
             RuleType.INTERFACE_CHECK -> {
                 val target = rule.toPackage ?: rule.toPackages?.joinToString(", ") ?: rule.toClassType?.name ?: "*"
                 val action = if (rule.constraint == ConstraintType.SHOULD_NOT_IMPLEMENT) {
-                    "must not implement"
+                    "не должны реализовывать"
                 } else {
-                    "must implement"
+                    "должны реализовывать"
                 }
-                "$prefix${rule.name}: classes in `${rule.fromPackage}` $action `$target`"
+                "$prefix${rule.name}: классы в `${rule.fromPackage}` $action `$target`"
             }
 
             RuleType.MODIFIER_CHECK -> {
@@ -116,32 +108,33 @@ object PromptFormatter {
                 val action = when (rule.constraint) {
                     ConstraintType.SHOULD_NOT_BE_PUBLIC,
                     ConstraintType.SHOULD_NOT_BE_FINAL,
-                    ConstraintType.SHOULD_NOT_BE_ABSTRACT -> "must not be"
-                    else -> "must be"
+                    ConstraintType.SHOULD_NOT_BE_ABSTRACT -> "не должны быть"
+
+                    else -> "должны быть"
                 }
-                "$prefix${rule.name}: classes in `${rule.fromPackage}` $action `$modifier`"
+                "$prefix${rule.name}: классы в `${rule.fromPackage}` $action `$modifier`"
             }
 
             RuleType.METHOD_SIGNATURE_CHECK -> {
                 val parts = mutableListOf<String>()
-                rule.fromMethodNamePattern?.takeIf { it.isNotBlank() }?.let { parts += "name matches pattern `$it`" }
-                rule.fromReturnType?.takeIf { it.isNotBlank() }?.let { parts += "return `$it`" }
-                rule.fromParameterTypes?.takeIf { it.isNotEmpty() }?.let { parts += "accept parameters `${it.joinToString(", ")}`" }
-                rule.fromModifiers?.takeIf { it.isNotEmpty() }?.let { parts += "have modifiers `${it.joinToString(", ")}`" }
+                rule.fromMethodNamePattern?.takeIf { it.isNotBlank() }?.let { parts += "имя совпадает с шаблоном `$it`" }
+                rule.fromReturnType?.takeIf { it.isNotBlank() }?.let { parts += "возвращают `$it`" }
+                rule.fromParameterTypes?.takeIf { it.isNotEmpty() }?.let { parts += "принимают параметры `${it.joinToString(", ")}`" }
+                rule.fromModifiers?.takeIf { it.isNotEmpty() }?.let { parts += "имеют модификаторы `${it.joinToString(", ")}`" }
 
-                val details = if (parts.isNotEmpty()) parts.joinToString("; ") else "have the required signature"
-                "$prefix${rule.name}: methods in classes `${rule.fromPackage}` must satisfy `${rule.constraint}`; $details"
+                val details = if (parts.isNotEmpty()) parts.joinToString("; ") else "имеют требуемую сигнатуру"
+                "$prefix${rule.name}: методы классов в `${rule.fromPackage}` должны соответствовать `${rule.constraint}`; $details"
             }
 
             RuleType.FIELD_CHECK -> {
                 val parts = mutableListOf<String>()
-                rule.fromFieldNamePattern?.takeIf { it.isNotBlank() }?.let { parts += "name matches pattern `$it`" }
-                rule.fromFieldType?.takeIf { it.isNotBlank() }?.let { parts += "type `$it`" }
-                rule.annotation?.takeIf { it.isNotBlank() }?.let { parts += "annotation `$it`" }
-                rule.fromModifiers?.takeIf { it.isNotEmpty() }?.let { parts += "modifiers `${it.joinToString(", ")}`" }
+                rule.fromFieldNamePattern?.takeIf { it.isNotBlank() }?.let { parts += "имя совпадает с шаблоном `$it`" }
+                rule.fromFieldType?.takeIf { it.isNotBlank() }?.let { parts += "тип `$it`" }
+                rule.annotation?.takeIf { it.isNotBlank() }?.let { parts += "аннотация `$it`" }
+                rule.fromModifiers?.takeIf { it.isNotEmpty() }?.let { parts += "модификаторы `${it.joinToString(", ")}`" }
 
-                val details = if (parts.isNotEmpty()) parts.joinToString("; ") else "satisfy the required property"
-                "$prefix${rule.name}: fields in classes `${rule.fromPackage}` must satisfy `${rule.constraint}`; $details"
+                val details = if (parts.isNotEmpty()) parts.joinToString("; ") else "соответствуют требуемому свойству"
+                "$prefix${rule.name}: поля классов в `${rule.fromPackage}` должны соответствовать `${rule.constraint}`; $details"
             }
 
             RuleType.EXCEPTION_CHECK -> {
@@ -150,12 +143,12 @@ object PromptFormatter {
                     ?: "*"
 
                 val action = when (rule.constraint) {
-                    ConstraintType.SHOULD_ONLY_THROW -> "may only throw"
-                    ConstraintType.SHOULD_NOT_THROW -> "must not throw"
-                    else -> "must satisfy the exception constraint"
+                    ConstraintType.SHOULD_ONLY_THROW -> "могут выбрасывать только"
+                    ConstraintType.SHOULD_NOT_THROW -> "не должны выбрасывать"
+                    else -> "должны соблюдать ограничение на исключения"
                 }
 
-                "$prefix${rule.name}: methods in classes `${rule.fromPackage}` $action `$target`"
+                "$prefix${rule.name}: методы классов в `${rule.fromPackage}` $action `$target`"
             }
 
             RuleType.CUSTOM -> "$prefix${rule.name}: ${rule.description ?: rule.id}"
@@ -170,7 +163,7 @@ object PromptFormatter {
     ): String {
         val projectSection = projectContext?.takeIf { it.isNotBlank() }?.let {
             """
-            |PROJECT CONTEXT:
+            |КОНТЕКСТ ПРОЕКТА:
             |```text
             |$it
             |```
@@ -179,7 +172,7 @@ object PromptFormatter {
 
         val codeSection = codeContext?.takeIf { it.isNotBlank() }?.let {
             """
-            |REFERENCE CODE FROM PROJECT:
+            |РЕФЕРЕНСНЫЙ КОД ИЗ ПРОЕКТА:
             |```text
             |$it
             |```
@@ -188,10 +181,10 @@ object PromptFormatter {
 
         val errorSection = if (previousErrors.isNotEmpty()) {
             """
-            |⚠️ THE PREVIOUS VERSION VIOLATED THE FOLLOWING RULES:
+            |⚠️ ПРЕДЫДУЩАЯ ВЕРСИЯ НАРУШАЛА СЛЕДУЮЩИЕ ПРАВИЛА:
             |${previousErrors.joinToString("\n") { "- $it" }}
             |
-            |Fix these errors in the new version.
+            |Исправь эти ошибки в новой версии.
             """.trimMargin()
         } else {
             ""
@@ -204,12 +197,12 @@ object PromptFormatter {
             $codeSection
             $errorSection
 
-            Generate the code now.
-            If multiple classes are needed, output them as separate complete source files,
-            each with its own package declaration, without mixing multiple packages in one file.
-            Use only existing packages and signatures from the project context.
-            Do not invent project-specific imports outside knownPackages. Standard JDK/Spring/Jakarta imports are allowed.
-            Preserve the original intent of the request and do not change the artifact type unless explicitly required.
+            Сгенерируй код сейчас.
+            Если нужно несколько классов, выведи их как отдельные полноценные файлы,
+            каждый со своей package declaration, без смешивания нескольких package в одном файле.
+            Используй только существующие пакеты и сигнатуры из контекста проекта.
+            Не добавляй импорты из пакетов, которых нет в knownPackages.
+            Сохраняй исходный intent запроса и не меняй тип артефакта без явной необходимости.
         """.trimIndent()
     }
 }
