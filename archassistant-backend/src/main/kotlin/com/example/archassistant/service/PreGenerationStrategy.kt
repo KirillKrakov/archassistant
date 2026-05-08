@@ -34,7 +34,7 @@ class PreGenerationStrategy(
         }
 
         val projectContext = try {
-            projectContextService.requireProjectContext(request.projectId)
+            projectContextService.requireProjectContext(request.projectId, refresh = true)
         } catch (e: Exception) {
             return GenerationResponseFactory.error(
                 errorCode = "PROJECT_CONTEXT_NOT_AVAILABLE",

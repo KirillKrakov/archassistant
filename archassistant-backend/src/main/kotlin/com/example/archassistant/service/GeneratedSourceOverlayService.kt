@@ -2,20 +2,12 @@ package com.example.archassistant.service
 
 import com.example.archassistant.dto.GeneratedFilePayload
 import com.example.archassistant.dto.GeneratedFileSyncResponse
-import com.example.archassistant.util.ClasspathUtils
-import com.example.archassistant.util.CompilationException
-import com.example.archassistant.util.ProjectClasspathResolver
-import com.example.archassistant.util.RuntimeClasspathResolver
-import org.jetbrains.kotlin.cli.common.ExitCode
-import org.jetbrains.kotlin.cli.jvm.K2JVMCompiler
+import com.example.archassistant.util.*
 import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.OutputStreamWriter
-import java.io.PrintStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
@@ -25,7 +17,6 @@ import javax.tools.DiagnosticCollector
 import javax.tools.JavaFileObject
 import javax.tools.ToolProvider
 import kotlin.io.path.isDirectory
-import kotlin.io.path.isRegularFile
 
 @Service
 class GeneratedSourceOverlayService(
@@ -198,33 +189,14 @@ class GeneratedSourceOverlayService(
         outputDir: Path,
         projectPath: String
     ) {
-        val compiler = K2JVMCompiler()
-        val effectiveClasspath = effectiveClasspath(projectPath)
-
-        val args = mutableListOf(
-            "-d", outputDir.toString()
+        KotlinCompilationSupport.compileKotlin(
+            sourceFiles = sourceFiles,
+            outputDir = outputDir,
+            classpath = effectiveClasspath(projectPath),
+            projectContext = null,
+            logger = logger,
+            operationLabel = "GeneratedSourceOverlayService"
         )
-
-        if (effectiveClasspath.isNotBlank()) {
-            args += listOf("-classpath", effectiveClasspath)
-        }
-
-        args += sourceFiles.map { it.toString() }
-
-        val errStream = ByteArrayOutputStream()
-        val originalErr = System.err
-        System.setErr(PrintStream(errStream))
-
-        val exitCode = try {
-            compiler.exec(System.err, *args.toTypedArray())
-        } finally {
-            System.setErr(originalErr)
-        }
-
-        if (exitCode != ExitCode.OK) {
-            val errorMsg = errStream.toString("UTF-8")
-            throw CompilationException("Kotlin overlay compilation failed:\n$errorMsg")
-        }
     }
 
     private fun compileJava(
@@ -278,18 +250,20 @@ class GeneratedSourceOverlayService(
 
         return ClasspathUtils.mergeClasspathStrings(
             runtimeEntries.joinToString(File.pathSeparator),
+            BootClasspathResolver.resolveRuntimeClasspathString(),
             projectClasspath
         )
     }
 
     private fun writeOverlayFile(sourceRoot: Path, payload: GeneratedFilePayload): Path {
-        val language = payload.language?.trim()?.lowercase()
-        val kotlinByHint = language == "kotlin"
-        val kotlinByCode = detectKotlin(payload.code)
-        val isKotlin = kotlinByHint || (!kotlinByHint && kotlinByCode)
+        val inferredLanguage = when (payload.language?.trim()?.lowercase()) {
+            "kotlin" -> SourceLanguage.KOTLIN
+            "java" -> SourceLanguage.JAVA
+            else -> SourceLanguageDetector.detect(payload.code)
+        }
 
-        val sourceDir = if (isKotlin) "kotlin" else "java"
-        val extension = if (isKotlin) "kt" else "java"
+        val sourceDir = if (inferredLanguage == SourceLanguage.KOTLIN) "kotlin" else "java"
+        val extension = inferredLanguage.extension
 
         val packageName = effectivePackageName(payload)
         val simpleClassName = payload.className.substringAfterLast('.')
@@ -304,8 +278,7 @@ class GeneratedSourceOverlayService(
         Files.createDirectories(target.parent)
         Files.writeString(target, payload.code)
 
-        val siblingExtension = if (isKotlin) "java" else "kt"
-        val siblingTarget = target.resolveSibling("$simpleClassName.$siblingExtension")
+        val siblingTarget = target.resolveSibling("$simpleClassName.$extension")
         if (Files.exists(siblingTarget)) {
             Files.deleteIfExists(siblingTarget)
         }
@@ -334,15 +307,6 @@ class GeneratedSourceOverlayService(
             ?.getOrNull(1)
             ?.trim()
             ?.takeIf { it.isNotBlank() }
-    }
-
-    private fun detectKotlin(code: String): Boolean {
-        val kotlinKeywords = listOf("fun ", "val ", "var ", "?:", "!!", "data class", "sealed class", "object ")
-        val isKotlin = kotlinKeywords.any { code.contains(it) }
-        if (!isKotlin && code.contains("class ") && !code.contains(";")) {
-            return true
-        }
-        return isKotlin
     }
 
     private fun resolveProjectPath(projectId: String, explicitProjectPath: String?): String {

@@ -1,13 +1,9 @@
 package com.example.archassistant.util
 
 import com.example.archassistant.model.ProjectContextSnapshot
-import org.jetbrains.kotlin.cli.common.ExitCode
-import org.jetbrains.kotlin.cli.jvm.K2JVMCompiler
 import org.slf4j.LoggerFactory
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.OutputStreamWriter
-import java.io.PrintStream
 import java.nio.file.Files
 import java.nio.file.Path
 import javax.tools.DiagnosticCollector
@@ -31,7 +27,7 @@ class CodeCompiler {
             .parse(code, className)
             .ifEmpty {
                 val cleaned = CodeCleaner.cleanCode(code)
-                val extension = if (detectLanguage(cleaned)) "kt" else "java"
+                val extension = SourceLanguageDetector.detect(cleaned).extension
                 listOf(
                     GeneratedSourceFile(
                         packageName = null,
@@ -43,11 +39,21 @@ class CodeCompiler {
                 )
             }
             .map { generated ->
-                generated.copy(
+                val detectedExtension = SourceLanguageDetector.detect(generated.sourceCode).extension
+                val normalized = if (generated.extension.equals(detectedExtension, ignoreCase = true)) {
+                    generated
+                } else {
+                    generated.copy(
+                        extension = detectedExtension,
+                        relativePath = generated.relativePath.substringBeforeLast('.', generated.relativePath) + ".$detectedExtension"
+                    )
+                }
+
+                normalized.copy(
                     sourceCode = ProjectImportNormalizer.normalize(
-                        code = generated.sourceCode,
+                        code = normalized.sourceCode,
                         projectContext = projectContext,
-                        primaryTypeName = generated.className
+                        primaryTypeName = normalized.className
                     )
                 )
             }
@@ -72,15 +78,6 @@ class CodeCompiler {
         }
     }
 
-    private fun detectLanguage(code: String): Boolean {
-        val kotlinKeywords = listOf("fun ", "val ", "var ", "?:", "!!", "data class", "sealed class", "object ")
-        val isKotlin = kotlinKeywords.any { code.contains(it) }
-        if (!isKotlin && code.contains("class ") && !code.contains(";")) {
-            return true
-        }
-        return isKotlin
-    }
-
     private fun effectiveClasspath(
         classpath: String,
         projectContext: ProjectContextSnapshot?
@@ -88,9 +85,10 @@ class CodeCompiler {
         val runtimeEntries = RuntimeClasspathResolver.resolveRuntimeClasspathEntries().map { it.toString() }
 
         return ClasspathUtils.mergeClasspathStrings(
-            runtimeEntries.joinToString(File.pathSeparator),
-            classpath,
-            projectContext?.compilationClasspath
+                runtimeEntries.joinToString(File.pathSeparator),
+        BootClasspathResolver.resolveRuntimeClasspathString(),
+        classpath,
+        projectContext?.compilationClasspath
         )
     }
 
@@ -103,33 +101,14 @@ class CodeCompiler {
         val outputDir = tempRoot.resolve("classes")
         Files.createDirectories(outputDir)
 
-        val compiler = K2JVMCompiler()
-        val effectiveClasspath = effectiveClasspath(classpath, projectContext)
-
-        val args = mutableListOf(
-            "-d", outputDir.toString()
+        KotlinCompilationSupport.compileKotlin(
+            sourceFiles = sourceFiles,
+            outputDir = outputDir,
+            classpath = classpath,
+            projectContext = projectContext,
+            logger = logger,
+            operationLabel = "CodeCompiler"
         )
-
-        if (effectiveClasspath.isNotBlank()) {
-            args += listOf("-classpath", effectiveClasspath)
-        }
-
-        args += sourceFiles.map { it.toString() }
-
-        val errStream = ByteArrayOutputStream()
-        val originalErr = System.err
-        System.setErr(PrintStream(errStream))
-
-        val exitCode = try {
-            compiler.exec(System.err, *args.toTypedArray())
-        } finally {
-            System.setErr(originalErr)
-        }
-
-        if (exitCode != ExitCode.OK) {
-            val errorMsg = errStream.toString("UTF-8")
-            throw CompilationException("Kotlin compilation failed:\n$errorMsg")
-        }
 
         return tempRoot
     }

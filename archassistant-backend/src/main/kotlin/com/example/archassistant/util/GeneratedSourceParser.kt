@@ -25,8 +25,6 @@ object GeneratedSourceParser {
         val cleaned = CodeCleaner.cleanCode(rawCode)
         if (cleaned.isBlank()) return emptyList()
 
-        val overallExtension = if (looksLikeKotlin(cleaned)) "kt" else "java"
-
         val candidateBlocks = extractCodeBlocks(cleaned).ifEmpty { listOf(cleaned) }
 
         return candidateBlocks
@@ -34,14 +32,19 @@ object GeneratedSourceParser {
                 splitIntoPackageBlocks(block)
             }
             .mapNotNull { block ->
+                val extension = SourceLanguageDetector.detect(block).extension
                 buildSourceFile(
                     block = block,
-                    extension = overallExtension,
+                    extension = extension,
                     fallbackClassName = fallbackClassName
                 )
             }
             .ifEmpty {
-                buildFallbackSourceFile(cleaned, overallExtension, fallbackClassName)?.let { listOf(it) }
+                buildFallbackSourceFile(
+                    cleaned,
+                    SourceLanguageDetector.detect(cleaned).extension,
+                    fallbackClassName
+                )?.let { listOf(it) }
                     ?: emptyList()
             }
     }
@@ -139,19 +142,5 @@ object GeneratedSourceParser {
         } else {
             "$packagePath/$className.$extension"
         }
-    }
-
-    private fun looksLikeKotlin(code: String): Boolean {
-        val kotlinMarkers = listOf(
-            "fun ",
-            "val ",
-            "var ",
-            "data class",
-            "sealed class",
-            "object ",
-            "companion object",
-            "override fun"
-        )
-        return kotlinMarkers.any { code.contains(it) }
     }
 }

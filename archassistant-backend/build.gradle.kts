@@ -36,6 +36,8 @@ dependencies {
 
     // Kotlin compiler (для компиляции сгенерированного кода)
     implementation("org.jetbrains.kotlin:kotlin-compiler-embeddable:1.9.20")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib")
+    implementation("org.jetbrains.kotlin:kotlin-script-runtime")
 
     // Jackson Kotlin module — для корректной сериализации data class
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
