@@ -48,7 +48,7 @@ export class MultiFileParser {
   }
 
   private splitByPackage(code: string): string[] {
-    const matches = [...code.matchAll(/^package\s+[\w.]+\s*;/gm)];
+    const matches = [...code.matchAll(/^package\s+[\w.]+\s*;?\s*$/gm)];
     if (matches.length <= 1) return [code];
 
     const blocks: string[] = [];
@@ -62,7 +62,7 @@ export class MultiFileParser {
   }
 
   private extractPackage(block: string): string {
-    const match = block.match(/package\s+([\w.]+)\s*;/);
+    const match = block.match(/^\s*package\s+([\w.]+)\s*;?\s*$/m);
     return match ? match[1] : '';
   }
 

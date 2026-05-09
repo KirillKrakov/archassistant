@@ -213,6 +213,17 @@ function setStatus(message) {
   document.getElementById('status').textContent = message || '';
 }
 
+function resetResultView() {
+  generatedFiles = [];
+
+  document.getElementById('result').style.display = 'none';
+  document.getElementById('summary').innerHTML = '';
+  document.getElementById('metrics').innerHTML = '';
+  document.getElementById('warnings').innerHTML = '';
+  document.getElementById('violations').innerHTML = '';
+  document.getElementById('files').innerHTML = '';
+}
+
 function generate() {
   const prompt = document.getElementById('prompt').value;
   const strategy = document.getElementById('strategy').value;
@@ -224,6 +235,7 @@ function generate() {
     return;
   }
 
+  resetResultView();
   setStatus('The generation request has been sent, wait for a response.');
 
   vscode.postMessage({

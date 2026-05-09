@@ -12,7 +12,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-archassistant}"]
-      interval: 10s
+      interval: 45s
       timeout: 5s
       retries: 5
 
@@ -37,7 +37,7 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/api/health >/dev/null || exit 1"]
-      interval: 30s
+      interval: 90s
       timeout: 10s
       retries: 3
     volumes:
