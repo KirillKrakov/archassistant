@@ -12,6 +12,7 @@ data class ProjectContextSnapshot(
     val structure: ProjectStructure,
     val classesDirPaths: List<String> = emptyList(),
     val compilationClasspath: String = "",
+    val moduleRoots: List<String> = emptyList(),
     val createdAt: String = LocalDateTime.now().toString()
 ) {
     val architecturePattern: ArchitecturePattern?
@@ -36,13 +37,28 @@ data class ProjectContextSnapshot(
         get() = detectBasePackage(structure.packages)
 
     fun preferredLanguageHint(): String? {
-        val javaSrc = Paths.get(projectPath, "src", "main", "java")
-        val kotlinSrc = Paths.get(projectPath, "src", "main", "kotlin")
+        val candidateRoots = buildList {
+            add(projectPath)
+            addAll(moduleRoots)
+        }
+            .mapNotNull { runCatching { Paths.get(it) }.getOrNull() }
+            .distinct()
+
+        fun hasSourceRoot(root: Path, languageDir: String): Boolean {
+            val candidate = root
+                .resolve("src")
+                .resolve("main")
+                .resolve(languageDir)
+            return Files.exists(candidate)
+        }
+
+        val hasJava = candidateRoots.any { hasSourceRoot(it, "java") }
+        val hasKotlin = candidateRoots.any { hasSourceRoot(it, "kotlin") }
 
         return when {
-            Files.exists(javaSrc) && !Files.exists(kotlinSrc) -> "Java"
-            Files.exists(kotlinSrc) && !Files.exists(javaSrc) -> "Kotlin"
-            Files.exists(javaSrc) && Files.exists(kotlinSrc) -> "Java/Kotlin"
+            hasJava && hasKotlin -> "Java/Kotlin"
+            hasJava -> "Java"
+            hasKotlin -> "Kotlin"
             else -> null
         }
     }
@@ -76,6 +92,7 @@ data class ProjectContextSnapshot(
         val sourceLanguage = preferredLanguageHint() ?: "mixed/unknown"
         val packageText = packages.sorted().take(maxPackages).joinToString(", ").ifBlank { "none" }
         val featureRootsText = structure.featureRoots(basePackage).take(10).joinToString(", ").ifBlank { "none" }
+        val moduleRootsText = moduleRoots.take(12).joinToString(", ").ifBlank { "none" }
 
         val request = requestText.orEmpty()
         val focusClassNames = resolveFocusClassNames(request, expectedClassName, existingTypes)
@@ -156,6 +173,7 @@ data class ProjectContextSnapshot(
             PROJECT CONTEXT
             - projectId: $projectId
             - projectPath: $projectPath
+            - moduleRoots: $moduleRootsText
             - sourceLanguage: $sourceLanguage
             - basePackage: ${if (basePackage.isBlank()) "unknown" else basePackage}
             - architecturePattern: ${architecturePattern?.name ?: "unknown"}

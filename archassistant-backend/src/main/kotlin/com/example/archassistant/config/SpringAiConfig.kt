@@ -29,7 +29,7 @@ class SpringAiConfig {
         return OpenAiChatOptions.builder()
             .withModel(model)
             .withTemperature(0.2)
-            .withMaxTokens(8000)
+            .withMaxTokens(10000)
             .withFrequencyPenalty(0.0)
             .withPresencePenalty(0.0)
             .build()
