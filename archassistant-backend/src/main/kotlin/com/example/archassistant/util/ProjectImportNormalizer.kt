@@ -19,11 +19,16 @@ object ProjectImportNormalizer {
         if (projectContext == null || code.isBlank()) return code
 
         val currentPackage = packageRegex.find(code)?.groupValues?.getOrNull(1)?.trim()?.trim('.')
+
         val existingImports = importRegex.findAll(code)
             .mapNotNull { match ->
                 ProjectTypeNameResolver.normalizeTypeName(match.groupValues.getOrNull(1))
             }
             .toSet()
+
+        val existingImportedSimpleNames = existingImports
+            .filter { !it.endsWith(".*") }
+            .associateBy { it.substringAfterLast('.') }
 
         val declaredTypes = linkedSetOf<String>().apply {
             primaryTypeName
@@ -50,7 +55,13 @@ object ProjectImportNormalizer {
             .filter { token -> token !in declaredTypes }
             .mapNotNull { token -> importIndex[token] }
             .filter { fqcn ->
-                currentPackage.isNullOrBlank() || !fqcn.startsWith("$currentPackage.")
+                val normalizedCurrentPackage = currentPackage?.trim('.')
+                normalizedCurrentPackage.isNullOrBlank() || !fqcn.startsWith("$normalizedCurrentPackage.")
+            }
+            .filter { fqcn ->
+                val simpleName = fqcn.substringAfterLast('.')
+                val existingFqcn = existingImportedSimpleNames[simpleName]
+                existingFqcn == null || existingFqcn == fqcn
             }
             .filter { fqcn -> fqcn !in existingImports }
             .distinct()

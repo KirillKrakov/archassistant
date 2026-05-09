@@ -1,15 +1,18 @@
 package com.example.archassistant.service
 
 import com.example.archassistant.model.*
+import com.example.archassistant.model.ProjectContextSnapshot
 import com.example.archassistant.util.ArchUnitRuleBuilder
 import com.example.archassistant.util.ArchUnitValidationUtils
 import com.example.archassistant.util.CodeCompiler
-import com.example.archassistant.model.ProjectContextSnapshot
 import com.tngtech.archunit.core.domain.JavaClasses
 import com.tngtech.archunit.core.importer.ClassFileImporter
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import java.io.File
+import java.net.URL
 import java.nio.file.Path
+import java.nio.file.Paths
 import kotlin.system.measureTimeMillis
 
 @Service
@@ -76,7 +79,7 @@ class DynamicRuleValidator(
             tempRoot = codeCompiler.compileCode(code, className, classpath, projectContext)
             val classesDir = tempRoot.resolve("classes")
 
-            val importedClasses: JavaClasses = ClassFileImporter().importPath(classesDir)
+            val importedClasses: JavaClasses = importCompiledClasses(classesDir, classpath)
             val enabledRules = rules.filter { it.enabled }
 
             val validPairs = enabledRules.mapNotNull { rule ->
@@ -152,24 +155,30 @@ class DynamicRuleValidator(
         }
     }
 
-    fun validateSingleRule(
-        code: String,
-        className: String,
-        rule: ArchitecturalRule,
-        classpath: String = "",
-        projectContext: ProjectContextSnapshot? = null
-    ): ValidationResult {
-        return validate(code, className, listOf(rule), classpath, projectContext)
+    private fun importCompiledClasses(classesDir: Path, classpath: String): JavaClasses {
+        val importUrls = linkedSetOf<URL>()
+        importUrls += classesDir.toUri().toURL()
+        importUrls += resolveClasspathUrls(classpath)
+
+        return ClassFileImporter().importUrls(importUrls.toList())
     }
 
-    fun validateBatch(
-        codeSnippets: List<Pair<String, String>>,
-        rules: List<ArchitecturalRule>,
-        classpath: String = "",
-        projectContext: ProjectContextSnapshot? = null
-    ): Map<String, ValidationResult> {
-        return codeSnippets.associate { (code, className) ->
-            className to validate(code, className, rules, classpath, projectContext)
-        }
+    private fun resolveClasspathUrls(classpath: String): List<URL> {
+        if (classpath.isBlank()) return emptyList()
+
+        return classpath
+            .split(File.pathSeparator)
+            .asSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .mapNotNull { entry ->
+                runCatching {
+                    Paths.get(entry).toUri().toURL()
+                }.getOrElse {
+                    logger.warn("Skipping invalid classpath entry for ArchUnit import: {}", entry)
+                    null
+                }
+            }
+            .toList()
     }
 }

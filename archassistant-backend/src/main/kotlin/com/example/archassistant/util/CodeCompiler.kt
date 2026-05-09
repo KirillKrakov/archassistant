@@ -3,10 +3,10 @@ package com.example.archassistant.util
 import com.example.archassistant.model.ProjectContextSnapshot
 import org.jetbrains.kotlin.cli.common.ExitCode
 import org.jetbrains.kotlin.cli.jvm.K2JVMCompiler
+import org.jetbrains.kotlin.cli.jvm.compiler.setupIdeaStandaloneExecution
 import org.slf4j.LoggerFactory
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.OutputStreamWriter
 import java.io.PrintStream
 import java.nio.file.Files
 import java.nio.file.Path
@@ -16,6 +16,7 @@ import javax.tools.ToolProvider
 
 class CodeCompiler {
     private val logger = LoggerFactory.getLogger(CodeCompiler::class.java)
+
     private val javaCompiler = ToolProvider.getSystemJavaCompiler()
         ?: throw IllegalStateException("Java compiler not available. Use JDK, not JRE.")
 
@@ -73,12 +74,17 @@ class CodeCompiler {
     }
 
     private fun detectLanguage(code: String): Boolean {
-        val kotlinKeywords = listOf("fun ", "val ", "var ", "?:", "!!", "data class", "sealed class", "object ")
-        val isKotlin = kotlinKeywords.any { code.contains(it) }
-        if (!isKotlin && code.contains("class ") && !code.contains(";")) {
-            return true
-        }
-        return isKotlin
+        val kotlinMarkers = listOf(
+            "fun ",
+            "val ",
+            "var ",
+            "?:",
+            "!!",
+            "data class",
+            "sealed class",
+            "object "
+        )
+        return kotlinMarkers.any { code.contains(it) }
     }
 
     private fun effectiveClasspath(
@@ -103,11 +109,17 @@ class CodeCompiler {
         val outputDir = tempRoot.resolve("classes")
         Files.createDirectories(outputDir)
 
+        // Important for Kotlin compiler running inside a Spring Boot executable jar.
+        setupIdeaStandaloneExecution()
+
         val compiler = K2JVMCompiler()
         val effectiveClasspath = effectiveClasspath(classpath, projectContext)
 
         val args = mutableListOf(
-            "-d", outputDir.toString()
+            "-d", outputDir.toString(),
+            "-jvm-target", "17",
+            "-no-stdlib",
+            "-no-reflect"
         )
 
         if (effectiveClasspath.isNotBlank()) {
@@ -118,17 +130,16 @@ class CodeCompiler {
 
         val errStream = ByteArrayOutputStream()
         val originalErr = System.err
-        System.setErr(PrintStream(errStream))
 
-        val exitCode = try {
-            compiler.exec(System.err, *args.toTypedArray())
+        System.setErr(PrintStream(errStream))
+        try {
+            val exitCode = compiler.exec(System.err, *args.toTypedArray())
+            if (exitCode != ExitCode.OK) {
+                val errorMsg = errStream.toString(Charsets.UTF_8)
+                throw CompilationException("Kotlin compilation failed:\n$errorMsg")
+            }
         } finally {
             System.setErr(originalErr)
-        }
-
-        if (exitCode != ExitCode.OK) {
-            val errorMsg = errStream.toString("UTF-8")
-            throw CompilationException("Kotlin compilation failed:\n$errorMsg")
         }
 
         return tempRoot
@@ -157,10 +168,8 @@ class CodeCompiler {
             }
 
             val diagnostics = DiagnosticCollector<JavaFileObject>()
-            val outWriter = OutputStreamWriter(System.out)
-
             val task = javaCompiler.getTask(
-                outWriter,
+                null,
                 fileManager,
                 diagnostics,
                 options,
