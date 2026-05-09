@@ -1,6 +1,7 @@
 package com.example.archassistant.model
 
 import com.example.archassistant.util.ClasspathUtils
+import com.example.archassistant.util.ProjectTypeNameResolver
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -94,26 +95,34 @@ data class ProjectContextSnapshot(
         val featureRootsText = structure.featureRoots(basePackage).take(10).joinToString(", ").ifBlank { "none" }
         val moduleRootsText = moduleRoots.take(12).joinToString(", ").ifBlank { "none" }
 
+        val normalizedTargetPackage = ProjectTypeNameResolver.normalizePackageName(targetPackage)
         val request = requestText.orEmpty()
-        val focusClassNames = resolveFocusClassNames(request, expectedClassName, existingTypes)
-        val focusPackage = resolveFocusPackage(request, targetPackage)
 
-        val rankedClasses = classes.sortedWith(
-            compareByDescending<ClassInfo> { relevanceScore(it, request, focusClassNames, focusPackage) }
-                .thenBy { it.fullName }
+        val focusTypeAliases = resolveFocusTypeAliases(request, expectedClassName, existingTypes)
+        val focusPackage = resolveFocusPackage(request, normalizedTargetPackage)
+
+        val visibleClasses = classes.filter { info ->
+            ProjectTypeNameResolver.isVisibleInPrompt(info, normalizedTargetPackage)
+        }
+
+        val visibleClassNames = visibleClasses.map { it.canonicalName }.toSet()
+
+        val rankedClasses = visibleClasses.sortedWith(
+            compareByDescending<ClassInfo> { relevanceScore(it, request, focusTypeAliases, focusPackage) }
+                .thenBy { it.canonicalName }
         )
 
         val focusClasses = rankedClasses
             .filter { info ->
-                info.simpleName in focusClassNames ||
+                ProjectTypeNameResolver.matchesRequestedNames(info, focusTypeAliases) ||
                         (focusPackage != null && (info.packageName == focusPackage || info.packageName.startsWith("$focusPackage.")))
             }
-            .distinctBy { it.fullName }
+            .distinctBy { it.canonicalName }
             .take(maxPriorityClasses)
 
-        val focusClassNamesSet = focusClasses.map { it.fullName }.toSet()
+        val focusClassNamesSet = focusClasses.map { it.canonicalName }.toSet()
         val remainingClasses = rankedClasses
-            .filterNot { it.fullName in focusClassNamesSet }
+            .filterNot { it.canonicalName in focusClassNamesSet }
             .take(maxClassSignatures)
 
         val focusContractsText = renderClassContracts(
@@ -134,14 +143,15 @@ data class ProjectContextSnapshot(
             .filter { it.value.isNotEmpty() }
             .joinToString("\n") { (layer, infos) ->
                 val visible = infos
+                    .filter { it.canonicalName in visibleClassNames }
                     .sortedWith(
-                        compareByDescending<ClassInfo> { relevanceScore(it, request, focusClassNames, focusPackage) }
-                            .thenBy { it.fullName }
+                        compareByDescending<ClassInfo> { relevanceScore(it, request, focusTypeAliases, focusPackage) }
+                            .thenBy { it.canonicalName }
                     )
                     .take(maxClassesPerLayer)
 
-                val names = visible.joinToString(", ") { it.fullName }
-                val remaining = infos.size - visible.size
+                val names = visible.joinToString(", ") { it.canonicalName }
+                val remaining = infos.count { it.canonicalName in visibleClassNames } - visible.size
                 val suffix = if (remaining > 0) " … (+$remaining more)" else ""
                 "- ${layer.name.lowercase()}: $names$suffix"
             }
@@ -150,23 +160,29 @@ data class ProjectContextSnapshot(
         val dependencyText = dependencies
             .take(maxDependencies)
             .joinToString("\n") { dep ->
-                "- ${dep.from} -> ${dep.to} [${dep.type.name.lowercase()}]"
+                "- ${ProjectTypeNameResolver.normalizeTypeText(dep.from)} -> ${ProjectTypeNameResolver.normalizeTypeText(dep.to)} [${dep.type.name.lowercase()}]"
             }
             .ifBlank { "- none" }
 
-        val importHintsText = if (focusClasses.isNotEmpty()) {
-            focusClasses.joinToString("\n") { info ->
-                "- import ${info.fullName}"
+        val importHintsText = focusClasses
+            .asSequence()
+            .filter { it.isPublicType }
+            .filter { normalizedTargetPackage == null || it.packageName != normalizedTargetPackage }
+            .distinctBy { it.canonicalName }
+            .joinToString("\n") { info ->
+                "- import ${info.canonicalName}"
             }
-        } else {
-            "- none"
-        }
+            .ifBlank { "- none" }
 
         val requestSummaryText = buildString {
             appendLine("requestedFocus:")
             appendLine("  - expectedClassName: ${expectedClassName ?: "none"}")
-            appendLine("  - targetPackage: ${focusPackage ?: targetPackage ?: "none"}")
-            appendLine("  - referencedTypes: ${if (focusClassNames.isNotEmpty()) focusClassNames.joinToString(", ") else "none"}")
+            appendLine("  - targetPackage: ${focusPackage ?: normalizedTargetPackage ?: targetPackage ?: "none"}")
+            appendLine(
+                "  - referencedTypes: ${
+                    if (focusTypeAliases.isNotEmpty()) focusTypeAliases.sorted().joinToString(", ") else "none"
+                }"
+            )
         }.trimEnd()
 
         return """
@@ -209,36 +225,32 @@ data class ProjectContextSnapshot(
             - Prefer existing classes and exact public method signatures from this context.
             - Never invent repository/service/controller types if a matching class is already present in the project.
             - If a request references a type from another package, import it explicitly.
+            - Treat nested types with canonical Java dotted syntax (Outer.Inner), not with '$'.
+            - Avoid referencing package-private types from another package; only use them inside the same package.
             - For simple immutable DTO/value objects in Java 16+, prefer record unless the prompt clearly asks for a bean style.
             - Do not add extra constructor parameters or fields beyond the contract shown in requestRelevantTypeContracts.
         """.trimIndent()
     }
 
-    private fun resolveFocusClassNames(
+    private fun resolveFocusTypeAliases(
         requestText: String,
         expectedClassName: String?,
         existingTypes: Collection<String>
     ): Set<String> {
         val result = linkedSetOf<String>()
 
-        expectedClassName
-            ?.trim()
-            ?.takeIf { it.isNotBlank() }
-            ?.substringAfterLast('.')
-            ?.let { result.add(it) }
+        fun addAliases(raw: String?) {
+            ProjectTypeNameResolver.typeAliases(raw).forEach { result.add(it) }
+        }
 
-        existingTypes
-            .asSequence()
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-            .map { it.substringAfterLast('.') }
-            .forEach { result.add(it) }
+        addAliases(expectedClassName)
+        existingTypes.forEach { addAliases(it) }
 
         classes.asSequence()
-            .map { it.simpleName }
-            .distinct()
-            .filter { simpleName -> requestText.contains(simpleName, ignoreCase = true) }
-            .forEach { result.add(it) }
+            .filter { ProjectTypeNameResolver.matchesRequestText(it, requestText) }
+            .forEach { info ->
+                info.canonicalTypeAliases().forEach { result.add(it) }
+            }
 
         return result
     }
@@ -260,20 +272,23 @@ data class ProjectContextSnapshot(
     private fun relevanceScore(
         info: ClassInfo,
         requestText: String,
-        focusClassNames: Set<String>,
+        focusTypeAliases: Set<String>,
         focusPackage: String?
     ): Int {
         var score = 0
 
         if (info.origin == ClassOrigin.OVERLAY) score += 1000
-        if (info.simpleName in focusClassNames) score += 800
+        if (ProjectTypeNameResolver.matchesRequestedNames(info, focusTypeAliases)) score += 800
+
         if (focusPackage != null) {
             if (info.packageName == focusPackage) score += 500
             if (info.packageName.startsWith("$focusPackage.")) score += 250
         }
 
         val request = requestText.lowercase()
-        if (request.contains("dto") && info.simpleName.endsWith("Dto")) score += 30
+        val displaySimpleName = ProjectTypeNameResolver.displaySimpleName(info)
+
+        if (request.contains("dto") && displaySimpleName.endsWith("Dto", ignoreCase = true)) score += 30
         if (request.contains("validator") && info.packageName.contains(".validation")) score += 30
         if (request.contains("service") && info.packageName.contains(".service")) score += 20
         if (request.contains("controller") && info.packageName.contains("controller")) score += 20
@@ -281,7 +296,7 @@ data class ProjectContextSnapshot(
         if (info.kind == ClassKind.INTERFACE) score += 10
         if (info.kind == ClassKind.ANNOTATION) score += 5
 
-        val occurrenceIndex = focusClassNames
+        val occurrenceIndex = focusTypeAliases
             .mapNotNull { name -> requestText.indexOf(name, ignoreCase = true).takeIf { it >= 0 } }
             .minOrNull()
 
@@ -309,35 +324,48 @@ data class ProjectContextSnapshot(
         maxFieldsPerClass: Int,
         maxConstructorsPerClass: Int
     ): String {
-        val modifiersText = if (info.modifiers.isNotEmpty()) info.modifiers.joinToString(" ") else "none"
-        val superClassText = info.superClass ?: "none"
-        val interfacesText = if (info.interfaces.isNotEmpty()) info.interfaces.joinToString(", ") else "none"
+        val modifiersText = if (info.modifiers.isNotEmpty()) info.modifiers.joinToString(" ") else info.visibilityLabel
+        val superClassText = ProjectTypeNameResolver.normalizeTypeText(info.superClass).ifBlank { "none" }
+        val interfacesText = if (info.interfaces.isNotEmpty()) {
+            info.interfaces.joinToString(", ") { ProjectTypeNameResolver.normalizeTypeText(it) }
+        } else {
+            "none"
+        }
+
         val fieldsText = if (info.fields.isEmpty()) {
             "    - none"
         } else {
             info.fields.take(maxFieldsPerClass).joinToString("\n") { field ->
                 val fieldModifiers = if (field.modifiers.isNotEmpty()) field.modifiers.joinToString(" ") + " " else ""
-                "    - ${fieldModifiers}${field.type} ${field.name}"
+                "    - ${fieldModifiers}${ProjectTypeNameResolver.normalizeTypeText(field.type)} ${field.name}"
             }
         }
+
         val constructorsText = if (info.constructors.isEmpty()) {
             "    - none"
         } else {
             info.constructors.take(maxConstructorsPerClass).joinToString("\n") { ctor ->
                 val ctorModifiers = if (ctor.modifiers.isNotEmpty()) ctor.modifiers.joinToString(" ") + " " else ""
-                val params = ctor.parameters.joinToString(", ")
-                "    - ${ctorModifiers}${info.simpleName}($params)"
+                val params = ctor.parameters
+                    .map { ProjectTypeNameResolver.normalizeTypeText(it) }
+                    .joinToString(", ")
+                "    - ${ctorModifiers}${ProjectTypeNameResolver.displaySimpleName(info)}($params)"
             }
         }
+
         val methodsText = if (info.publicMethods.isEmpty()) {
             "    - none"
         } else {
-            info.publicMethods.take(10).joinToString("\n") { sig -> "    - $sig" }
+            info.publicMethods.take(10).joinToString("\n") { sig ->
+                "    - ${ProjectTypeNameResolver.normalizeTypeText(sig)}"
+            }
         }
 
         return """
-            - ${info.fullName} [${info.kind.name.lowercase()}, ${info.origin.name.lowercase()}]
+            - ${ProjectTypeNameResolver.displayName(info)} [${info.kind.name.lowercase()}, ${info.origin.name.lowercase()}]
               package: ${info.packageName}
+              accessibility: ${info.visibilityLabel}
+              nesting: ${if (info.isNestedType) "nested" else "top-level"}
               modifiers: $modifiersText
               superClass: $superClassText
               interfaces: $interfacesText

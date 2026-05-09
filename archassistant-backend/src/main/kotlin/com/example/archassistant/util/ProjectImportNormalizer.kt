@@ -18,33 +18,41 @@ object ProjectImportNormalizer {
     ): String {
         if (projectContext == null || code.isBlank()) return code
 
-        val currentPackage = packageRegex.find(code)?.groupValues?.getOrNull(1)?.trim()
+        val currentPackage = packageRegex.find(code)?.groupValues?.getOrNull(1)?.trim()?.trim('.')
         val existingImports = importRegex.findAll(code)
-            .map { it.groupValues[1].trim() }
+            .mapNotNull { match ->
+                ProjectTypeNameResolver.normalizeTypeName(match.groupValues.getOrNull(1))
+            }
             .toSet()
 
-        val declaredTypes = buildSet {
-            primaryTypeName?.trim()?.takeIf { it.isNotBlank() }?.substringAfterLast('.')?.let { add(it) }
-            declaredTypeRegex.findAll(code).forEach { match -> add(match.groupValues[1]) }
+        val declaredTypes = linkedSetOf<String>().apply {
+            primaryTypeName
+                ?.let { ProjectTypeNameResolver.typeAliases(it) }
+                ?.forEach { add(it) }
+
+            declaredTypeRegex.findAll(code).forEach { match ->
+                ProjectTypeNameResolver.typeAliases(match.groupValues.getOrNull(1))
+                    .forEach { add(it) }
+            }
         }
 
-        val simpleToFqcn = projectContext.classes
-            .groupBy { it.simpleName }
-            .mapNotNull { (simpleName, infos) ->
-                if (infos.size == 1) simpleName to infos.single().fullName else null
-            }
-            .toMap()
+        val importIndex = ProjectTypeNameResolver.buildUniqueImportIndex(
+            classes = projectContext.classes,
+            currentPackage = currentPackage
+        )
 
-        val referencedTokens = typeTokenRegex.findAll(code).map { it.value }.toSet()
+        val referencedTokens = typeTokenRegex.findAll(code)
+            .map { it.value }
+            .toSet()
 
         val importsToAdd = referencedTokens
             .asSequence()
-            .filter { it !in declaredTypes }
-            .mapNotNull { simpleName -> simpleToFqcn[simpleName] }
+            .filter { token -> token !in declaredTypes }
+            .mapNotNull { token -> importIndex[token] }
             .filter { fqcn ->
                 currentPackage.isNullOrBlank() || !fqcn.startsWith("$currentPackage.")
             }
-            .filter { fqcn -> existingImports.none { it == fqcn } }
+            .filter { fqcn -> fqcn !in existingImports }
             .distinct()
             .sorted()
             .toList()

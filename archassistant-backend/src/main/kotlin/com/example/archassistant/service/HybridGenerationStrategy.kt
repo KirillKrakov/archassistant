@@ -4,7 +4,11 @@ import com.example.archassistant.dto.CodeGenerationRequest
 import com.example.archassistant.dto.CodeGenerationResponse
 import com.example.archassistant.dto.GenerationResponseFactory
 import com.example.archassistant.model.*
-import com.example.archassistant.util.*
+import com.example.archassistant.util.CodeCleaner
+import com.example.archassistant.util.ErrorFormatter
+import com.example.archassistant.util.GeneratedTypeNameExtractor
+import com.example.archassistant.util.ProjectImportNormalizer
+import com.example.archassistant.util.PromptFormatter
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import kotlin.system.measureTimeMillis
@@ -47,6 +51,10 @@ class HybridGenerationStrategy(
             ?: ruleRepository.load(request.projectId)?.getEnabledRules()
             ?: emptyList()
 
+        val normalizedTargetPackage = request.normalizedTargetPackage()
+        val normalizedExpectedClassName = request.normalizedExpectedClassName()
+        val normalizedExistingTypes = request.normalizedExistingTypes()
+
         val baseSystemPrompt = PromptFormatter.formatSystemPrompt(
             rules = rules,
             languageHint = projectContext.preferredLanguageHint()
@@ -54,9 +62,9 @@ class HybridGenerationStrategy(
 
         val requestContextText = projectContext.promptContext(
             requestText = request.prompt,
-            targetPackage = request.context?.targetPackage,
-            expectedClassName = request.expectedClassName,
-            existingTypes = request.context?.existingTypes.orEmpty()
+            targetPackage = normalizedTargetPackage,
+            expectedClassName = normalizedExpectedClassName,
+            existingTypes = normalizedExistingTypes
         )
 
         val baseUserPrompt = PromptFormatter.formatUserPrompt(
@@ -109,18 +117,20 @@ class HybridGenerationStrategy(
                     )
                 }
             }
+
             val generatedCode = ProjectImportNormalizer.normalize(
                 code = CodeCleaner.cleanCode(rawCode),
                 projectContext = projectContext,
-                primaryTypeName = request.expectedClassName ?: GeneratedTypeNameExtractor.extract(rawCode)
+                primaryTypeName = normalizedExpectedClassName ?: GeneratedTypeNameExtractor.extract(rawCode)?.replace('$', '.')
             )
+
             totalGenerationTime += generationTime
             lastCode = generatedCode
 
-            val className = request.expectedClassName ?: GeneratedTypeNameExtractor.extract(generatedCode)
+            val className = normalizedExpectedClassName ?: GeneratedTypeNameExtractor.extract(generatedCode)?.replace('$', '.')
             var validationTime = 0L
-            var score: ComplianceScore?
-            var violations: List<Violation>
+            var score: ComplianceScore? = null
+            var violations: List<Violation> = emptyList()
 
             try {
                 if (className != null) {
@@ -243,4 +253,22 @@ class HybridGenerationStrategy(
 
         return warnings
     }
+
+    private fun CodeGenerationRequest.normalizedTargetPackage(): String? =
+        context?.targetPackage
+            ?.trim()
+            ?.trim('.')
+            ?.takeIf { it.isNotBlank() }
+
+    private fun CodeGenerationRequest.normalizedExpectedClassName(): String? =
+        expectedClassName
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?.replace('$', '.')
+
+    private fun CodeGenerationRequest.normalizedExistingTypes(): List<String> =
+        context?.existingTypes.orEmpty()
+            .map { it.trim().replace('$', '.') }
+            .filter { it.isNotBlank() }
+            .distinct()
 }
