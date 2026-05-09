@@ -168,8 +168,7 @@ class ValidationController(
         val trimmed = projectId?.trim().orEmpty()
         if (trimmed.isBlank()) return null
 
-        return projectContextService.getProjectContext(trimmed) ?: throw IllegalStateException(
-            "Project context is unavailable for projectId='$trimmed'. " +
+        return projectContextService.getProjectContext(trimmed, refresh = true) ?: throw IllegalStateException(            "Project context is unavailable for projectId='$trimmed'. " +
                     "Set projectPath and ensure project classes are built before validation."
         )
     }

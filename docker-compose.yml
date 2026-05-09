@@ -30,6 +30,8 @@ services:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
       PROJECTS_ROOT: /workspace/project
       ARCHASSISTANT_CONFIG_ROOT: /data/archassistant
+      KOTLIN_HOME: /opt/kotlin
+      KOTLIN_COMPILER_HOME: /opt/kotlin
     ports:
       - "8080:8080"
     depends_on:
