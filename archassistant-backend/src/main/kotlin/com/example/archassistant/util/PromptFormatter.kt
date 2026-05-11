@@ -49,6 +49,9 @@ object PromptFormatter {
             16. If the context defines a class contract, do not add extra fields, constructor parameters, or methods beyond that contract.
             17. Treat nested types with canonical Java dotted syntax (Outer.Inner), not with '$'.
             18. Avoid referencing package-private classes from a different package; only use them inside the same package.
+            19. Do not invent framework API members, annotation attributes, or inherited methods.
+                Use only names explicitly listed in the context or guaranteed by the visible contract.
+            20. For annotations, prefer minimal usage; if an attribute is not explicitly known, omit it rather than guessing.
         """.trimIndent()
     }
 
@@ -213,6 +216,8 @@ object PromptFormatter {
             Do not invent project-specific imports outside knownPackages. Standard JDK/Spring/Jakarta imports are allowed.
             Treat nested types as canonical Java dotted names (Outer.Inner) and do not reference package-private classes outside their own package.
             Preserve the original intent of the request and do not change the artifact type unless explicitly required.
+            Use only exact method names and annotation elements shown in the context.
+            Do not infer methods from superinterfaces and do not invent annotation attributes.
         """.trimIndent()
     }
 }

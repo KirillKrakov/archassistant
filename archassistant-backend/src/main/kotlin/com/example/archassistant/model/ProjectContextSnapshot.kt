@@ -229,6 +229,10 @@ data class ProjectContextSnapshot(
             - Avoid referencing package-private types from another package; only use them inside the same package.
             - For simple immutable DTO/value objects in Java 16+, prefer record unless the prompt clearly asks for a bean style.
             - Do not add extra constructor parameters or fields beyond the contract shown in requestRelevantTypeContracts.
+            - Only the public methods listed in requestRelevantTypeContracts and classContracts are guaranteed.
+            - Do not assume inherited framework methods unless they are explicitly shown.
+            - Do not invent annotation attributes. For annotations already shown in the context, use only their documented members. 
+              Marker annotations like @Service, @Repository, @Controller, @Entity, and @Override may be used normally without attributes.
         """.trimIndent()
     }
 
