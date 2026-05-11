@@ -106,6 +106,7 @@ class GenerationController(
     }
 
     private fun saveMetricsAsync(projectId: String, prompt: String, response: CodeGenerationResponse) {
+        logger.info("Received generated code: {}'",response.data?.code)
         try {
             val violations = response.data?.score?.violations.orEmpty()
             val record = GenerationRecord(

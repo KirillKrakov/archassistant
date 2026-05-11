@@ -2,10 +2,14 @@ package com.example.archassistant.service
 
 import com.example.archassistant.model.*
 import com.example.archassistant.util.*
+import com.tngtech.archunit.core.domain.JavaClasses
 import com.tngtech.archunit.core.importer.ClassFileImporter
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import java.io.File
+import java.net.URL
 import java.nio.file.Path
+import java.nio.file.Paths
 
 @Service
 class ComplianceScoreCalculator(
@@ -27,7 +31,7 @@ class ComplianceScoreCalculator(
         return try {
             tempRoot = codeCompiler.compileCode(code, className, classpath, projectContext)
             val classesDir = tempRoot.resolve("classes")
-            val importedClasses = ClassFileImporter().importPath(classesDir)
+            val importedClasses = importCompiledClasses(classesDir, classpath)
 
             val allRules = rules.filter { it.enabled }
             val universal = RuleViolationAnalyzer.evaluate(importedClasses, allRules, RuleType.entries.toSet())
@@ -112,5 +116,32 @@ class ComplianceScoreCalculator(
             classpath = classpath,
             projectContext = projectContext
         ).total >= threshold
+    }
+
+    private fun importCompiledClasses(classesDir: Path, classpath: String): JavaClasses {
+        val importUrls = linkedSetOf<URL>()
+        importUrls += classesDir.toUri().toURL()
+        importUrls += resolveClasspathUrls(classpath)
+
+        return ClassFileImporter().importUrls(importUrls.toList())
+    }
+
+    private fun resolveClasspathUrls(classpath: String): List<URL> {
+        if (classpath.isBlank()) return emptyList()
+
+        return classpath
+            .split(File.pathSeparator)
+            .asSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .mapNotNull { entry ->
+                runCatching {
+                    Paths.get(entry).toUri().toURL()
+                }.getOrElse {
+                    logger.warn("Skipping invalid classpath entry for ArchUnit import: {}", entry)
+                    null
+                }
+            }
+            .toList()
     }
 }

@@ -38,7 +38,7 @@ object PromptFormatter {
             5. If the solution requires multiple classes, return them as separate complete source files.
             6. Each source file must start with its own package declaration.
             7. Never combine multiple package declarations in a single file.
-            8. If the user prompt contains project context, use only existing packages, classes, and methods from it.
+            8. If the user prompt contains project context, use only existing packages, classes, methods, and accessible public API from it.
             9. Do not invent project-specific package roots that do not exist in the project context.
             10. If you implement an existing interface or repository contract, include all abstract methods with exact signatures from the context.
             11. Never generate a partial interface implementation: if an interface is selected, it must compile without missing abstract methods.
@@ -47,6 +47,11 @@ object PromptFormatter {
             14. Standard JDK/Spring/Jakarta imports are allowed when needed.
             15. Do not invent project-specific imports outside knownPackages.
             16. If the context defines a class contract, do not add extra fields, constructor parameters, or methods beyond that contract.
+            17. Treat nested types with canonical Java dotted syntax (Outer.Inner), not with '$'.
+            18. Avoid referencing package-private classes from a different package; only use them inside the same package.
+            19. Do not invent framework API members, annotation attributes, or inherited methods.
+                Use only names explicitly listed in the context or guaranteed by the visible contract.
+            20. For annotations, prefer minimal usage; if an attribute is not explicitly known, omit it rather than guessing.
         """.trimIndent()
     }
 
@@ -209,7 +214,10 @@ object PromptFormatter {
             each with its own package declaration, without mixing multiple packages in one file.
             Use only existing packages and signatures from the project context.
             Do not invent project-specific imports outside knownPackages. Standard JDK/Spring/Jakarta imports are allowed.
+            Treat nested types as canonical Java dotted names (Outer.Inner) and do not reference package-private classes outside their own package.
             Preserve the original intent of the request and do not change the artifact type unless explicitly required.
+            Use only exact method names and annotation elements shown in the context.
+            Do not infer methods from superinterfaces and do not invent annotation attributes.
         """.trimIndent()
     }
 }

@@ -50,18 +50,23 @@ class PreGenerationStrategy(
             ?: ruleRepository.load(request.projectId)?.getEnabledRules()
             ?: emptyList()
 
+        val normalizedTargetPackage = request.normalizedTargetPackage()
+        val normalizedExpectedClassName = request.normalizedExpectedClassName()
+        val normalizedExistingTypes = request.normalizedExistingTypes()
+
         val systemPrompt = PromptFormatter.formatSystemPrompt(
             rules = rules,
             languageHint = projectContext.preferredLanguageHint()
         )
+
         val userPrompt = PromptFormatter.formatUserPrompt(
             originalRequest = request.prompt,
             previousErrors = emptyList(),
             projectContext = projectContext.promptContext(
                 requestText = request.prompt,
-                targetPackage = request.context?.targetPackage,
-                expectedClassName = request.expectedClassName,
-                existingTypes = request.context?.existingTypes.orEmpty()
+                targetPackage = normalizedTargetPackage,
+                expectedClassName = normalizedExpectedClassName,
+                existingTypes = normalizedExistingTypes
             ),
             codeContext = request.context?.codeSnippet
         )
@@ -88,12 +93,6 @@ class PreGenerationStrategy(
                     model = llmOrchestrator.extractModelName(),
                     warnings = emptyList()
                 )
-            } catch (e: LlmGenerationException) {
-                GenerationResponseFactory.error(
-                    errorCode = "LLM_ERROR",
-                    message = e.message ?: "Failed to generate code",
-                    totalTimeMs = 0
-                )
             } catch (e: Exception) {
                 GenerationResponseFactory.error(
                     errorCode = "INTERNAL_ERROR",
@@ -111,7 +110,7 @@ class PreGenerationStrategy(
         val generatedCode = ProjectImportNormalizer.normalize(
             code = CodeCleaner.cleanCode(rawCode),
             projectContext = projectContext,
-            primaryTypeName = request.expectedClassName ?: GeneratedTypeNameExtractor.extract(rawCode)
+            primaryTypeName = normalizedExpectedClassName ?: GeneratedTypeNameExtractor.extract(rawCode)?.replace('$', '.')
         )
 
         var validationTime: Long = 0
@@ -119,7 +118,7 @@ class PreGenerationStrategy(
         val warnings = mutableListOf<String>()
 
         if (request.collectMetrics) {
-            val className = request.expectedClassName ?: GeneratedTypeNameExtractor.extract(generatedCode)
+            val className = normalizedExpectedClassName ?: GeneratedTypeNameExtractor.extract(generatedCode)?.replace('$', '.')
 
             if (className != null) {
                 validationTime = measureTimeMillis {
@@ -167,4 +166,22 @@ class PreGenerationStrategy(
             warnings = warnings
         )
     }
+
+    private fun CodeGenerationRequest.normalizedTargetPackage(): String? =
+        context?.targetPackage
+            ?.trim()
+            ?.trim('.')
+            ?.takeIf { it.isNotBlank() }
+
+    private fun CodeGenerationRequest.normalizedExpectedClassName(): String? =
+        expectedClassName
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?.replace('$', '.')
+
+    private fun CodeGenerationRequest.normalizedExistingTypes(): List<String> =
+        context?.existingTypes.orEmpty()
+            .map { it.trim().replace('$', '.') }
+            .filter { it.isNotBlank() }
+            .distinct()
 }

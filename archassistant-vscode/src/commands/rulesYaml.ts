@@ -105,12 +105,30 @@ function stringListOrNull(value: unknown): string[] | null {
   return null;
 }
 
+function removeNullFields<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value
+      .map(item => removeNullFields(item))
+      .filter(item => item !== null) as T;
+  }
+
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, v]) => v !== null)
+        .map(([k, v]) => [k, removeNullFields(v)])
+    ) as T;
+  }
+
+  return value;
+}
+
 function defaultExportConfig(
   projectId: string,
   projectPath: string,
   source?: RulesConfig | null
 ): RulesConfig {
-  return {
+  return removeNullFields({
     version: source?.version ?? '2.0',
     project_id: projectId,
     project_type: source?.project_type ?? null,
@@ -119,7 +137,7 @@ function defaultExportConfig(
     project_path: projectPath,
     created_at: source?.created_at ?? null,
     updated_at: source?.updated_at ?? null
-  };
+  }) as RulesConfig;
 }
 
 function parseRulesFromDocument(parsed: unknown): {
@@ -386,7 +404,8 @@ export async function exportRulesYamlCommand(
   if (!saveUri) return;
 
   try {
-    const yamlText = stringifyYaml(exportConfig, { indent: 2 });
+    const cleanedExportConfig = removeNullFields(exportConfig);
+    const yamlText = stringifyYaml(cleanedExportConfig, { indent: 2 });
     await vscode.workspace.fs.writeFile(saveUri, Buffer.from(yamlText, 'utf8'));
     logger.info('Exported rules YAML for project {} to {}', current.projectId, saveUri.fsPath);
     vscode.window.showInformationMessage(`Rules exported to ${saveUri.fsPath}`);
