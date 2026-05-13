@@ -73,3 +73,45 @@ export:
 # Корреляция запросов
 correlation:
   header-name: X-Correlation-Id
+
+archassistant:
+  config-root: ${ARCHASSISTANT_CONFIG_ROOT:.archassistant}
+
+  compliance:
+    threshold: ${ARCHASSISTANT_COMPLIANCE_THRESHOLD:70.0}
+    weights:
+      rules-pass: ${ARCHASSISTANT_WEIGHT_RULES_PASS:1.0}
+      pattern-match: ${ARCHASSISTANT_WEIGHT_PATTERN_MATCH:0.5}
+      dependency-correct: ${ARCHASSISTANT_WEIGHT_DEPENDENCY_CORRECT:0.5}
+
+  export:
+    max-records: ${ARCHASSISTANT_EXPORT_MAX_RECORDS:10000}
+    default-format: ${ARCHASSISTANT_EXPORT_DEFAULT_FORMAT:CSV}
+
+  cache:
+    project-context-ttl-minutes: ${ARCHASSISTANT_CONTEXT_TTL_MINUTES:30}
+    max-entries: ${ARCHASSISTANT_CONTEXT_CACHE_MAX_ENTRIES:32}
+
+  llm:
+    provider: ${LLM_PROVIDER:mistral}
+
+    mistral:
+      base-url: ${MISTRAL_BASE_URL:https://api.mistral.ai}
+      api-key: ${MISTRAL_API_KEY:}
+      model: ${MISTRAL_MODEL:mistral-medium-latest}
+      temperature: ${MISTRAL_TEMPERATURE:0.2}
+      max-tokens: ${MISTRAL_MAX_TOKENS:10000}
+
+    deepseek:
+      base-url: ${DEEPSEEK_BASE_URL:https://api.deepseek.com}
+      api-key: ${DEEPSEEK_API_KEY:}
+      model: ${DEEPSEEK_MODEL:deepseek-chat}
+      temperature: ${DEEPSEEK_TEMPERATURE:0.2}
+      max-tokens: ${DEEPSEEK_MAX_TOKENS:10000}
+
+    groq:
+      base-url: ${GROQ_BASE_URL:https://api.groq.com/openai/v1}
+      api-key: ${GROQ_API_KEY:}
+      model: ${GROQ_MODEL:llama-3.3-70b-versatile}
+      temperature: ${GROQ_TEMPERATURE:0.2}
+      max-tokens: ${GROQ_MAX_TOKENS:10000}

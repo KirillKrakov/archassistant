@@ -78,6 +78,17 @@ class SpringLayeredProfileStrategy : ProfileRuleStrategy {
                 scopeLabel = "all"
             )
 
+            rules += RuleFactory.annotationHas(
+                context = context,
+                prefix = "spring_layered",
+                scopePackage = scope,
+                annotation = "org.springframework.web.bind.annotation.RestController",
+                name = "Controllers should be annotated with @RestController",
+                description = "Controller classes should be annotated with @RestController",
+                severity = Severity.INFO,
+                weight = 0.7
+            )
+
             if (shouldSuggestResponseEntityRules(context)) {
                 rules += RuleFactory.methodSignatureCheck(
                     context = context,
@@ -115,6 +126,17 @@ class SpringLayeredProfileStrategy : ProfileRuleStrategy {
                 scopeLabel = "all"
             )
 
+            rules += RuleFactory.annotationHas(
+                context = context,
+                prefix = "spring_layered",
+                scopePackage = scope,
+                annotation = "org.springframework.stereotype.Service",
+                name = "Services should be annotated with @Service",
+                description = "Service classes should be annotated with @Service",
+                severity = Severity.INFO,
+                weight = 0.7
+            )
+
             rules += RuleFactory.exceptionCheck(
                 context = context,
                 prefix = "spring_layered",
@@ -147,6 +169,17 @@ class SpringLayeredProfileStrategy : ProfileRuleStrategy {
                 severity = Severity.INFO,
                 weight = 0.4,
                 scopeLabel = "all"
+            )
+
+            rules += RuleFactory.annotationHas(
+                context = context,
+                prefix = "spring_layered",
+                scopePackage = scope,
+                annotation = "org.springframework.stereotype.Repository",
+                name = "Repositories should be annotated with @Repository",
+                description = "Repository classes should be annotated with @Repository",
+                severity = Severity.INFO,
+                weight = 0.7
             )
         }
 
@@ -353,6 +386,41 @@ class CleanProfileStrategy : ProfileRuleStrategy {
             )
         }
 
+        listOfNotNull(domainPattern, applicationPattern).forEach { pkg ->
+            rules += RuleFactory.annotationNo(
+                context = context,
+                prefix = "clean",
+                scopePackage = pkg,
+                annotation = "org.springframework.stereotype.Service",
+                name = "Core packages should not use @Service",
+                description = "Core and application packages should not depend on Spring service annotations",
+                severity = Severity.WARNING,
+                weight = 0.8
+            )
+
+            rules += RuleFactory.annotationNo(
+                context = context,
+                prefix = "clean",
+                scopePackage = pkg,
+                annotation = "org.springframework.stereotype.Repository",
+                name = "Core packages should not use @Repository",
+                description = "Core and application packages should not depend on Spring repository annotations",
+                severity = Severity.WARNING,
+                weight = 0.8
+            )
+
+            rules += RuleFactory.annotationNo(
+                context = context,
+                prefix = "clean",
+                scopePackage = pkg,
+                annotation = "org.springframework.web.bind.annotation.RestController",
+                name = "Core packages should not use @RestController",
+                description = "Core and application packages should not depend on web annotations",
+                severity = Severity.WARNING,
+                weight = 0.8
+            )
+        }
+
         if (infrastructurePattern != null) {
             addDependency(
                 from = domainPattern,
@@ -497,6 +565,32 @@ class HexagonalProfileStrategy : ProfileRuleStrategy {
                 constraint = constraint,
                 severity = severity,
                 weight = weight
+            )
+        }
+
+        if (domainPattern.isNotBlank()) {
+            rules += RuleFactory.annotationNo(
+                context = context,
+                prefix = "hexagonal",
+                scopePackage = domainPattern,
+                annotation = "org.springframework.stereotype.Service",
+                name = "Domain should not use @Service",
+                description = "Domain layer should not depend on Spring service annotations",
+                severity = Severity.WARNING,
+                weight = 0.8
+            )
+        }
+
+        if (applicationPattern != null) {
+            rules += RuleFactory.annotationNo(
+                context = context,
+                prefix = "hexagonal",
+                scopePackage = applicationPattern,
+                annotation = "org.springframework.web.bind.annotation.RestController",
+                name = "Application should not use @RestController",
+                description = "Application layer should not depend on web annotations",
+                severity = Severity.WARNING,
+                weight = 0.8
             )
         }
 
@@ -670,6 +764,18 @@ class MvvmProfileStrategy : ProfileRuleStrategy {
                 severity = Severity.WARNING,
                 weight = 0.7,
                 scopeLabel = vm
+            )
+
+            rules += RuleFactory.fieldCheck(
+                context = context,
+                prefix = "mvvm",
+                scopePackage = vm,
+                name = "ViewModel fields should use state-oriented naming",
+                description = "ViewModel fields should use state-oriented naming conventions",
+                constraint = ConstraintType.FIELD_NAME_PATTERN,
+                severity = Severity.INFO,
+                weight = 0.4,
+                fieldNamePattern = "*State"
             )
         }
 
