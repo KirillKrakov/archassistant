@@ -143,16 +143,6 @@ class LlmOrchestrator(
             ?: System.getProperty("spring.ai.openai.chat.options.model")
     }
 
-    fun generateWithStrategy(
-        prompt: String,
-        projectId: String,
-        strategy: StrategyType,
-        rules: List<ArchitecturalRule>? = null,
-        codeContext: String? = null
-    ): CodeGenerationResponse {
-        return generateCode(prompt, projectId, rules, codeContext)
-    }
-
     fun generateCodeRaw(
         systemPrompt: String,
         userPrompt: String,
@@ -162,9 +152,6 @@ class LlmOrchestrator(
     }
 }
 
-/**
- * Исключение генерации через LLM
- */
 class LlmGenerationException(
     message: String,
     val isRetryable: Boolean = true

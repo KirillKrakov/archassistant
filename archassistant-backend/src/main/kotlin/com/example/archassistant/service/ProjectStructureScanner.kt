@@ -176,9 +176,6 @@ class ProjectStructureScanner(
         }
     }
 
-    private fun modifiersToText(modifiers: List<String>): String =
-        if (modifiers.isEmpty()) "" else modifiers.joinToString(" ")
-
     private fun extractAnnotations(classes: Iterable<JavaClass>): Map<String, Int> {
         return classes
             .flatMap { javaClass ->

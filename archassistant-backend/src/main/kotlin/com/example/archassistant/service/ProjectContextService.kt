@@ -53,10 +53,6 @@ class ProjectContextService(
         cache.remove(projectId)
     }
 
-    fun clear() {
-        cache.clear()
-    }
-
     private fun buildProjectContext(
         projectId: String,
         projectPathOverride: String? = null
