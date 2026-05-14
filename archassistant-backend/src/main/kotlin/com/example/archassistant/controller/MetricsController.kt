@@ -10,6 +10,7 @@ import com.example.archassistant.repository.GenerationRecordRepository
 import com.example.archassistant.service.metrics.MetricsComparisonService
 import com.example.archassistant.service.metrics.MetricsExportService
 import org.slf4j.LoggerFactory
+import org.springframework.data.domain.PageRequest
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
@@ -39,9 +40,9 @@ class MetricsController(
         val threshold = properties.compliance.threshold
 
         val metrics = if (projectId.isNullOrBlank()) {
-            metricsRepository.getAllMetrics(threshold)
+            metricsRepository.getAllMetrics()
         } else {
-            metricsRepository.getMetricsByProject(projectId, threshold)
+            metricsRepository.getMetricsByProject(projectId)
         }
 
         val result = metrics.associate { it.strategy.name to it.toMap() }
@@ -50,54 +51,27 @@ class MetricsController(
 
     @GetMapping("/{projectId}")
     fun getProjectMetrics(@PathVariable projectId: String): ResponseEntity<Map<String, Any?>> {
-        val fullHistory = metricsRepository.findByProjectIdOrderByCreatedAtDesc(projectId)
-        val recentHistory = fullHistory.take(RECENT_HISTORY_LIMIT)
+        val totalGenerations = metricsRepository.countByProjectId(projectId)
+        val recent = metricsRepository.findByProjectIdOrderByCreatedAtDesc(
+            projectId,
+            PageRequest.of(0, RECENT_HISTORY_LIMIT)
+        )
 
-        val totalGenerations = fullHistory.size.toLong()
-        val successfulGenerations = fullHistory.count { it.success }.toLong()
-        val failedGenerations = totalGenerations - successfulGenerations
-
-        val scoreTotals = fullHistory.mapNotNull { it.scoreTotal }
+        val history = recent.content
+        val scoreTotals = history.mapNotNull { it.scoreTotal }
         val avgScore = if (scoreTotals.isNotEmpty()) scoreTotals.average() else null
-
-        val avgIterations = if (fullHistory.isNotEmpty()) {
-            fullHistory.map { it.iterations.toDouble() }.average()
-        } else {
-            null
-        }
-
-        val avgGenerationTimeMs = if (fullHistory.isNotEmpty()) {
-            fullHistory.map { it.generationTimeMs.toDouble() }.average()
-        } else {
-            null
-        }
-
-        val avgValidationTimeMs = if (fullHistory.isNotEmpty()) {
-            fullHistory.map { it.validationTimeMs.toDouble() }.average()
-        } else {
-            null
-        }
-
-        val avgTotalTimeMs = if (fullHistory.isNotEmpty()) {
-            fullHistory.map { (it.generationTimeMs + it.validationTimeMs).toDouble() }.average()
-        } else {
-            null
-        }
-
-        val successRate = if (totalGenerations > 0) {
-            successfulGenerations.toDouble() / totalGenerations.toDouble()
-        } else {
-            null
-        }
-
-        val lastGeneration = fullHistory.firstOrNull()?.createdAt
+        val avgIterations = if (history.isNotEmpty()) history.map { it.iterations.toDouble() }.average() else null
+        val avgGenerationTimeMs = if (history.isNotEmpty()) history.map { it.generationTimeMs.toDouble() }.average() else null
+        val avgValidationTimeMs = if (history.isNotEmpty()) history.map { it.validationTimeMs.toDouble() }.average() else null
+        val avgTotalTimeMs = if (history.isNotEmpty()) history.map { (it.generationTimeMs + it.validationTimeMs).toDouble() }.average() else null
+        val successfulGenerations = history.count { it.success }.toLong()
+        val successRate = if (history.isNotEmpty()) successfulGenerations.toDouble() / history.size.toDouble() else null
+        val lastGeneration = history.firstOrNull()?.createdAt
 
         return ResponseEntity.ok(
             mapOf(
                 "projectId" to projectId,
                 "totalGenerations" to totalGenerations,
-                "successfulGenerations" to successfulGenerations,
-                "failedGenerations" to failedGenerations,
                 "avgScore" to avgScore?.let { "%.2f".format(it).toDouble() },
                 "avgIterations" to avgIterations?.let { "%.2f".format(it).toDouble() },
                 "avgGenerationTimeMs" to avgGenerationTimeMs?.let { "%.2f".format(it).toDouble() },
@@ -106,7 +80,7 @@ class MetricsController(
                 "successRate" to successRate?.let { "%.2f".format(it).toDouble() },
                 "successRatePercent" to successRate?.let { "%.2f".format(it * 100.0).toDouble() },
                 "lastGeneration" to lastGeneration?.toString(),
-                "recentHistory" to recentHistory.map { record ->
+                "recentHistory" to history.map { record ->
                     mapOf<String, Any?>(
                         "strategy" to record.strategy.name,
                         "score" to record.scoreTotal,
@@ -193,40 +167,55 @@ class MetricsController(
         @RequestParam(required = false) fromDate: LocalDateTime?,
         @RequestParam(required = false) toDate: LocalDateTime?
     ): ResponseEntity<Map<String, Any>> {
-        val records = when {
-            strategy != null && fromDate != null && toDate != null ->
+        if (page < 0 || size <= 0) {
+            return ResponseEntity.badRequest().body(mapOf("error" to "page must be >= 0 and size must be > 0"))
+        }
+
+        val pageable = PageRequest.of(page, size)
+
+        val pageResult = when {
+            strategy != null && fromDate != null && toDate != null -> {
+                val strategyType = runCatching { StrategyType.valueOf(strategy.uppercase()) }.getOrNull()
+                    ?: return ResponseEntity.badRequest().body(mapOf("error" to "Unknown strategy: $strategy"))
                 metricsRepository.findByProjectIdAndStrategyAndCreatedAtBetween(
                     projectId,
-                    StrategyType.valueOf(strategy.uppercase()),
+                    strategyType,
                     fromDate,
-                    toDate
+                    toDate,
+                    pageable
                 )
+            }
 
             strategy != null -> {
                 val strategyType = runCatching { StrategyType.valueOf(strategy.uppercase()) }.getOrNull()
                     ?: return ResponseEntity.badRequest().body(mapOf("error" to "Unknown strategy: $strategy"))
-                metricsRepository.findByProjectIdAndStrategy(projectId, strategyType)
+                metricsRepository.findByProjectIdAndStrategy(
+                    projectId,
+                    strategyType,
+                    pageable
+                )
             }
 
             fromDate != null && toDate != null ->
-                metricsRepository.findByProjectIdAndCreatedAtBetween(projectId, fromDate, toDate)
+                metricsRepository.findByProjectIdAndCreatedAtBetween(
+                    projectId,
+                    fromDate,
+                    toDate,
+                    pageable
+                )
 
             else ->
-                metricsRepository.findByProjectIdOrderByCreatedAtDesc(projectId)
+                metricsRepository.findByProjectIdOrderByCreatedAtDesc(projectId, pageable)
         }
-
-        val paginated = records.drop(page * size).take(size)
-        val total = records.size
-        val totalPages = (total + size - 1) / size
 
         return ResponseEntity.ok(
             mapOf(
                 "projectId" to projectId,
                 "page" to page,
                 "size" to size,
-                "totalRecords" to total,
-                "totalPages" to totalPages,
-                "records" to paginated.map { record ->
+                "totalRecords" to pageResult.totalElements,
+                "totalPages" to pageResult.totalPages,
+                "records" to pageResult.content.map { record ->
                     mapOf(
                         "id" to record.id,
                         "strategy" to record.strategy.name,

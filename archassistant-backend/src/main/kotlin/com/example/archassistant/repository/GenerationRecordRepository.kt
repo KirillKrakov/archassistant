@@ -3,6 +3,8 @@ package com.example.archassistant.repository
 import com.example.archassistant.dto.StrategyMetrics
 import com.example.archassistant.model.GenerationRecord
 import com.example.archassistant.model.StrategyType
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
@@ -34,8 +36,7 @@ interface GenerationRecordRepository : JpaRepository<GenerationRecord, String> {
         """
     )
     fun getMetricsByProject(
-        @Param("projectId") projectId: String,
-        @Param("qualityThreshold") qualityThreshold: Double
+        @Param("projectId") projectId: String
     ): List<StrategyMetrics>
 
     @Query(
@@ -58,13 +59,13 @@ interface GenerationRecordRepository : JpaRepository<GenerationRecord, String> {
         GROUP BY g.strategy
         """
     )
-    fun getAllMetrics(
-        @Param("qualityThreshold") qualityThreshold: Double
-    ): List<StrategyMetrics>
+    fun getAllMetrics(): List<StrategyMetrics>
+
+    fun countByProjectId(projectId: String): Long
 
     fun findByProjectIdOrderByCreatedAtDesc(projectId: String): List<GenerationRecord>
 
-    fun countByProjectId(projectId: String): Long
+    fun findByProjectIdOrderByCreatedAtDesc(projectId: String, pageable: Pageable): Page<GenerationRecord>
 
     @Query(
         """
@@ -99,6 +100,20 @@ interface GenerationRecordRepository : JpaRepository<GenerationRecord, String> {
         """
         SELECT r FROM GenerationRecord r
         WHERE r.projectId = :projectId
+        AND r.strategy = :strategy
+        ORDER BY r.createdAt DESC
+        """
+    )
+    fun findByProjectIdAndStrategy(
+        @Param("projectId") projectId: String,
+        @Param("strategy") strategy: StrategyType,
+        pageable: Pageable
+    ): Page<GenerationRecord>
+
+    @Query(
+        """
+        SELECT r FROM GenerationRecord r
+        WHERE r.projectId = :projectId
         AND r.createdAt BETWEEN :fromDate AND :toDate
         ORDER BY r.createdAt DESC
         """
@@ -112,6 +127,38 @@ interface GenerationRecordRepository : JpaRepository<GenerationRecord, String> {
     @Query(
         """
         SELECT r FROM GenerationRecord r
+        WHERE r.projectId = :projectId
+        AND r.createdAt BETWEEN :fromDate AND :toDate
+        ORDER BY r.createdAt DESC
+        """
+    )
+    fun findByProjectIdAndCreatedAtBetween(
+        @Param("projectId") projectId: String,
+        @Param("fromDate") fromDate: LocalDateTime,
+        @Param("toDate") toDate: LocalDateTime,
+        pageable: Pageable
+    ): Page<GenerationRecord>
+
+    @Query(
+        """
+        SELECT r FROM GenerationRecord r
+        WHERE r.projectId = :projectId
+        AND r.strategy = :strategy
+        AND r.createdAt BETWEEN :fromDate AND :toDate
+        ORDER BY r.createdAt DESC
+        """
+    )
+    fun findByProjectIdAndStrategyAndCreatedAtBetween(
+        @Param("projectId") projectId: String,
+        @Param("strategy") strategy: StrategyType,
+        @Param("fromDate") fromDate: LocalDateTime,
+        @Param("toDate") toDate: LocalDateTime,
+        pageable: Pageable
+    ): Page<GenerationRecord>
+
+    @Query(
+        """
+        SELECT r FROM GenerationRecord r
         WHERE r.createdAt BETWEEN :fromDate AND :toDate
         ORDER BY r.createdAt DESC
         """
@@ -120,4 +167,17 @@ interface GenerationRecordRepository : JpaRepository<GenerationRecord, String> {
         @Param("fromDate") fromDate: LocalDateTime,
         @Param("toDate") toDate: LocalDateTime
     ): List<GenerationRecord>
+
+    @Query(
+        """
+        SELECT r FROM GenerationRecord r
+        WHERE r.createdAt BETWEEN :fromDate AND :toDate
+        ORDER BY r.createdAt DESC
+        """
+    )
+    fun findByCreatedAtBetween(
+        @Param("fromDate") fromDate: LocalDateTime,
+        @Param("toDate") toDate: LocalDateTime,
+        pageable: Pageable
+    ): Page<GenerationRecord>
 }

@@ -8,6 +8,7 @@ import com.example.archassistant.repository.GenerationRecordRepository
 import com.example.archassistant.service.metrics.export.CsvExporter
 import com.example.archassistant.service.metrics.export.JsonExporter
 import org.slf4j.LoggerFactory
+import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import java.time.LocalDateTime
 
@@ -30,79 +31,74 @@ class MetricsExportService(
         val selection = fetchRecords(request)
         val maxRecords = properties.export.maxRecords.coerceAtLeast(1)
 
-        val exportedRecords = selection.records.take(maxRecords)
+        val matchedCount = selection.size
+        val exportRecords = selection.take(maxRecords)
+
         val warnings = buildList {
-            addAll(selection.warnings)
-            if (selection.records.size > maxRecords) {
-                add("Export truncated to $maxRecords record(s) out of ${selection.records.size} matched record(s).")
+            if (matchedCount > maxRecords) {
+                add("Export truncated to $maxRecords record(s) out of $matchedCount matched record(s).")
             }
         }
 
-        val exportRecords = if (request.includeViolations) {
-            exportedRecords
+        val sanitizedRecords = if (request.includeViolations) {
+            exportRecords
         } else {
-            exportedRecords.map { it.copy(violationsJson = null) }
+            exportRecords.map { it.copy(violationsJson = null) }
         }
 
         val content = when (request.format) {
-            ExportFormat.CSV -> csvExporter.export(exportRecords, request.includeViolations)
-            ExportFormat.JSON -> jsonExporter.export(exportRecords, pretty = false)
-            ExportFormat.JSON_PRETTY -> jsonExporter.export(exportRecords, pretty = true)
+            ExportFormat.CSV -> csvExporter.export(sanitizedRecords, request.includeViolations)
+            ExportFormat.JSON -> jsonExporter.export(sanitizedRecords, pretty = false)
+            ExportFormat.JSON_PRETTY -> jsonExporter.export(sanitizedRecords, pretty = true)
         }
 
         return ExportResult(
             format = request.format,
-            recordCount = selection.records.size,
-            exportedRecordCount = exportRecords.size,
+            recordCount = matchedCount,
+            exportedRecordCount = sanitizedRecords.size,
             content = content,
             generatedAt = LocalDateTime.now(),
             warnings = warnings
         )
     }
 
-    private fun fetchRecords(request: ExportRequest): RecordSelection {
+    private fun fetchRecords(request: ExportRequest): List<GenerationRecord> {
+        val maxRecords = properties.export.maxRecords.coerceAtLeast(1)
+        val pageRequest = PageRequest.of(0, maxRecords)
+
         return when {
-            request.projectId != null && request.strategy != null && request.fromDate != null && request.toDate != null -> {
-                val records = recordRepository.findByProjectIdAndStrategyAndCreatedAtBetween(
+            request.projectId != null && request.strategy != null && request.fromDate != null && request.toDate != null ->
+                recordRepository.findByProjectIdAndStrategyAndCreatedAtBetween(
                     request.projectId,
                     parseStrategyOrThrow(request.strategy),
                     request.fromDate,
-                    request.toDate
-                )
-                RecordSelection(records = records)
-            }
+                    request.toDate,
+                    pageRequest
+                ).content
 
-            request.projectId != null && request.strategy != null -> {
-                val records = recordRepository.findByProjectIdAndStrategy(
+            request.projectId != null && request.strategy != null ->
+                recordRepository.findByProjectIdAndStrategy(
                     request.projectId,
-                    parseStrategyOrThrow(request.strategy)
-                )
-                RecordSelection(records = records)
-            }
+                    parseStrategyOrThrow(request.strategy),
+                    pageRequest
+                ).content
 
-            request.projectId != null && request.fromDate != null && request.toDate != null -> {
-                val records = recordRepository.findByProjectIdAndCreatedAtBetween(
+            request.projectId != null && request.fromDate != null && request.toDate != null ->
+                recordRepository.findByProjectIdAndCreatedAtBetween(
                     request.projectId,
                     request.fromDate,
-                    request.toDate
-                )
-                RecordSelection(records = records)
-            }
+                    request.toDate,
+                    pageRequest
+                ).content
 
-            request.projectId != null -> {
-                val records = recordRepository.findByProjectIdOrderByCreatedAtDesc(request.projectId)
-                RecordSelection(records = records)
-            }
+            request.projectId != null ->
+                recordRepository.findByProjectIdOrderByCreatedAtDesc(request.projectId, pageRequest).content
 
-            request.fromDate != null && request.toDate != null -> {
-                val records = recordRepository.findByCreatedAtBetween(request.fromDate, request.toDate)
-                RecordSelection(records = records)
-            }
+            request.fromDate != null && request.toDate != null ->
+                recordRepository.findByCreatedAtBetween(request.fromDate, request.toDate, pageRequest).content
 
-            else -> {
-                val records = recordRepository.findAll()
-                RecordSelection(records = records)
-            }
+            else ->
+                recordRepository.findAll(pageRequest).content
         }
     }
 
@@ -113,11 +109,6 @@ class MetricsExportService(
             throw IllegalArgumentException("Unknown strategy: $strategy")
         }
     }
-
-    private data class RecordSelection(
-        val records: List<GenerationRecord>,
-        val warnings: List<String> = emptyList()
-    )
 }
 
 data class ExportResult(
