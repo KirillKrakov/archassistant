@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.PrintStream
+import java.io.OutputStreamWriter;
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
@@ -103,6 +104,7 @@ class GeneratedSourceOverlayService(
             )
 
             if (!compilation.success) {
+                deleteRecursively(stagingRoot)
                 return GeneratedFileSyncResponse(
                     success = false,
                     projectId = projectId,
@@ -170,33 +172,104 @@ class GeneratedSourceOverlayService(
             )
         }
 
-        val hasJava = allSourceFiles.any { it.toString().endsWith(".java") }
-        val hasKotlin = allSourceFiles.any { it.toString().endsWith(".kt") }
+        val javaFiles = allSourceFiles.filter { it.toString().endsWith(".java") }
+        val kotlinFiles = allSourceFiles.filter { it.toString().endsWith(".kt") }
 
-        if (hasJava && hasKotlin) {
-            return OverlayCompilationResult(
-                success = false,
-                error = "Mixed Java/Kotlin overlay output is not supported yet",
-                warnings = listOf("Compile the overlay as either pure Java or pure Kotlin for now.")
-            )
+        return when {
+            javaFiles.isNotEmpty() && kotlinFiles.isNotEmpty() ->
+                compileMixedOverlay(projectId, projectPath, javaFiles, kotlinFiles, classesRoot)
+
+            kotlinFiles.isNotEmpty() ->
+                tryCompileSingleLanguage(
+                    projectId = projectId,
+                    language = "Kotlin",
+                    classesRoot = classesRoot
+                ) {
+                    compileKotlin(allSourceFiles, classesRoot, projectPath)
+                }
+
+            else ->
+                tryCompileSingleLanguage(
+                    projectId = projectId,
+                    language = "Java",
+                    classesRoot = classesRoot
+                ) {
+                    compileJava(allSourceFiles, classesRoot, projectPath)
+                }
+        }
+    }
+
+    private fun compileMixedOverlay(
+        projectId: String,
+        projectPath: String,
+        javaFiles: List<Path>,
+        kotlinFiles: List<Path>,
+        classesRoot: Path
+    ): OverlayCompilationResult {
+        val attempts = listOf(
+            "java-first" to {
+                clearDirectory(classesRoot)
+                compileJava(javaFiles, classesRoot, projectPath)
+                compileKotlin(
+                    kotlinFiles,
+                    classesRoot,
+                    projectPath,
+                    extraClasspath = classesRoot.toString()
+                )
+            },
+            "kotlin-first" to {
+                clearDirectory(classesRoot)
+                compileKotlin(kotlinFiles, classesRoot, projectPath)
+                compileJava(
+                    javaFiles,
+                    classesRoot,
+                    projectPath,
+                    extraClasspath = classesRoot.toString()
+                )
+            }
+        )
+
+        val failures = mutableListOf<String>()
+
+        for ((name, attempt) in attempts) {
+            try {
+                attempt()
+                return OverlayCompilationResult(
+                    success = true,
+                    compiledFiles = javaFiles.size + kotlinFiles.size,
+                    warnings = listOf("Mixed Java/Kotlin overlay compiled using $name order.")
+                )
+            } catch (e: Exception) {
+                failures += "[$name] ${e.message ?: "unknown error"}"
+                logger.warn("Mixed overlay compile attempt {} failed for {}: {}", name, projectId, e.message)
+            }
         }
 
-        try {
-            if (hasKotlin) {
-                compileKotlin(allSourceFiles, classesRoot, projectPath)
-            } else {
-                compileJava(allSourceFiles, classesRoot, projectPath)
-            }
-
-            return OverlayCompilationResult(
-                success = true,
-                compiledFiles = allSourceFiles.size
+        return OverlayCompilationResult(
+            success = false,
+            error = "Mixed Java/Kotlin overlay compilation failed in both orders:\n${failures.joinToString("\n")}",
+            warnings = listOf(
+                "Mixed Java/Kotlin overlay files were accepted, but compilation failed in both orders.",
+                "If the files reference each other cyclically, split the change into smaller steps."
             )
+        )
+    }
+
+    private fun tryCompileSingleLanguage(
+        projectId: String,
+        language: String,
+        classesRoot: Path,
+        block: () -> Unit
+    ): OverlayCompilationResult {
+        return try {
+            clearDirectory(classesRoot)
+            block()
+            OverlayCompilationResult(success = true, compiledFiles = 0)
         } catch (e: Exception) {
-            logger.warn("Overlay compilation failed for {}: {}", projectId, e.message)
-            return OverlayCompilationResult(
+            logger.warn("{} overlay compilation failed for {}: {}", language, projectId, e.message)
+            OverlayCompilationResult(
                 success = false,
-                error = e.message ?: "Overlay compilation failed"
+                error = e.message ?: "$language overlay compilation failed"
             )
         }
     }
@@ -204,15 +277,17 @@ class GeneratedSourceOverlayService(
     private fun compileKotlin(
         sourceFiles: List<Path>,
         outputDir: Path,
-        projectPath: String
+        projectPath: String,
+        extraClasspath: String? = null
     ) {
-        Files.createDirectories(outputDir)
-
         val compiler = K2JVMCompiler()
-        val effectiveClasspath = effectiveClasspath(projectPath)
+        val effectiveClasspath = effectiveClasspath(projectPath, extraClasspath)
 
         val args = mutableListOf(
-            "-d", outputDir.toString()
+            "-d", outputDir.toString(),
+            "-jvm-target", "17",
+            "-no-stdlib",
+            "-no-reflect"
         )
 
         if (effectiveClasspath.isNotBlank()) {
@@ -223,8 +298,8 @@ class GeneratedSourceOverlayService(
 
         val errStream = ByteArrayOutputStream()
         val originalErr = System.err
-
         System.setErr(PrintStream(errStream))
+
         try {
             val exitCode = compiler.exec(System.err, *args.toTypedArray())
             if (exitCode != ExitCode.OK) {
@@ -239,7 +314,8 @@ class GeneratedSourceOverlayService(
     private fun compileJava(
         sourceFiles: List<Path>,
         outputDir: Path,
-        projectPath: String
+        projectPath: String,
+        extraClasspath: String? = null
     ) {
         Files.createDirectories(outputDir)
 
@@ -249,7 +325,7 @@ class GeneratedSourceOverlayService(
                 sourceFiles.map { it.toFile() }
             )
 
-            val effectiveClasspath = effectiveClasspath(projectPath)
+            val effectiveClasspath = effectiveClasspath(projectPath, extraClasspath)
 
             val options = mutableListOf("-d", outputDir.toString())
             if (effectiveClasspath.isNotBlank()) {
@@ -257,8 +333,10 @@ class GeneratedSourceOverlayService(
             }
 
             val diagnostics = DiagnosticCollector<JavaFileObject>()
+            val outWriter = OutputStreamWriter(System.out)
+
             val task = javaCompiler.getTask(
-                null,
+                outWriter,
                 fileManager,
                 diagnostics,
                 options,
@@ -281,14 +359,22 @@ class GeneratedSourceOverlayService(
         }
     }
 
-    private fun effectiveClasspath(projectPath: String): String {
+    private fun effectiveClasspath(projectPath: String, extraClasspath: String? = null): String {
         val runtimeEntries = RuntimeClasspathResolver.resolveRuntimeClasspathEntries().map { it.toString() }
         val projectClasspath = ProjectClasspathResolver.buildCompilationClasspath(projectPath)
 
         return ClasspathUtils.mergeClasspathStrings(
             runtimeEntries.joinToString(File.pathSeparator),
-            projectClasspath
+            projectClasspath,
+            extraClasspath
         )
+    }
+
+    private fun clearDirectory(path: Path) {
+        if (Files.exists(path)) {
+            deleteRecursively(path)
+        }
+        Files.createDirectories(path)
     }
 
     private fun writeOverlayFile(sourceRoot: Path, payload: GeneratedFilePayload): Path {

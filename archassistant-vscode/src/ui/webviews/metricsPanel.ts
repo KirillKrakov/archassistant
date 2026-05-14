@@ -197,6 +197,7 @@ button:hover { background: var(--vscode-button-hoverBackground); }
     <div class="section">
       <button onclick="refreshMetrics()">Refresh</button>
       <button onclick="exportMetrics()">Export</button>
+      <button onclick="clearHistory()">Clear</button>
     </div>
   </div>
 
@@ -219,6 +220,14 @@ function fmtScore(score) {
 
 function fmtTime(ms) {
   return ms === null || ms === undefined ? 'N/A' : (ms < 1000 ? ms + 'ms' : (ms / 1000).toFixed(1) + 's');
+}
+
+function fmtPercent(value) {
+  return value === null || value === undefined ? 'N/A' : Number(value).toFixed(0) + '%';
+}
+
+function clearHistory() {
+  vscode.postMessage({ command: 'clearHistory' });
 }
 
 function fmtDate(isoString) {
@@ -261,26 +270,66 @@ function renderMetrics() {
   const lastGeneration = currentMetrics?.lastGeneration;
   const history = currentMetrics?.recentHistory || [];
 
+  const successfulGenerations =
+    currentMetrics?.successfulGenerations ??
+    history.filter((item) => item.success).length;
+
+  const successRatePercent =
+    currentMetrics?.successRatePercent ??
+    (currentMetrics?.successRate != null
+      ? currentMetrics.successRate * 100
+      : totalGenerations > 0
+        ? (successfulGenerations / totalGenerations) * 100
+        : null);
+
+  const avgIterations =
+    currentMetrics?.avgIterations ??
+    (history.length
+      ? history.reduce((s, x) => s + (x.iterations || 0), 0) / history.length
+      : null);
+
+  const avgGenerationTimeMs =
+    currentMetrics?.avgGenerationTimeMs ??
+    (history.length
+      ? history.reduce((s, x) => s + (x.generationTimeMs || 0), 0) / history.length
+      : null);
+
+  const avgValidationTimeMs =
+    currentMetrics?.avgValidationTimeMs ??
+    (history.length
+      ? history.reduce((s, x) => s + (x.validationTimeMs || 0), 0) / history.length
+      : null);
+
+  const avgTotalTimeMs =
+    currentMetrics?.avgTotalTimeMs ??
+    ((avgGenerationTimeMs != null || avgValidationTimeMs != null)
+      ? (avgGenerationTimeMs || 0) + (avgValidationTimeMs || 0)
+      : null);
+
   document.getElementById('totalGenerations').textContent = totalGenerations;
   document.getElementById('avgScore').textContent = fmtScore(avgScore);
+  document.getElementById('successRate').textContent = fmtPercent(successRatePercent);
   document.getElementById('lastGeneration').textContent = fmtDate(lastGeneration);
-  document.getElementById('avgIterations').textContent = history.length
-    ? (history.reduce((s, x) => s + (x.iterations || 0), 0) / history.length).toFixed(1)
-    : 'N/A';
+  document.getElementById('avgIterations').textContent = avgIterations === null ? 'N/A' : avgIterations.toFixed(1);
+  document.getElementById('avgTotalTimeMs').textContent = fmtTime(avgTotalTimeMs);
 
   const tbody = document.getElementById('strategyTableBody');
   tbody.innerHTML = '';
 
   if (currentComparison?.strategies) {
     Object.entries(currentComparison.strategies).forEach(([strategy, data]) => {
+      const avgTotalTime = data.avgTotalTimeMs ?? ((data.avgGenerationTimeMs ?? 0) + (data.avgValidationTimeMs ?? 0));
+
       const row = document.createElement('tr');
       row.innerHTML = \`
         <td><strong>\${strategy}</strong></td>
         <td>\${data.totalGenerations ?? 0}</td>
-        <td>\${((data.successRate || 0) * 100).toFixed(0)}%</td>
+        <td>\${fmtPercent((data.successRate || 0) * 100)}</td>
         <td>\${fmtScore(data.avgScore)}</td>
         <td>\${(data.avgIterations ?? 0).toFixed(1)}</td>
+        <td>\${fmtTime(data.avgGenerationTimeMs)}</td>
         <td>\${fmtTime(data.avgValidationTimeMs)}</td>
+        <td>\${fmtTime(avgTotalTime)}</td>
       \`;
       tbody.appendChild(row);
     });
@@ -292,43 +341,24 @@ function renderMetrics() {
     rec.innerHTML = \`
       <strong>Recommended:</strong> \${currentComparison.recommendation.bestStrategy}<br/>
       \${currentComparison.recommendation.reason}<br/>
-      <span class="small">Confidence: \${((currentComparison.recommendation.confidence || 0) * 100).toFixed(0)}%</span>
+      Confidence: \${(currentComparison.recommendation.confidence * 100).toFixed(0)}%
     \`;
   } else {
     rec.style.display = 'none';
+    rec.innerHTML = '';
   }
 
   const historyList = document.getElementById('historyList');
-  historyList.innerHTML = '';
-  history.slice(0, 10).forEach(item => {
-    const li = document.createElement('li');
-    li.className = 'history-item';
-    const summary = \`
-      <div>
-        <strong>\${item.strategy}</strong>
-        <div class="small">\${fmtDate(item.timestamp)}</div>
-      </div>
-      <div>
-        <div>\${fmtScore(item.score)}</div>
-        <div class="small">\${item.iterations} iter</div>
-      </div>
-    \`;
-    const hasPrompt = item.prompt && item.prompt.trim().length > 0;
-    const hasCode = item.generatedCode && item.generatedCode.trim().length > 0;
-    if (hasPrompt || hasCode) {
-      let details = '';
-      if (hasPrompt) {
-        details += \`<p><strong>Prompt:</strong><pre>\${escapeHtml(item.prompt)}</pre></p>\`;
-      }
-      if (hasCode) {
-        details += \`<p><strong>Generated Code:</strong><pre>\${escapeHtml(item.generatedCode)}</pre></p>\`;
-      }
-      li.innerHTML = \`<details><summary>\${summary}</summary>\${details}</details>\`;
-    } else {
-      li.innerHTML = summary;
-    }
-    historyList.appendChild(li);
-  });
+  historyList.innerHTML = history.length
+    ? history.slice(0, 10).map(item => \`
+        <li class="history-item">
+          <strong>\${item.strategy}</strong> · \${fmtDate(item.timestamp)} ·
+          score \${fmtScore(item.score)} ·
+          \${item.iterations} iter ·
+          total \${fmtTime(item.totalTimeMs ?? ((item.generationTimeMs || 0) + (item.validationTimeMs || 0)))}
+        </li>
+      \`).join('')
+    : '<li class="history-item">No generation history</li>';
 }
 </script>
 </body>
@@ -343,6 +373,39 @@ function renderMetrics() {
       case 'export':
         await vscode.commands.executeCommand('archassistant.exportMetrics');
         break;
+      case 'clearHistory':
+        await this.handleClearHistory();
+        break;
+    }
+  }
+
+  private async handleClearHistory(): Promise<void> {
+    try {
+      const project = this.projectRegistry.getCurrentProject();
+      if (!project) {
+        throw new Error('No project configured');
+      }
+
+      const confirmed = await vscode.window.showWarningMessage(
+        `Delete all metric records for project ${project.projectId}?`,
+        { modal: true },
+        'Clear',
+        'Cancel'
+      );
+
+      if (confirmed !== 'Clear') {
+        return;
+      }
+
+      const result = await this.backendClient.clearProjectMetrics(project.projectId);
+      vscode.window.showInformationMessage(
+        `Deleted ${result.deletedCount} metric record(s) for ${project.projectId}`
+      );
+
+      await this.loadMetrics();
+    } catch (error: any) {
+      logError(`Clear history failed: ${error.message}`);
+      vscode.window.showErrorMessage(`Failed to clear metrics: ${error.message}`);
     }
   }
 

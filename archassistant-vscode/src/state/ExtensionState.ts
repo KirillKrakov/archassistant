@@ -20,6 +20,7 @@ export interface BackendLaunchInfo {
   composeDirectory: string;
   serviceName: string;
   backendUrl: string;
+  llmProvider?: string
 }
 
 export class ExtensionState {

@@ -16,6 +16,7 @@ import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import java.time.LocalDateTime
+import org.springframework.transaction.annotation.Transactional
 
 @RestController
 @RequestMapping("/api/metrics")
@@ -51,27 +52,27 @@ class MetricsController(
 
     @GetMapping("/{projectId}")
     fun getProjectMetrics(@PathVariable projectId: String): ResponseEntity<Map<String, Any?>> {
-        val totalGenerations = metricsRepository.countByProjectId(projectId)
-        val recent = metricsRepository.findByProjectIdOrderByCreatedAtDesc(
-            projectId,
-            PageRequest.of(0, RECENT_HISTORY_LIMIT)
-        )
+        val fullHistory = metricsRepository.findByProjectIdOrderByCreatedAtDesc(projectId)
+        val history = fullHistory.take(10)
 
-        val history = recent.content
-        val scoreTotals = history.mapNotNull { it.scoreTotal }
-        val avgScore = if (scoreTotals.isNotEmpty()) scoreTotals.average() else null
-        val avgIterations = if (history.isNotEmpty()) history.map { it.iterations.toDouble() }.average() else null
-        val avgGenerationTimeMs = if (history.isNotEmpty()) history.map { it.generationTimeMs.toDouble() }.average() else null
-        val avgValidationTimeMs = if (history.isNotEmpty()) history.map { it.validationTimeMs.toDouble() }.average() else null
-        val avgTotalTimeMs = if (history.isNotEmpty()) history.map { (it.generationTimeMs + it.validationTimeMs).toDouble() }.average() else null
-        val successfulGenerations = history.count { it.success }.toLong()
-        val successRate = if (history.isNotEmpty()) successfulGenerations.toDouble() / history.size.toDouble() else null
-        val lastGeneration = history.firstOrNull()?.createdAt
+        val totalGenerations = fullHistory.size.toLong()
+        val successfulGenerations = fullHistory.count { it.success }.toLong()
+        val failedGenerations = totalGenerations - successfulGenerations
+
+        val avgScore = fullHistory.mapNotNull { it.scoreTotal }.takeIf { it.isNotEmpty() }?.average()
+        val avgIterations = fullHistory.map { it.iterations.toDouble() }.takeIf { it.isNotEmpty() }?.average()
+        val avgGenerationTimeMs = fullHistory.map { it.generationTimeMs.toDouble() }.takeIf { it.isNotEmpty() }?.average()
+        val avgValidationTimeMs = fullHistory.map { it.validationTimeMs.toDouble() }.takeIf { it.isNotEmpty() }?.average()
+        val avgTotalTimeMs = fullHistory.map { (it.generationTimeMs + it.validationTimeMs).toDouble() }.takeIf { it.isNotEmpty() }?.average()
+        val successRate = if (totalGenerations > 0) successfulGenerations.toDouble() / totalGenerations.toDouble() else null
+        val lastGeneration = fullHistory.firstOrNull()?.createdAt
 
         return ResponseEntity.ok(
             mapOf(
                 "projectId" to projectId,
                 "totalGenerations" to totalGenerations,
+                "successfulGenerations" to successfulGenerations,
+                "failedGenerations" to failedGenerations,
                 "avgScore" to avgScore?.let { "%.2f".format(it).toDouble() },
                 "avgIterations" to avgIterations?.let { "%.2f".format(it).toDouble() },
                 "avgGenerationTimeMs" to avgGenerationTimeMs?.let { "%.2f".format(it).toDouble() },
@@ -82,6 +83,7 @@ class MetricsController(
                 "lastGeneration" to lastGeneration?.toString(),
                 "recentHistory" to history.map { record ->
                     mapOf<String, Any?>(
+                        "id" to record.id,
                         "strategy" to record.strategy.name,
                         "score" to record.scoreTotal,
                         "iterations" to record.iterations,
@@ -89,11 +91,31 @@ class MetricsController(
                         "generationTimeMs" to record.generationTimeMs,
                         "validationTimeMs" to record.validationTimeMs,
                         "totalTimeMs" to (record.generationTimeMs + record.validationTimeMs),
+                        "violationsCount" to record.violationsCount,
                         "timestamp" to record.createdAt.toString(),
                         "prompt" to record.prompt,
                         "generatedCode" to record.generatedCode
                     )
                 }
+            )
+        )
+    }
+
+    @Transactional
+    @DeleteMapping("/{projectId}")
+    fun clearProjectMetrics(@PathVariable projectId: String): ResponseEntity<Map<String, Any>> {
+        val records = metricsRepository.findByProjectIdOrderByCreatedAtDesc(projectId)
+        val deletedCount = records.size
+
+        if (deletedCount > 0) {
+            metricsRepository.deleteAllInBatch(records)
+        }
+
+        return ResponseEntity.ok(
+            mapOf(
+                "success" to true,
+                "projectId" to projectId,
+                "deletedCount" to deletedCount
             )
         )
     }
@@ -232,4 +254,6 @@ class MetricsController(
             )
         )
     }
+
+
 }
