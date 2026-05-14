@@ -117,7 +117,7 @@ export class MetricsPanel {
 body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); padding: 18px; }
 h2, h3 { margin: 0 0 10px 0; }
 .section { margin-bottom: 18px; padding: 12px; background: var(--vscode-textBlockBackground); border-radius: 6px; }
-.metrics-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
 .metric-card { padding: 10px; background: var(--vscode-badge-background); border-radius: 6px; text-align: center; }
 .metric-value { font-size: 1rem; font-weight: 700; }
 .metric-label { font-size: 0.8rem; opacity: 0.8; }
@@ -130,15 +130,76 @@ h2, h3 { margin: 0 0 10px 0; }
   border-radius: 6px;
   margin-top: 10px;
 }
-.history-list { list-style: none; padding: 0; margin: 0; }
+.history-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .history-item {
-  padding: 8px;
-  margin: 6px 0;
+  padding: 10px;
   background: var(--vscode-list-hoverBackground);
-  border-radius: 4px;
+  border-radius: 6px;
+}
+
+.history-item details {
+  width: 100%;
+}
+
+.history-item summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.history-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.history-summary {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.history-summary-left,
+.history-summary-right {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.history-details {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.history-details pre {
+  margin: 6px 0 0;
+  padding: 10px;
+  border-radius: 4px;
+  background: var(--vscode-editor-background);
+  white-space: pre-wrap;
+  overflow: auto;
+}
+
+.history-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.history-pill {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--vscode-badge-background);
+  font-size: 0.8rem;
 }
 button {
   padding: 8px 14px;
@@ -166,8 +227,10 @@ button:hover { background: var(--vscode-button-hoverBackground); }
       <div class="metrics-grid">
         <div class="metric-card"><div class="metric-value" id="totalGenerations">-</div><div class="metric-label">Total Generations</div></div>
         <div class="metric-card"><div class="metric-value" id="avgScore">-</div><div class="metric-label">Average Score</div></div>
+        <div class="metric-card"><div class="metric-value" id="successRate">-</div><div class="metric-label">Success Rate</div></div>
         <div class="metric-card"><div class="metric-value" id="lastGeneration">-</div><div class="metric-label">Last Generation</div></div>
         <div class="metric-card"><div class="metric-value" id="avgIterations">-</div><div class="metric-label">Avg Iterations</div></div>
+        <div class="metric-card"><div class="metric-value" id="avgTotalTimeMs">-</div><div class="metric-label">Avg Total Time</div></div>
       </div>
     </div>
 
@@ -181,7 +244,9 @@ button:hover { background: var(--vscode-button-hoverBackground); }
             <th>Success Rate</th>
             <th>Avg Score</th>
             <th>Avg Iterations</th>
+            <th>Avg Generation</th>
             <th>Avg Validation</th>
+            <th>Avg Total Time</th>
           </tr>
         </thead>
         <tbody id="strategyTableBody"></tbody>
@@ -349,16 +414,56 @@ function renderMetrics() {
   }
 
   const historyList = document.getElementById('historyList');
-  historyList.innerHTML = history.length
-    ? history.slice(0, 10).map(item => \`
-        <li class="history-item">
-          <strong>\${item.strategy}</strong> · \${fmtDate(item.timestamp)} ·
-          score \${fmtScore(item.score)} ·
-          \${item.iterations} iter ·
-          total \${fmtTime(item.totalTimeMs ?? ((item.generationTimeMs || 0) + (item.validationTimeMs || 0)))}
-        </li>
-      \`).join('')
-    : '<li class="history-item">No generation history</li>';
+  historyList.innerHTML = '';
+
+  history.slice(0, 10).forEach((item) => {
+    const li = document.createElement('li');
+    li.className = 'history-item';
+
+    const hasPrompt = item.prompt && item.prompt.trim().length > 0;
+    const hasCode = item.generatedCode && item.generatedCode.trim().length > 0;
+
+    const summaryHtml = \`
+      <span class="history-summary-left">
+        <strong>\${escapeHtml(item.strategy)}</strong>
+        <span class="small">\${fmtDate(item.timestamp)}</span>
+      </span>
+      <span class="history-summary-right">
+        <span>\${fmtScore(item.score)}</span>
+        <span class="small">\${item.iterations} iter</span>
+      </span>
+    \`;
+
+    const metaPills = [
+      item.totalTimeMs != null ? \`Total: \${fmtTime(item.totalTimeMs)}\` : null,
+      item.generationTimeMs != null ? \`Gen: \${fmtTime(item.generationTimeMs)}\` : null,
+      item.validationTimeMs != null ? \`Val: \${fmtTime(item.validationTimeMs)}\` : null,
+      item.violationsCount != null ? \`Violations: \${item.violationsCount}\` : null
+    ].filter(Boolean).map(text => \`<span class="history-pill">\${text}</span>\`).join('');
+
+    const detailsHtml = \`
+      <div class="history-details">
+        <div class="history-meta">\${metaPills}</div>
+        \${hasPrompt ? \`<div><strong>Prompt</strong><pre>\${escapeHtml(item.prompt)}</pre></div>\` : ''}
+        \${hasCode ? \`<div><strong>Generated Code</strong><pre>\${escapeHtml(item.generatedCode)}</pre></div>\` : ''}
+      </div>
+    \`;
+
+    if (hasPrompt || hasCode) {
+      li.innerHTML = \`
+        <details>
+          <summary class="history-summary">\${summaryHtml}</summary>
+          \${detailsHtml}
+        </details>
+      \`;
+    } else {
+      li.innerHTML = \`
+        <div class="history-summary">\${summaryHtml}</div>
+      \`;
+    }
+
+    historyList.appendChild(li);
+  });
 }
 </script>
 </body>

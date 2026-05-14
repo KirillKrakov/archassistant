@@ -9,54 +9,109 @@ class CsvExporter {
 
     private val dateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
 
-    /**
-     * Экспорт записей в CSV-формат
-     */
-    fun export(records: List<GenerationRecord>, includeViolations: Boolean): String {
-        val headers = listOf(
-            "id", "projectId", "strategy", "prompt", "generatedCode", "success", "scoreTotal", "scoreRulesPass",
-            "scorePatternMatch", "scoreDependencyCorrect", "iterations", "generationTimeMs",
-            "validationTimeMs", "violationsCount", "createdAt"
-        ) + if (includeViolations) listOf("violationsJson") else emptyList()
+    fun export(
+        records: List<GenerationRecord>,
+        includeViolations: Boolean
+    ): String {
 
-        val rows = records.map { record ->
-            val base = listOf(
-                record.id,
-                record.projectId,
-                record.strategy.name,
-                record.prompt ?: "",
-                record.generatedCode ?: "",
-                record.success.toString(),
-                record.scoreTotal?.toString() ?: "N/A",
-                record.scoreRulesPass?.toString() ?: "N/A",
-                record.scorePatternMatch?.toString() ?: "N/A",
-                record.scoreDependencyCorrect?.toString() ?: "N/A",
-                record.iterations.toString(),
-                record.generationTimeMs.toString(),
-                record.validationTimeMs.toString(),
-                record.violationsCount.toString(),
-                record.createdAt.format(dateTimeFormatter)
+        val headers = buildList {
+            addAll(
+                listOf(
+                    "id",
+                    "projectId",
+                    "strategy",
+                    "prompt",
+                    "generatedCode",
+                    "success",
+                    "scoreTotal",
+                    "scoreRulesPass",
+                    "scorePatternMatch",
+                    "scoreDependencyCorrect",
+                    "iterations",
+                    "generationTimeMs",
+                    "validationTimeMs",
+                    "violationsCount",
+                    "createdAt"
+                )
             )
+
             if (includeViolations) {
-                base + listOf(record.violationsJson?.let { escapeCsv(it) } ?: "N/A")
-            } else {
-                base
+                add("violationsJson")
             }
         }
 
         return buildString {
+            append('\uFEFF')
             appendLine(headers.joinToString(","))
-            rows.forEach { row ->
-                appendLine(row.joinToString(",") { escapeCsv(it) })
+
+            records.forEach { record ->
+
+                val row = buildList {
+
+                    add(record.id)
+                    add(record.projectId)
+                    add(record.strategy.name)
+
+                    add(normalizeMultiline(record.prompt))
+                    add(normalizeMultiline(record.generatedCode))
+
+                    add(record.success.toString())
+
+                    add(record.scoreTotal?.toString() ?: "N/A")
+                    add(record.scoreRulesPass?.toString() ?: "N/A")
+                    add(record.scorePatternMatch?.toString() ?: "N/A")
+                    add(record.scoreDependencyCorrect?.toString() ?: "N/A")
+
+                    add(record.iterations.toString())
+                    add(record.generationTimeMs.toString())
+                    add(record.validationTimeMs.toString())
+                    add(record.violationsCount.toString())
+
+                    add(record.createdAt.format(dateTimeFormatter))
+
+                    if (includeViolations) {
+                        add(normalizeMultiline(record.violationsJson))
+                    }
+                }
+
+                appendLine(
+                    row.joinToString(",") { escapeCsv(it) }
+                )
             }
         }
     }
 
-    private fun escapeCsv(value: String): String {
-        return if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
-            "\"${value.replace("\"", "\"\"")}\""
+    private fun normalizeMultiline(value: String?): String {
+        if (value.isNullOrBlank()) {
+            return ""
+        }
+
+        return sanitizeForSpreadsheet(
+            value
+                .replace("\r\n", "\n")
+                .replace("\r", "\n")
+                .replace("\t", "\\t")
+                .replace("\n", "\\n")
+        )
+    }
+
+    private fun sanitizeForSpreadsheet(value: String): String {
+        return if (
+            value.startsWith("=") ||
+            value.startsWith("+") ||
+            value.startsWith("-") ||
+            value.startsWith("@")
+        ) {
+            "'$value"
         } else {
             value
         }
+    }
+
+    private fun escapeCsv(value: String): String {
+
+        val escaped = value.replace("\"", "\"\"")
+
+        return "\"$escaped\""
     }
 }
