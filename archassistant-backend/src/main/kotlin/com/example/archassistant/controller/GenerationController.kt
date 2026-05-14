@@ -2,26 +2,19 @@ package com.example.archassistant.controller
 
 import com.example.archassistant.dto.CodeGenerationRequest
 import com.example.archassistant.dto.CodeGenerationResponse
-import com.example.archassistant.dto.ErrorDetails
-import com.example.archassistant.dto.ResponseMetadata
-import com.example.archassistant.service.StrategyOrchestrator
-import org.slf4j.LoggerFactory
-import org.springframework.http.ResponseEntity
-import org.springframework.web.bind.annotation.*
 import com.example.archassistant.model.GenerationRecord
 import com.example.archassistant.model.StrategyType
 import com.example.archassistant.repository.GenerationRecordRepository
+import com.example.archassistant.service.generation.StrategyOrchestrator
 import com.fasterxml.jackson.databind.ObjectMapper
+import org.slf4j.LoggerFactory
+import org.springframework.http.ResponseEntity
+import org.springframework.web.bind.annotation.*
+import java.time.LocalDateTime
 
-/**
- * Контроллер для генерации кода с архитектурным контролем
- *
- * Endpoints:
- * POST /api/generate - Основная точка входа для генерации кода
- */
 @RestController
 @RequestMapping("/api/generate")
-@CrossOrigin(origins = ["*"]) // Для удобства тестирования из Postman/браузера (поменять в production)
+@CrossOrigin(origins = ["*"])
 class GenerationController(
     private val strategyOrchestrator: StrategyOrchestrator,
     private val metricsRepository: GenerationRecordRepository,
@@ -30,83 +23,42 @@ class GenerationController(
 
     private val logger = LoggerFactory.getLogger(GenerationController::class.java)
 
-    /**
-     * Генерация кода с выбранной стратегией архитектурного контроля
-     */
     @PostMapping
     fun generateCode(@RequestBody request: CodeGenerationRequest): ResponseEntity<CodeGenerationResponse> {
-        logger.info("Received generation request: strategy={}, projectId={}, promptLength={}",
-            request.strategy, request.projectId, request.prompt.length)
+        logger.info(
+            "Received generation request: strategy={}, projectId={}, promptLength={}",
+            request.strategy, request.projectId, request.prompt.length
+        )
 
         if (request.prompt.isBlank()) {
-            return ResponseEntity.badRequest().body(
-                CodeGenerationResponse(
-                    success = false,
-                    data = null,
-                    error = ErrorDetails(
-                        code = "INVALID_PROMPT",
-                        message = "Prompt cannot be empty"
-                    ),
-                    metadata = ResponseMetadata(
-                        generationTimeMs = 0,
-                        validationTimeMs = 0,
-                        totalTimeMs = 0
-                    )
-                )
-            )
+            throw IllegalArgumentException("Prompt cannot be empty")
         }
 
-        return try {
-            val response = strategyOrchestrator.generate(request)
+        val response = strategyOrchestrator.generate(request)
+        saveMetrics(request.projectId, request.prompt, response)
 
-            saveMetricsAsync(request.projectId, request.prompt, response)
-
-            when {
-                response.success -> ResponseEntity.ok(response)
-                else -> ResponseEntity.badRequest().body(response)
-            }
-        } catch (e: IllegalArgumentException) {
-            ResponseEntity.badRequest().body(
-                CodeGenerationResponse(
-                    success = false,
-                    data = null,
-                    error = ErrorDetails(
-                        code = "INVALID_REQUEST",
-                        message = e.message ?: "Invalid request parameters"
-                    ),
-                    metadata = ResponseMetadata(0, 0, 0)
-                )
-            )
-        } catch (e: Exception) {
-            ResponseEntity.internalServerError().body(
-                CodeGenerationResponse(
-                    success = false,
-                    data = null,
-                    error = ErrorDetails(
-                        code = "INTERNAL_ERROR",
-                        message = "Internal server error: ${e.message}"
-                    ),
-                    metadata = ResponseMetadata(0, 0, 0)
-                )
-            )
+        return if (response.success) {
+            ResponseEntity.ok(response)
+        } else {
+            ResponseEntity.badRequest().body(response)
         }
     }
 
-    /**
-     * Health check для генерации (проверка доступности стратегий)
-     */
     @GetMapping("/health")
     fun health(): ResponseEntity<Map<String, Any>> {
         val availableStrategies = strategyOrchestrator.getAvailableStrategies("")
-        return ResponseEntity.ok(mapOf(
-            "status" to "UP",
-            "availableStrategies" to availableStrategies.map { it.name },
-            "timestamp" to java.time.LocalDateTime.now().toString()
-        ))
+        return ResponseEntity.ok(
+            mapOf(
+                "status" to "UP",
+                "availableStrategies" to availableStrategies.map { it.name },
+                "timestamp" to LocalDateTime.now().toString()
+            )
+        )
     }
 
-    private fun saveMetricsAsync(projectId: String, prompt: String, response: CodeGenerationResponse) {
-        logger.info("Received generated code: {}'",response.data?.code)
+    private fun saveMetrics(projectId: String, prompt: String, response: CodeGenerationResponse) {
+        logger.info("Received generated code: {}", response.data?.code)
+
         try {
             val violations = response.data?.score?.violations.orEmpty()
             val record = GenerationRecord(
@@ -125,9 +77,9 @@ class GenerationController(
                 violationsCount = violations.size,
                 violationsJson = if (violations.isNotEmpty()) objectMapper.writeValueAsString(violations) else null
             )
-            metricsRepository.save(record)
+            metricsRepository.saveAndFlush(record)
         } catch (e: Exception) {
-            logger.warn("Failed to save metrics: ${e.message}")
+            logger.warn("Failed to save metrics: ", e)
         }
     }
 }

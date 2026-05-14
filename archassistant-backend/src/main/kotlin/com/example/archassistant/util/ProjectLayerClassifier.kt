@@ -8,17 +8,27 @@ import com.tngtech.archunit.core.domain.JavaClass
 object ProjectLayerClassifier {
 
     fun classify(classInfo: ClassInfo): LayerType {
-        return classify(null, classInfo.packageName, classInfo.simpleName, classInfo.annotations)
+        return classify(
+            packageName = classInfo.packageName,
+            simpleName = classInfo.simpleName,
+            annotationsRaw = classInfo.annotations,
+            javaClass = null
+        )
     }
 
     fun classify(javaClass: JavaClass): LayerType {
         val annotations = javaClass.annotations.map { it.type.name.substringAfterLast('.') }
         val simpleName = javaClass.name.substringAfterLast('.')
-        return classify(javaClass, javaClass.packageName, simpleName, annotations)
+        return classify(
+            packageName = javaClass.packageName,
+            simpleName = simpleName,
+            annotationsRaw = annotations,
+            javaClass = javaClass
+        )
     }
 
     fun matchesClassType(classInfo: ClassInfo, type: ClassType): Boolean {
-        return classify(null, classInfo.packageName, classInfo.simpleName, classInfo.annotations).toClassType() == type
+        return classify(classInfo).toClassType() == type
     }
 
     fun matchesClassType(javaClass: JavaClass, type: ClassType): Boolean {
@@ -30,10 +40,10 @@ object ProjectLayerClassifier {
     fun matchesLayer(javaClass: JavaClass, type: LayerType): Boolean = classify(javaClass) == type
 
     private fun classify(
-        javaClass: JavaClass?,
         packageName: String,
         simpleName: String,
-        annotationsRaw: List<String>
+        annotationsRaw: List<String>,
+        javaClass: JavaClass?
     ): LayerType {
         val pkg = packageName.lowercase()
         val simple = simpleName.lowercase()
@@ -41,40 +51,40 @@ object ProjectLayerClassifier {
         val lastSegment = pkg.split('.').lastOrNull().orEmpty()
 
         return when {
-            isController(pkg, lastSegment, simple, annotations) -> LayerType.CONTROLLER
-            isViewModel(pkg, lastSegment, simple, annotations) -> LayerType.VIEWMODEL
-            isView(pkg, lastSegment, simple, annotations) -> LayerType.VIEW
-            isRepository(javaClass, pkg, lastSegment, simple, annotations) -> LayerType.REPOSITORY
-            isService(pkg, lastSegment, simple, annotations) -> LayerType.SERVICE
-            isEntity(pkg, lastSegment, simple, annotations) -> LayerType.ENTITY
-            isDto(pkg, lastSegment, simple, annotations) -> LayerType.DTO
-            isPort(pkg, lastSegment, simple, annotations) -> LayerType.PORT
-            isAdapter(pkg, lastSegment, simple, annotations) -> LayerType.ADAPTER
-            isApi(pkg, lastSegment, simple, annotations) -> LayerType.API
-            isImpl(pkg, lastSegment, simple, annotations) -> LayerType.IMPL
-            isFeature(pkg, lastSegment, simple, annotations) -> LayerType.FEATURE
-            isCommon(pkg, lastSegment, simple, annotations) -> LayerType.COMMON
-            isApplication(pkg, lastSegment, simple, annotations) -> LayerType.APPLICATION
-            isInfrastructure(pkg, lastSegment, simple, annotations) -> LayerType.INFRASTRUCTURE
-            isDomain(pkg, lastSegment, simple, annotations) -> LayerType.DOMAIN
+            isController(lastSegment, simple, annotations) -> LayerType.CONTROLLER
+            isViewModel(lastSegment, simple, annotations) -> LayerType.VIEWMODEL
+            isView(lastSegment, simple, annotations) -> LayerType.VIEW
+            isRepository(javaClass, lastSegment, simple, annotations) -> LayerType.REPOSITORY
+            isService(lastSegment, simple, annotations) -> LayerType.SERVICE
+            isEntity(lastSegment, simple, annotations) -> LayerType.ENTITY
+            isDto(lastSegment, simple) -> LayerType.DTO
+            isPort(lastSegment, simple) -> LayerType.PORT
+            isAdapter(lastSegment, simple) -> LayerType.ADAPTER
+            isApi(lastSegment, simple) -> LayerType.API
+            isImpl(lastSegment, simple) -> LayerType.IMPL
+            isFeature(lastSegment, simple) -> LayerType.FEATURE
+            isCommon(lastSegment, simple) -> LayerType.COMMON
+            isApplication(lastSegment, simple) -> LayerType.APPLICATION
+            isInfrastructure(lastSegment) -> LayerType.INFRASTRUCTURE
+            isDomain(lastSegment) -> LayerType.DOMAIN
             else -> LayerType.OTHER
         }
     }
 
-    private fun isController(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
+    private fun isController(last: String, simple: String, annotations: List<String>): Boolean {
         return annotations.any { it == "controller" || it == "restcontroller" } ||
                 last in setOf("controller", "web", "rest", "resource", "endpoint", "api") ||
                 simple.endsWith("controller") ||
                 simple.endsWith("resource")
     }
 
-    private fun isViewModel(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
+    private fun isViewModel(last: String, simple: String, annotations: List<String>): Boolean {
         return annotations.any { it.contains("viewmodel") || it.contains("livedata") } ||
                 last in setOf("viewmodel", "vm") ||
                 simple.endsWith("viewmodel")
     }
 
-    private fun isView(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
+    private fun isView(last: String, simple: String, annotations: List<String>): Boolean {
         return annotations.any { it == "composable" } ||
                 last in setOf("view", "ui", "screen", "fragment", "activity") ||
                 simple.endsWith("view") ||
@@ -85,7 +95,6 @@ object ProjectLayerClassifier {
 
     private fun isRepository(
         javaClass: JavaClass?,
-        pkg: String,
         last: String,
         simple: String,
         annotations: List<String>
@@ -138,7 +147,7 @@ object ProjectLayerClassifier {
                 simple.endsWith("reactiverepository")
     }
 
-    private fun isService(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
+    private fun isService(last: String, simple: String, annotations: List<String>): Boolean {
         return annotations.any { it == "service" } ||
                 last in setOf("service", "business", "usecase", "interactor") ||
                 simple.endsWith("service") ||
@@ -146,13 +155,13 @@ object ProjectLayerClassifier {
                 simple.endsWith("interactor")
     }
 
-    private fun isEntity(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
+    private fun isEntity(last: String, simple: String, annotations: List<String>): Boolean {
         return annotations.any { it == "entity" || it == "table" } ||
                 last in setOf("entity", "model", "domain") ||
                 simple.endsWith("entity")
     }
 
-    private fun isDto(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
+    private fun isDto(last: String, simple: String): Boolean {
         return last in setOf("dto", "vo", "request", "response", "command", "query") ||
                 simple.endsWith("dto") ||
                 simple.endsWith("request") ||
@@ -161,44 +170,44 @@ object ProjectLayerClassifier {
                 simple.endsWith("query")
     }
 
-    private fun isPort(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
+    private fun isPort(last: String, simple: String): Boolean {
         return last in setOf("port", "ports", "contract", "gateway", "spi") ||
                 simple.endsWith("port")
     }
 
-    private fun isAdapter(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
+    private fun isAdapter(last: String, simple: String): Boolean {
         return last in setOf("adapter", "adapters") ||
                 simple.endsWith("adapter")
     }
 
-    private fun isApi(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
+    private fun isApi(last: String, simple: String): Boolean {
         return last in setOf("api", "public", "contract", "exposed") ||
                 simple.endsWith("api")
     }
 
-    private fun isImpl(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
+    private fun isImpl(last: String, simple: String): Boolean {
         return last in setOf("impl", "implementation") || simple.endsWith("impl")
     }
 
-    private fun isFeature(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
+    private fun isFeature(last: String, simple: String): Boolean {
         return last in setOf("feature", "module", "modules") || simple.contains("feature")
     }
 
-    private fun isCommon(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
+    private fun isCommon(last: String, simple: String): Boolean {
         return last in setOf("common", "shared", "base", "kernel", "util") || simple.contains("common")
     }
 
-    private fun isApplication(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
+    private fun isApplication(last: String, simple: String): Boolean {
         return last in setOf("application", "usecase", "interactor") ||
                 simple.endsWith("usecase") ||
                 simple.endsWith("interactor")
     }
 
-    private fun isInfrastructure(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
+    private fun isInfrastructure(last: String): Boolean {
         return last in setOf("infrastructure", "persistence", "adapter", "client", "integration", "external")
     }
 
-    private fun isDomain(pkg: String, last: String, simple: String, annotations: List<String>): Boolean {
+    private fun isDomain(last: String): Boolean {
         return last in setOf("domain", "core")
     }
 

@@ -1,18 +1,20 @@
 package com.example.archassistant.controller
 
+import com.example.archassistant.config.ArchassistantProperties
+import com.example.archassistant.dto.ExportFormat
 import com.example.archassistant.dto.ExportRequest
+import com.example.archassistant.dto.GenerationRecordDto
 import com.example.archassistant.model.GenerationRecord
+import com.example.archassistant.model.StrategyType
 import com.example.archassistant.repository.GenerationRecordRepository
-import com.example.archassistant.service.MetricsComparisonService
-import com.example.archassistant.service.MetricsExportService
+import com.example.archassistant.service.metrics.MetricsComparisonService
+import com.example.archassistant.service.metrics.MetricsExportService
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import java.time.LocalDateTime
-import com.example.archassistant.dto.ExportFormat
-import com.example.archassistant.dto.GenerationRecordDto
 
 @RestController
 @RequestMapping("/api/metrics")
@@ -20,7 +22,8 @@ import com.example.archassistant.dto.GenerationRecordDto
 class MetricsController(
     private val metricsRepository: GenerationRecordRepository,
     private val exportService: MetricsExportService,
-    private val comparisonService: MetricsComparisonService
+    private val comparisonService: MetricsComparisonService,
+    private val properties: ArchassistantProperties
 ) {
 
     private companion object {
@@ -33,14 +36,15 @@ class MetricsController(
     fun compareStrategies(
         @RequestParam(required = false) projectId: String?
     ): ResponseEntity<Map<String, Any>> {
+        val threshold = properties.compliance.threshold
+
         val metrics = if (projectId.isNullOrBlank()) {
-            metricsRepository.getAllMetrics()
+            metricsRepository.getAllMetrics(threshold)
         } else {
-            metricsRepository.getMetricsByProject(projectId)
+            metricsRepository.getMetricsByProject(projectId, threshold)
         }
 
         val result = metrics.associate { it.strategy.name to it.toMap() }
-
         return ResponseEntity.ok(result)
     }
 
@@ -52,106 +56,82 @@ class MetricsController(
         val avgScore = if (scoreTotals.isNotEmpty()) scoreTotals.average() else null
         val lastGeneration = history.firstOrNull()?.createdAt
 
-        return ResponseEntity.ok(mapOf(
-            "projectId" to projectId,
-            "totalGenerations" to totalGenerations,
-            "avgScore" to avgScore?.let { "%.2f".format(it).toDouble() },
-            "lastGeneration" to lastGeneration?.toString(),
-            "recentHistory" to history.map { record ->
-                mapOf<String, Any?>(
-                    "strategy" to record.strategy.name,
-                    "score" to record.scoreTotal,
-                    "iterations" to record.iterations,
-                    "success" to record.success,
-                    "timestamp" to record.createdAt.toString(),
-                    "prompt" to record.prompt,
-                    "generatedCode" to record.generatedCode
-                )
-            }
-        ))
+        return ResponseEntity.ok(
+            mapOf(
+                "projectId" to projectId,
+                "totalGenerations" to totalGenerations,
+                "avgScore" to avgScore?.let { "%.2f".format(it).toDouble() },
+                "lastGeneration" to lastGeneration?.toString(),
+                "recentHistory" to history.map { record ->
+                    mapOf<String, Any?>(
+                        "strategy" to record.strategy.name,
+                        "score" to record.scoreTotal,
+                        "iterations" to record.iterations,
+                        "success" to record.success,
+                        "timestamp" to record.createdAt.toString(),
+                        "prompt" to record.prompt,
+                        "generatedCode" to record.generatedCode
+                    )
+                }
+            )
+        )
     }
 
     @PostMapping("/record")
-    fun saveGenerationRecord(@RequestBody record: GenerationRecordDto): ResponseEntity<Map<String, Any>> {
-        logger.info("Saving generation record: strategy={}, projectId={}, score={}",
-            record.strategy, record.projectId, record.scoreTotal)
+    fun saveGenerationRecord(@RequestBody record: GenerationRecordDto): ResponseEntity<Map<String, Any?>> {
+        logger.info(
+            "Saving generation record: strategy={}, projectId={}, score={}",
+            record.strategy, record.projectId, record.scoreTotal
+        )
 
-        return try {
-            val entity = GenerationRecord(
-                id = record.id ?: java.util.UUID.randomUUID().toString(),
-                projectId = record.projectId,
-                strategy = record.strategy,
-                prompt = record.prompt,
-                generatedCode = record.generatedCode,
-                success = record.success,
-                scoreTotal = record.scoreTotal,
-                scoreRulesPass = record.scoreRulesPass,
-                scorePatternMatch = record.scorePatternMatch,
-                scoreDependencyCorrect = record.scoreDependencyCorrect,
-                iterations = record.iterations,
-                generationTimeMs = record.generationTimeMs,
-                validationTimeMs = record.validationTimeMs,
-                violationsCount = record.violationsCount,
-                violationsJson = record.violationsJson
-            )
+        val entity = GenerationRecord(
+            id = record.id ?: java.util.UUID.randomUUID().toString(),
+            projectId = record.projectId,
+            strategy = record.strategy,
+            prompt = record.prompt,
+            generatedCode = record.generatedCode,
+            success = record.success,
+            scoreTotal = record.scoreTotal,
+            scoreRulesPass = record.scoreRulesPass,
+            scorePatternMatch = record.scorePatternMatch,
+            scoreDependencyCorrect = record.scoreDependencyCorrect,
+            iterations = record.iterations,
+            generationTimeMs = record.generationTimeMs,
+            validationTimeMs = record.validationTimeMs,
+            violationsCount = record.violationsCount,
+            violationsJson = record.violationsJson
+        )
 
-            metricsRepository.save(entity)
+        metricsRepository.save(entity)
 
-            ResponseEntity.ok(mapOf("success" to true, "recordId" to entity.id))
-        } catch (e: Exception) {
-            logger.error("Failed to save generation record: ${e.message}", e)
-            return ResponseEntity.internalServerError()
-                .body(mapOf<String, Any>("success" to false, "error" to (e.message ?: "Unknown error")))
-        }
+        return ResponseEntity.ok(mapOf("success" to true, "recordId" to entity.id))
     }
 
-    /**
-     * Экспорт метрик в CSV/JSON
-     */
     @PostMapping("/export")
     fun exportMetrics(@RequestBody request: ExportRequest): ResponseEntity<Any> {
-        try {
-            val result = exportService.export(request)
+        val result = exportService.export(request)
 
-            val contentType = when (request.format) {
-                ExportFormat.CSV -> "text/csv"
-                ExportFormat.JSON, ExportFormat.JSON_PRETTY -> "application/json"
-            }
-
-            val filename = "archassistant-metrics-${request.projectId ?: "all"}-${result.generatedAt}.${request.format.name.lowercase()}"
-
-            return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(contentType))
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"$filename\"")
-                .body(result.content)
-
-        } catch (e: Exception) {
-            logger.error("Export failed: ${e.message}", e)
-            return ResponseEntity.internalServerError()
-                .body(mapOf("error" to "Export failed: ${e.message}"))
+        val contentType = when (request.format) {
+            ExportFormat.CSV -> "text/csv"
+            ExportFormat.JSON, ExportFormat.JSON_PRETTY -> "application/json"
         }
+
+        val filename = "archassistant-metrics-${request.projectId ?: "all"}-${result.generatedAt}.${request.format.name.lowercase()}"
+
+        return ResponseEntity.ok()
+            .contentType(MediaType.parseMediaType(contentType))
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"$filename\"")
+            .body(result.content)
     }
 
-    /**
-     * Сравнение стратегий с рекомендацией
-     */
     @GetMapping("/compare")
     fun compareStrategiesDetailed(
         @RequestParam(required = false) projectId: String?
     ): ResponseEntity<Any> {
-        try {
-            val result = comparisonService.compare(projectId)
-            return ResponseEntity.ok(result)
-        } catch (e: Exception) {
-            logger.error("Comparison failed: ${e.message}", e)
-            return ResponseEntity.internalServerError()
-                .body(mapOf("error" to "Comparison failed: ${e.message}"))
-        }
+        val result = comparisonService.compare(projectId)
+        return ResponseEntity.ok(result)
     }
 
-    /**
-     * История генераций с пагинацией
-     */
     @GetMapping("/{projectId}/history")
     fun getGenerationHistory(
         @PathVariable projectId: String,
@@ -161,33 +141,34 @@ class MetricsController(
         @RequestParam(required = false) fromDate: LocalDateTime?,
         @RequestParam(required = false) toDate: LocalDateTime?
     ): ResponseEntity<Map<String, Any>> {
-        try {
-            val records = when {
-                strategy != null && fromDate != null && toDate != null ->
-                    metricsRepository.findByProjectIdAndStrategyAndCreatedAtBetween(
-                        projectId,
-                        com.example.archassistant.model.StrategyType.valueOf(strategy),
-                        fromDate,
-                        toDate
-                    )
-                strategy != null -> {
-                    val strategyType = parseStrategyOrNull(strategy)
-                        ?: return ResponseEntity.badRequest().body(mapOf("error" to "Unknown strategy: $strategy"))
+        val records = when {
+            strategy != null && fromDate != null && toDate != null ->
+                metricsRepository.findByProjectIdAndStrategyAndCreatedAtBetween(
+                    projectId,
+                    StrategyType.valueOf(strategy.uppercase()),
+                    fromDate,
+                    toDate
+                )
 
-                    metricsRepository.findByProjectIdAndStrategy(projectId, strategyType)
-                }
-                fromDate != null && toDate != null ->
-                    metricsRepository.findByProjectIdAndCreatedAtBetween(projectId, fromDate, toDate)
-                else ->
-                    metricsRepository.findByProjectIdOrderByCreatedAtDesc(projectId)
+            strategy != null -> {
+                val strategyType = runCatching { StrategyType.valueOf(strategy.uppercase()) }.getOrNull()
+                    ?: return ResponseEntity.badRequest().body(mapOf("error" to "Unknown strategy: $strategy"))
+                metricsRepository.findByProjectIdAndStrategy(projectId, strategyType)
             }
 
-            // Пагинация
-            val paginated = records.drop(page * size).take(size)
-            val total = records.size
-            val totalPages = (total + size - 1) / size
+            fromDate != null && toDate != null ->
+                metricsRepository.findByProjectIdAndCreatedAtBetween(projectId, fromDate, toDate)
 
-            return ResponseEntity.ok(mapOf(
+            else ->
+                metricsRepository.findByProjectIdOrderByCreatedAtDesc(projectId)
+        }
+
+        val paginated = records.drop(page * size).take(size)
+        val total = records.size
+        val totalPages = (total + size - 1) / size
+
+        return ResponseEntity.ok(
+            mapOf(
                 "projectId" to projectId,
                 "page" to page,
                 "size" to size,
@@ -206,18 +187,7 @@ class MetricsController(
                         "createdAt" to record.createdAt
                     )
                 }
-            ))
-        } catch (e: Exception) {
-            logger.error("History fetch failed: ${e.message}", e)
-            return ResponseEntity.internalServerError()
-                .body(mapOf("error" to "History fetch failed: ${e.message}"))
-        }
-    }
-
-    private fun parseStrategyOrNull(value: String?): com.example.archassistant.model.StrategyType? {
-        if (value.isNullOrBlank()) return null
-        return runCatching {
-            com.example.archassistant.model.StrategyType.valueOf(value.uppercase())
-        }.getOrNull()
+            )
+        )
     }
 }

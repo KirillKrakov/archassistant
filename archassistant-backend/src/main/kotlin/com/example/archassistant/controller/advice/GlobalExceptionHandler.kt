@@ -1,9 +1,8 @@
 package com.example.archassistant.controller.advice
 
+import com.example.archassistant.dto.CodeGenerationResponse
 import com.example.archassistant.dto.ErrorDetails
 import com.example.archassistant.dto.ResponseMetadata
-import com.example.archassistant.dto.CodeGenerationResponse
-import com.example.archassistant.service.LlmGenerationException
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -31,16 +30,6 @@ class GlobalExceptionHandler {
             status = HttpStatus.CONFLICT,
             code = "ILLEGAL_STATE",
             message = exception.message ?: "Illegal state"
-        )
-    }
-
-    @ExceptionHandler(LlmGenerationException::class)
-    fun handleLlmGeneration(exception: LlmGenerationException): ResponseEntity<CodeGenerationResponse> {
-        logger.warn("LLM generation error: {}", exception.message)
-        return buildError(
-            status = HttpStatus.BAD_GATEWAY,
-            code = "LLM_ERROR",
-            message = exception.message ?: "LLM generation failed"
         )
     }
 

@@ -32,14 +32,6 @@ data class ArchassistantProperties(
         val mistral: Provider = Provider(
             baseUrl = "https://api.mistral.ai",
             model = "mistral-medium-latest"
-        ),
-        val deepseek: Provider = Provider(
-            baseUrl = "https://api.deepseek.com",
-            model = "deepseek-chat"
-        ),
-        val groq: Provider = Provider(
-            baseUrl = "https://api.groq.com/openai/v1",
-            model = "llama-3.3-70b-versatile"
         )
     ) {
         data class Provider(
@@ -49,13 +41,5 @@ data class ArchassistantProperties(
             val temperature: Double = 0.2,
             val maxTokens: Int = 10_000
         )
-    }
-
-    fun activeProvider(): Llm.Provider {
-        return when (llm.provider.trim().lowercase()) {
-            "deepseek" -> llm.deepseek
-            "groq" -> llm.groq
-            else -> llm.mistral
-        }
     }
 }

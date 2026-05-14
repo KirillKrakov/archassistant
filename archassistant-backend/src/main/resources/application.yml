@@ -6,7 +6,6 @@ spring:
     exclude:
       - org.springframework.ai.autoconfigure.openai.OpenAiAutoConfiguration
 
-  # Database Configuration (можно закомментировать для этапа 1)
   datasource:
     url: jdbc:postgresql://postgres:5432/${POSTGRES_DB:archassistant}
     username: ${DB_USERNAME:postgres}
@@ -28,13 +27,22 @@ spring:
       allowed-headers: "*"
       allow-credentials: false
 
-  # Отключаем JPA автоконфигурацию если БД не нужна на этапе 1
-  # autoconfigure:
-  #   exclude:
-  #     - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
-  #     - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+  ai:
+    gigachat:
+      auth:
+        bearer:
+          api-key: ${GIGACHAT_API_KEY:}
+        scope: ${GIGACHAT_SCOPE:GIGACHAT_API_PERS}
+        unsafe-ssl: ${GIGACHAT_UNSAFE_SSL:false}
+      chat:
+        options:
+          model: ${GIGACHAT_MODEL:GigaChat}
+          temperature: ${GIGACHAT_TEMPERATURE:0.2}
+          max-tokens: ${GIGACHAT_MAX_TOKENS:10000}
+      internal:
+        connect-timeout: ${GIGACHAT_CONNECT_TIMEOUT:15s}
+        read-timeout: ${GIGACHAT_READ_TIMEOUT:30s}
 
-# ← ИСПРАВЛЕНО: Actuator использует префикс management, а не spring
 management:
   endpoints:
     web:
@@ -44,13 +52,11 @@ management:
     health:
       show-details: always
 
-# Application Configuration
 server:
   port: 8080
 
-# Logging Configuration
 logging:
-  format: ${LOG_FORMAT:TEXT}  # TEXT или JSON
+  format: ${LOG_FORMAT:TEXT}
   level:
     root: INFO
     com.example.archassistant: DEBUG
@@ -65,12 +71,10 @@ logging:
     max-size: 10MB
     max-history: 30
 
-# Export configuration
 export:
-  max-records: 10000  # Лимит записей на один экспорт
+  max-records: 10000
   default-format: CSV
 
-# Корреляция запросов
 correlation:
   header-name: X-Correlation-Id
 
@@ -102,16 +106,10 @@ archassistant:
       temperature: ${MISTRAL_TEMPERATURE:0.2}
       max-tokens: ${MISTRAL_MAX_TOKENS:10000}
 
-    deepseek:
-      base-url: ${DEEPSEEK_BASE_URL:https://api.deepseek.com}
-      api-key: ${DEEPSEEK_API_KEY:}
-      model: ${DEEPSEEK_MODEL:deepseek-chat}
-      temperature: ${DEEPSEEK_TEMPERATURE:0.2}
-      max-tokens: ${DEEPSEEK_MAX_TOKENS:10000}
-
-    groq:
-      base-url: ${GROQ_BASE_URL:https://api.groq.com/openai/v1}
-      api-key: ${GROQ_API_KEY:}
-      model: ${GROQ_MODEL:llama-3.3-70b-versatile}
-      temperature: ${GROQ_TEMPERATURE:0.2}
-      max-tokens: ${GROQ_MAX_TOKENS:10000}
+    gigachat:
+      api-key: ${GIGACHAT_API_KEY:}
+      scope: ${GIGACHAT_SCOPE:GIGACHAT_API_PERS}
+      base-url: ${GIGACHAT_BASE_URL:https://gigachat.devices.sberbank.ru/api/v1}
+      model: ${GIGACHAT_MODEL:GigaChat}
+      temperature: ${GIGACHAT_TEMPERATURE:0.2}
+      max-tokens: ${GIGACHAT_MAX_TOKENS:10000}

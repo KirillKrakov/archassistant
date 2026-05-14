@@ -3,9 +3,9 @@ package com.example.archassistant.controller
 import com.example.archassistant.dto.GeneratedFileSyncRequest
 import com.example.archassistant.dto.GeneratedFileSyncResponse
 import com.example.archassistant.model.RulesConfig
-import com.example.archassistant.service.GeneratedSourceOverlayService
-import com.example.archassistant.service.ProjectContextService
-import com.example.archassistant.service.YamlRuleRepository
+import com.example.archassistant.service.context.ProjectContextService
+import com.example.archassistant.service.context.overlay.GeneratedSourceOverlayService
+import com.example.archassistant.service.rules.repository.YamlRuleRepository
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
@@ -44,7 +44,7 @@ class GeneratedFilesController(
         }
 
         if (!request.projectPath.isNullOrBlank()) {
-            persistProjectPathBestEffort(projectId, request.projectPath, result)
+            persistProjectPathBestEffort(projectId, request.projectPath)
         }
 
         val refreshed = runCatching {
@@ -94,8 +94,7 @@ class GeneratedFilesController(
 
     private fun persistProjectPathBestEffort(
         projectId: String,
-        projectPath: String,
-        result: GeneratedFileSyncResponse
+        projectPath: String
     ) {
         try {
             val existing = ruleRepository.load(projectId)

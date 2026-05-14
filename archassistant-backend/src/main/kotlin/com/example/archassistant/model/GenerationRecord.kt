@@ -10,7 +10,6 @@ import java.time.LocalDateTime
 @Table(name = "generation_records")
 data class GenerationRecord(
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     val id: String = java.util.UUID.randomUUID().toString(),
 
     @Column(nullable = false)
