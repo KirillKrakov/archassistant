@@ -46,7 +46,7 @@ class GenerationController(
 
     @GetMapping("/health")
     fun health(): ResponseEntity<Map<String, Any>> {
-        val availableStrategies = strategyOrchestrator.getAvailableStrategies("")
+        val availableStrategies = strategyOrchestrator.getAvailableStrategies()
         return ResponseEntity.ok(
             mapOf(
                 "status" to "UP",

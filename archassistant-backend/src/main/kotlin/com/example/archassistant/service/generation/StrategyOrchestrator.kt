@@ -17,5 +17,5 @@ class StrategyOrchestrator(
         return strategy.generate(request)
     }
 
-    fun getAvailableStrategies(projectId: String): List<StrategyType> = strategies.keys.toList()
+    fun getAvailableStrategies(): List<StrategyType> = strategies.keys.toList()
 }
