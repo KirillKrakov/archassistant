@@ -1,6 +1,4 @@
-package com.example.archassistant.model
-
-import com.example.archassistant.model.context.ProjectProfile
+package com.example.archassistant.model.context
 
 enum class ArchitecturePattern(
     val description: String,
