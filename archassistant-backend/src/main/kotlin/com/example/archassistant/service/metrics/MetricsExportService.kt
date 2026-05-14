@@ -1,5 +1,6 @@
 package com.example.archassistant.service.metrics
 
+import com.example.archassistant.config.ArchassistantProperties
 import com.example.archassistant.dto.ExportFormat
 import com.example.archassistant.dto.ExportRequest
 import com.example.archassistant.model.GenerationRecord
@@ -14,7 +15,8 @@ import java.time.LocalDateTime
 class MetricsExportService(
     private val recordRepository: GenerationRecordRepository,
     private val csvExporter: CsvExporter,
-    private val jsonExporter: JsonExporter
+    private val jsonExporter: JsonExporter,
+    private val properties: ArchassistantProperties
 ) {
 
     private val logger = LoggerFactory.getLogger(MetricsExportService::class.java)
@@ -25,12 +27,21 @@ class MetricsExportService(
             request.projectId, request.strategy, request.fromDate, request.toDate, request.format
         )
 
-        val records = fetchRecords(request)
+        val selection = fetchRecords(request)
+        val maxRecords = properties.export.maxRecords.coerceAtLeast(1)
+
+        val exportedRecords = selection.records.take(maxRecords)
+        val warnings = buildList {
+            addAll(selection.warnings)
+            if (selection.records.size > maxRecords) {
+                add("Export truncated to $maxRecords record(s) out of ${selection.records.size} matched record(s).")
+            }
+        }
 
         val exportRecords = if (request.includeViolations) {
-            records
+            exportedRecords
         } else {
-            records.map { it.copy(violationsJson = null) }
+            exportedRecords.map { it.copy(violationsJson = null) }
         }
 
         val content = when (request.format) {
@@ -41,43 +52,57 @@ class MetricsExportService(
 
         return ExportResult(
             format = request.format,
-            recordCount = records.size,
+            recordCount = selection.records.size,
+            exportedRecordCount = exportRecords.size,
             content = content,
-            generatedAt = LocalDateTime.now()
+            generatedAt = LocalDateTime.now(),
+            warnings = warnings
         )
     }
 
-    private fun fetchRecords(request: ExportRequest): List<GenerationRecord> {
+    private fun fetchRecords(request: ExportRequest): RecordSelection {
         return when {
-            request.projectId != null && request.strategy != null && request.fromDate != null && request.toDate != null ->
-                recordRepository.findByProjectIdAndStrategyAndCreatedAtBetween(
+            request.projectId != null && request.strategy != null && request.fromDate != null && request.toDate != null -> {
+                val records = recordRepository.findByProjectIdAndStrategyAndCreatedAtBetween(
                     request.projectId,
                     parseStrategyOrThrow(request.strategy),
                     request.fromDate,
                     request.toDate
                 )
+                RecordSelection(records = records)
+            }
 
-            request.projectId != null && request.strategy != null ->
-                recordRepository.findByProjectIdAndStrategy(
+            request.projectId != null && request.strategy != null -> {
+                val records = recordRepository.findByProjectIdAndStrategy(
                     request.projectId,
                     parseStrategyOrThrow(request.strategy)
                 )
+                RecordSelection(records = records)
+            }
 
-            request.projectId != null && request.fromDate != null && request.toDate != null ->
-                recordRepository.findByProjectIdAndCreatedAtBetween(
+            request.projectId != null && request.fromDate != null && request.toDate != null -> {
+                val records = recordRepository.findByProjectIdAndCreatedAtBetween(
                     request.projectId,
                     request.fromDate,
                     request.toDate
                 )
+                RecordSelection(records = records)
+            }
 
-            request.projectId != null ->
-                recordRepository.findByProjectIdOrderByCreatedAtDesc(request.projectId)
+            request.projectId != null -> {
+                val records = recordRepository.findByProjectIdOrderByCreatedAtDesc(request.projectId)
+                RecordSelection(records = records)
+            }
 
-            request.fromDate != null && request.toDate != null ->
-                recordRepository.findByCreatedAtBetween(request.fromDate, request.toDate)
+            request.fromDate != null && request.toDate != null -> {
+                val records = recordRepository.findByCreatedAtBetween(request.fromDate, request.toDate)
+                RecordSelection(records = records)
+            }
 
-            else ->
-                recordRepository.findAll()
+            else -> {
+                val records = recordRepository.findAll()
+                RecordSelection(records = records)
+            }
         }
     }
 
@@ -88,11 +113,18 @@ class MetricsExportService(
             throw IllegalArgumentException("Unknown strategy: $strategy")
         }
     }
+
+    private data class RecordSelection(
+        val records: List<GenerationRecord>,
+        val warnings: List<String> = emptyList()
+    )
 }
 
 data class ExportResult(
     val format: ExportFormat,
     val recordCount: Int,
+    val exportedRecordCount: Int,
     val content: String,
-    val generatedAt: LocalDateTime
+    val generatedAt: LocalDateTime,
+    val warnings: List<String> = emptyList()
 )

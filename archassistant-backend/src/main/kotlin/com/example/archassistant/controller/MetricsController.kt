@@ -50,24 +50,71 @@ class MetricsController(
 
     @GetMapping("/{projectId}")
     fun getProjectMetrics(@PathVariable projectId: String): ResponseEntity<Map<String, Any?>> {
-        val totalGenerations = metricsRepository.countByProjectId(projectId)
-        val history = metricsRepository.findByProjectIdOrderByCreatedAtDesc(projectId).take(RECENT_HISTORY_LIMIT)
-        val scoreTotals = history.mapNotNull { it.scoreTotal }
+        val fullHistory = metricsRepository.findByProjectIdOrderByCreatedAtDesc(projectId)
+        val recentHistory = fullHistory.take(RECENT_HISTORY_LIMIT)
+
+        val totalGenerations = fullHistory.size.toLong()
+        val successfulGenerations = fullHistory.count { it.success }.toLong()
+        val failedGenerations = totalGenerations - successfulGenerations
+
+        val scoreTotals = fullHistory.mapNotNull { it.scoreTotal }
         val avgScore = if (scoreTotals.isNotEmpty()) scoreTotals.average() else null
-        val lastGeneration = history.firstOrNull()?.createdAt
+
+        val avgIterations = if (fullHistory.isNotEmpty()) {
+            fullHistory.map { it.iterations.toDouble() }.average()
+        } else {
+            null
+        }
+
+        val avgGenerationTimeMs = if (fullHistory.isNotEmpty()) {
+            fullHistory.map { it.generationTimeMs.toDouble() }.average()
+        } else {
+            null
+        }
+
+        val avgValidationTimeMs = if (fullHistory.isNotEmpty()) {
+            fullHistory.map { it.validationTimeMs.toDouble() }.average()
+        } else {
+            null
+        }
+
+        val avgTotalTimeMs = if (fullHistory.isNotEmpty()) {
+            fullHistory.map { (it.generationTimeMs + it.validationTimeMs).toDouble() }.average()
+        } else {
+            null
+        }
+
+        val successRate = if (totalGenerations > 0) {
+            successfulGenerations.toDouble() / totalGenerations.toDouble()
+        } else {
+            null
+        }
+
+        val lastGeneration = fullHistory.firstOrNull()?.createdAt
 
         return ResponseEntity.ok(
             mapOf(
                 "projectId" to projectId,
                 "totalGenerations" to totalGenerations,
+                "successfulGenerations" to successfulGenerations,
+                "failedGenerations" to failedGenerations,
                 "avgScore" to avgScore?.let { "%.2f".format(it).toDouble() },
+                "avgIterations" to avgIterations?.let { "%.2f".format(it).toDouble() },
+                "avgGenerationTimeMs" to avgGenerationTimeMs?.let { "%.2f".format(it).toDouble() },
+                "avgValidationTimeMs" to avgValidationTimeMs?.let { "%.2f".format(it).toDouble() },
+                "avgTotalTimeMs" to avgTotalTimeMs?.let { "%.2f".format(it).toDouble() },
+                "successRate" to successRate?.let { "%.2f".format(it).toDouble() },
+                "successRatePercent" to successRate?.let { "%.2f".format(it * 100.0).toDouble() },
                 "lastGeneration" to lastGeneration?.toString(),
-                "recentHistory" to history.map { record ->
+                "recentHistory" to recentHistory.map { record ->
                     mapOf<String, Any?>(
                         "strategy" to record.strategy.name,
                         "score" to record.scoreTotal,
                         "iterations" to record.iterations,
                         "success" to record.success,
+                        "generationTimeMs" to record.generationTimeMs,
+                        "validationTimeMs" to record.validationTimeMs,
+                        "totalTimeMs" to (record.generationTimeMs + record.validationTimeMs),
                         "timestamp" to record.createdAt.toString(),
                         "prompt" to record.prompt,
                         "generatedCode" to record.generatedCode
@@ -118,10 +165,15 @@ class MetricsController(
 
         val filename = "archassistant-metrics-${request.projectId ?: "all"}-${result.generatedAt}.${request.format.name.lowercase()}"
 
-        return ResponseEntity.ok()
+        val builder = ResponseEntity.ok()
             .contentType(MediaType.parseMediaType(contentType))
             .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"$filename\"")
-            .body(result.content)
+
+        if (result.warnings.isNotEmpty()) {
+            builder.header("X-ArchAssistant-Warning", result.warnings.joinToString(" | "))
+        }
+
+        return builder.body(result.content)
     }
 
     @GetMapping("/compare")
@@ -183,6 +235,7 @@ class MetricsController(
                         "iterations" to record.iterations,
                         "generationTimeMs" to record.generationTimeMs,
                         "validationTimeMs" to record.validationTimeMs,
+                        "totalTimeMs" to (record.generationTimeMs + record.validationTimeMs),
                         "violationsCount" to record.violationsCount,
                         "createdAt" to record.createdAt
                     )

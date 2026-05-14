@@ -20,11 +20,12 @@ interface GenerationRecordRepository : JpaRepository<GenerationRecord, String> {
             AVG(g.iterations),
             AVG(
                 CASE
-                    WHEN g.success = false THEN 0.0
-                    WHEN g.scoreTotal IS NULL OR g.scoreTotal <= :qualityThreshold THEN 0.5
-                    ELSE 1.0
+                    WHEN g.success = true THEN 1.0
+                    ELSE 0.0
                 END
             ),
+            AVG(g.generationTimeMs),
+            AVG(g.validationTimeMs),
             AVG(g.generationTimeMs + g.validationTimeMs)
         )
         FROM GenerationRecord g
@@ -45,11 +46,12 @@ interface GenerationRecordRepository : JpaRepository<GenerationRecord, String> {
             AVG(g.iterations),
             AVG(
                 CASE
-                    WHEN g.success = false THEN 0.0
-                    WHEN g.scoreTotal IS NULL OR g.scoreTotal <= :qualityThreshold THEN 0.5
-                    ELSE 1.0
+                    WHEN g.success = true THEN 1.0
+                    ELSE 0.0
                 END
             ),
+            AVG(g.generationTimeMs),
+            AVG(g.validationTimeMs),
             AVG(g.generationTimeMs + g.validationTimeMs)
         )
         FROM GenerationRecord g
