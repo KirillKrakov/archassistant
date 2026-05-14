@@ -1,9 +1,9 @@
 package com.example.archassistant.model.rules
 
-import com.example.archassistant.model.ClassType
-import com.example.archassistant.model.LayerType
-import com.example.archassistant.model.Severity
-import com.example.archassistant.util.PackagePatternBuilder
+import com.example.archassistant.model.context.ClassType
+import com.example.archassistant.model.context.LayerType
+import com.example.archassistant.model.core.Severity
+import com.example.archassistant.util.pack.PackagePatternBuilder
 import com.fasterxml.jackson.annotation.JsonProperty
 
 data class ArchitecturalRule(

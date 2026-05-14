@@ -1,7 +1,7 @@
 package com.example.archassistant.dto.metrics.response
 
-import com.example.archassistant.model.StrategyType
-import java.util.Locale
+import com.example.archassistant.model.core.StrategyType
+
 
 data class ComparisonResult(
     val projectId: String? = null,

@@ -2,11 +2,11 @@ package com.example.archassistant.service.context.overlay
 
 import com.example.archassistant.dto.generatedfiles.request.GeneratedFilePayload
 import com.example.archassistant.dto.generatedfiles.response.GeneratedFileSyncResponse
-import com.example.archassistant.service.context.ProjectPathResolver
-import com.example.archassistant.util.ClasspathUtils
-import com.example.archassistant.util.CompilationException
-import com.example.archassistant.util.ProjectClasspathResolver
-import com.example.archassistant.util.RuntimeClasspathResolver
+import com.example.archassistant.exception.CompilationException
+import com.example.archassistant.service.context.classpath.ProjectClasspathResolver
+import com.example.archassistant.service.context.classpath.ProjectPathResolver
+import com.example.archassistant.service.generation.validation.classpath.RuntimeClasspathResolver
+import com.example.archassistant.util.classpath.ClasspathUtils
 import org.jetbrains.kotlin.cli.common.ExitCode
 import org.jetbrains.kotlin.cli.jvm.K2JVMCompiler
 import org.slf4j.LoggerFactory

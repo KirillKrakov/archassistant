@@ -1,12 +1,15 @@
 package com.example.archassistant.service.context
 
 import com.example.archassistant.model.*
+import com.example.archassistant.model.context.*
+import com.example.archassistant.service.context.classpath.ProjectClasspathResolver
 import com.example.archassistant.service.context.detection.ArchitectureDetector
 import com.example.archassistant.service.context.overlay.GeneratedSourceOverlayService
+import com.example.archassistant.service.context.scanner.ProjectLayerClassifier
 import com.example.archassistant.service.context.scanner.ProjectStructureScanner
-import com.example.archassistant.util.ClasspathUtils
-import com.example.archassistant.util.ProjectClasspathResolver
-import com.example.archassistant.util.ProjectLayerClassifier
+import com.example.archassistant.service.context.workspace.WorkspaceModuleSuggestions
+import com.example.archassistant.service.context.workspace.WorkspaceProjectScanner
+import com.example.archassistant.util.classpath.ClasspathUtils
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.io.File

@@ -1,7 +1,7 @@
 package com.example.archassistant.model.generation
 
 import com.example.archassistant.dto.generation.request.CodeGenerationRequest
-import com.example.archassistant.model.ProjectContextSnapshot
+import com.example.archassistant.model.context.ProjectContextSnapshot
 import com.example.archassistant.model.rules.ArchitecturalRule
 
 data class PreparedGenerationRequest(

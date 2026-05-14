@@ -1,6 +1,6 @@
 package com.example.archassistant.entity
 
-import com.example.archassistant.model.StrategyType
+import com.example.archassistant.model.core.StrategyType
 import jakarta.persistence.*
 import java.time.LocalDateTime
 

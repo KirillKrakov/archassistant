@@ -2,8 +2,8 @@ package com.example.archassistant.service.rules
 
 import com.example.archassistant.dto.rules.*
 import com.example.archassistant.model.rules.RulesConfig
-import com.example.archassistant.service.context.WorkspaceModuleSuggestions
-import com.example.archassistant.service.context.WorkspaceProjectScanner
+import com.example.archassistant.service.context.workspace.WorkspaceModuleSuggestions
+import com.example.archassistant.service.context.workspace.WorkspaceProjectScanner
 import com.example.archassistant.service.rules.mapper.RulesConfigMapper
 import com.example.archassistant.service.rules.repository.YamlRuleRepository
 import org.slf4j.LoggerFactory

@@ -4,6 +4,7 @@ import com.example.archassistant.dto.rules.ProjectPathRequest
 import com.example.archassistant.dto.rules.RulesConfigDto
 import com.example.archassistant.dto.rules.RulesDeleteResponse
 import com.example.archassistant.dto.rules.RulesSaveResponse
+import com.example.archassistant.service.context.workspace.WorkspaceModuleSuggestions
 import com.example.archassistant.service.rules.RulesManagementService
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
@@ -42,7 +43,7 @@ class RulesController(
     fun suggestRules(
         @PathVariable projectId: String,
         @RequestParam projectPath: String? = null
-    ): ResponseEntity<List<com.example.archassistant.service.context.WorkspaceModuleSuggestions>> {
+    ): ResponseEntity<List<WorkspaceModuleSuggestions>> {
         return try {
             ResponseEntity.ok(rulesManagementService.suggestRules(projectId, projectPath))
         } catch (e: IllegalArgumentException) {

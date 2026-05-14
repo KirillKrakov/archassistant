@@ -1,7 +1,7 @@
 package com.example.archassistant.dto.generation.response
 
-import com.example.archassistant.model.StrategyType
 import com.example.archassistant.model.core.ComplianceScore
+import com.example.archassistant.model.core.StrategyType
 
 /**
  * Фабрика для удобного создания ответов

@@ -2,8 +2,8 @@ package com.example.archassistant.service.generation.pipeline
 
 import com.example.archassistant.dto.generation.response.CodeGenerationResponse
 import com.example.archassistant.dto.generation.response.GenerationResponseFactory
-import com.example.archassistant.model.StrategyType
 import com.example.archassistant.model.core.ComplianceScore
+import com.example.archassistant.model.core.StrategyType
 import org.springframework.stereotype.Service
 
 @Service

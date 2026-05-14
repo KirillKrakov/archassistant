@@ -1,14 +1,15 @@
 package com.example.archassistant.service.generation.pipeline
 
 import com.example.archassistant.dto.generation.request.CodeGenerationRequest
+import com.example.archassistant.model.context.ProjectContextSnapshot
 import com.example.archassistant.model.generation.GenerationValidationResult
 import com.example.archassistant.model.generation.PreparedGenerationRequest
-import com.example.archassistant.model.Violation
+import com.example.archassistant.model.core.Violation
 import com.example.archassistant.model.core.ComplianceScore
+import com.example.archassistant.service.generation.parser.CodeCleaner
 import com.example.archassistant.service.generation.validation.ComplianceScoreCalculator
-import com.example.archassistant.util.CodeCleaner
-import com.example.archassistant.util.GeneratedTypeNameExtractor
-import com.example.archassistant.util.ProjectImportNormalizer
+import com.example.archassistant.service.generation.validation.GeneratedTypeNameExtractor
+import com.example.archassistant.service.generation.validation.ProjectImportNormalizer
 import org.springframework.stereotype.Service
 import kotlin.system.measureTimeMillis
 
@@ -65,7 +66,7 @@ class ValidationFacade(
 
     private fun cleanAndNormalizeCode(
         rawCode: String,
-        projectContext: com.example.archassistant.model.ProjectContextSnapshot,
+        projectContext: ProjectContextSnapshot,
         primaryTypeName: String?
     ): String {
         return ProjectImportNormalizer.normalize(

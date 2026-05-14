@@ -2,13 +2,15 @@ package com.example.archassistant.service.generation
 
 import com.example.archassistant.dto.generation.response.CodeGenerationResponse
 import com.example.archassistant.dto.generation.response.GenerationResponseFactory
+import com.example.archassistant.exception.LlmGenerationException
+import com.example.archassistant.model.core.StrategyType
 import com.example.archassistant.service.generation.client.LlmClientFactory
-import com.example.archassistant.util.PromptFormatter
 import org.slf4j.LoggerFactory
 import org.springframework.ai.chat.client.ChatClient
 import org.springframework.stereotype.Service
 import kotlin.system.measureTimeMillis
 import com.example.archassistant.model.rules.ArchitecturalRule
+import com.example.archassistant.service.generation.prompt.PromptFormatter
 
 @Service
 class LlmOrchestrator(
@@ -68,7 +70,7 @@ class LlmOrchestrator(
             GenerationResponseFactory.success(
                 code = code,
                 score = null,
-                strategy = com.example.archassistant.model.StrategyType.PRE,
+                strategy = StrategyType.PRE,
                 iterations = 1,
                 generationTimeMs = generationTime,
                 validationTimeMs = 0,

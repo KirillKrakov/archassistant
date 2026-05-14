@@ -1,6 +1,7 @@
 package com.example.archassistant.dto.metrics.request
 
-import com.example.archassistant.model.StrategyType
+import com.example.archassistant.model.core.StrategyType
+
 
 data class GenerationRecordRequest(
     val id: String? = null,

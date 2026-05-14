@@ -1,16 +1,15 @@
 package com.example.archassistant.service.rules.profile
 
-import com.example.archassistant.model.Severity
+import com.example.archassistant.model.core.Severity
 import com.example.archassistant.model.context.ProjectProfile
 import com.example.archassistant.model.rules.ArchitecturalRule
 import com.example.archassistant.model.rules.ConstraintType
-import com.example.archassistant.service.rules.ProfileRuleStrategy
 import com.example.archassistant.service.rules.RuleGenerationContext
 import com.example.archassistant.service.rules.profile.common.addAnnotationNoRule
 import com.example.archassistant.service.rules.profile.common.addCycleRule
 import com.example.archassistant.service.rules.profile.common.addInheritanceRule
 import com.example.archassistant.service.rules.profile.common.addPackageDependencyRule
-import com.example.archassistant.util.PackagePatternBuilder
+import com.example.archassistant.util.pack.PackagePatternBuilder
 import org.springframework.stereotype.Service
 
 @Service

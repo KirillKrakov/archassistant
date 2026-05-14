@@ -5,7 +5,9 @@ import com.example.archassistant.dto.rules.RulesConfigDto
 import com.example.archassistant.model.rules.ProjectType
 import com.example.archassistant.model.rules.RuleSettings
 import com.example.archassistant.model.rules.RulesConfig
+import org.springframework.stereotype.Component
 
+@Component
 object RulesConfigMapper {
 
     fun toModel(dto: RulesConfigDto): RulesConfig {

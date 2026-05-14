@@ -1,7 +1,5 @@
 package com.example.archassistant.model.core
 
-import com.example.archassistant.model.ScoreGrade
-import com.example.archassistant.model.Violation
 import com.fasterxml.jackson.annotation.JsonIgnore
 
 /**

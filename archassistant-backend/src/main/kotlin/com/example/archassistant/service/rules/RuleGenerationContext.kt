@@ -1,8 +1,8 @@
 package com.example.archassistant.service.rules
 
-import com.example.archassistant.model.PackageScopeIndex
+import com.example.archassistant.model.context.PackageScopeIndex
 import com.example.archassistant.model.context.ProjectProfileDetection
-import com.example.archassistant.model.ProjectStructure
+import com.example.archassistant.model.context.ProjectStructure
 
 data class RuleGenerationContext(
     val structure: ProjectStructure,

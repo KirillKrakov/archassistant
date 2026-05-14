@@ -1,8 +1,10 @@
 package com.example.archassistant.service.rules.repository
 
-import com.example.archassistant.model.*
+import com.example.archassistant.model.core.Severity
+import com.example.archassistant.model.core.Violation
+import com.example.archassistant.model.generation.ValidationResult
 import com.example.archassistant.model.rules.*
-import com.example.archassistant.util.PackagePatternBuilder
+import com.example.archassistant.util.pack.PackagePatternBuilder
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier

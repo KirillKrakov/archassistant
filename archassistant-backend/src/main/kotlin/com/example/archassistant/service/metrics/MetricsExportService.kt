@@ -4,6 +4,7 @@ import com.example.archassistant.config.ArchassistantProperties
 import com.example.archassistant.dto.metrics.request.ExportFormat
 import com.example.archassistant.dto.metrics.request.ExportRequest
 import com.example.archassistant.entity.GenerationRecord
+import com.example.archassistant.model.core.StrategyType
 import com.example.archassistant.repository.GenerationRecordRepository
 import com.example.archassistant.service.metrics.export.CsvExporter
 import com.example.archassistant.service.metrics.export.JsonExporter
@@ -102,9 +103,9 @@ class MetricsExportService(
         }
     }
 
-    private fun parseStrategyOrThrow(strategy: String): com.example.archassistant.model.StrategyType {
+    private fun parseStrategyOrThrow(strategy: String): StrategyType {
         return runCatching {
-            com.example.archassistant.model.StrategyType.valueOf(strategy.uppercase())
+            StrategyType.valueOf(strategy.uppercase())
         }.getOrElse {
             throw IllegalArgumentException("Unknown strategy: $strategy")
         }

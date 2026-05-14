@@ -1,7 +1,7 @@
 package com.example.archassistant.config
 
-import com.example.archassistant.model.CodeGenerationStrategy
-import com.example.archassistant.model.StrategyType
+import com.example.archassistant.model.core.StrategyType
+import com.example.archassistant.model.generation.CodeGenerationStrategy
 import com.example.archassistant.service.generation.strategy.HybridGenerationStrategy
 import com.example.archassistant.service.generation.strategy.PostGenerationStrategy
 import com.example.archassistant.service.generation.strategy.PreGenerationStrategy

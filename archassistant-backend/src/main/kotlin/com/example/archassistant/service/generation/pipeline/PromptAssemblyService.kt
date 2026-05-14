@@ -1,12 +1,12 @@
 package com.example.archassistant.service.generation.pipeline
 
 import com.example.archassistant.dto.generation.request.CodeGenerationRequest
+import com.example.archassistant.model.core.StrategyType
 import com.example.archassistant.model.generation.GenerationPrompt
 import com.example.archassistant.model.generation.PreparedGenerationRequest
-import com.example.archassistant.model.StrategyType
-import com.example.archassistant.model.Violation
-import com.example.archassistant.util.ErrorFormatter
-import com.example.archassistant.util.PromptFormatter
+import com.example.archassistant.model.core.Violation
+import com.example.archassistant.service.generation.prompt.ErrorFormatter
+import com.example.archassistant.service.generation.prompt.PromptFormatter
 import org.springframework.stereotype.Service
 import java.util.Locale
 

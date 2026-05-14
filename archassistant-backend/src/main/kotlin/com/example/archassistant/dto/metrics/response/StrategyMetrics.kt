@@ -1,6 +1,6 @@
 package com.example.archassistant.dto.metrics.response
 
-import com.example.archassistant.model.StrategyType
+import com.example.archassistant.model.core.StrategyType
 import java.util.Locale
 
 data class StrategyMetrics(

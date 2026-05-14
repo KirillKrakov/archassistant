@@ -1,10 +1,10 @@
 package com.example.archassistant.service.context.scanner
 
 import com.example.archassistant.model.*
-import com.example.archassistant.service.context.ProjectPathResolver
+import com.example.archassistant.model.context.*
+import com.example.archassistant.service.context.classpath.ProjectPathResolver
 import com.example.archassistant.service.context.detection.ArchitectureDetector
 import com.example.archassistant.service.rules.repository.YamlRuleRepository
-import com.example.archassistant.util.ProjectLayerClassifier
 import com.tngtech.archunit.core.domain.JavaClass
 import com.tngtech.archunit.core.domain.JavaModifier
 import com.tngtech.archunit.core.importer.ClassFileImporter

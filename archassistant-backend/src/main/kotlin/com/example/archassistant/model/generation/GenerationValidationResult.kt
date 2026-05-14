@@ -1,6 +1,6 @@
 package com.example.archassistant.model.generation
 
-import com.example.archassistant.model.Violation
+import com.example.archassistant.model.core.Violation
 import com.example.archassistant.model.core.ComplianceScore
 
 data class GenerationValidationResult(

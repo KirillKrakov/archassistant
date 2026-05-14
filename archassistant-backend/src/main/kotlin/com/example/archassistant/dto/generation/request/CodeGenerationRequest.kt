@@ -1,6 +1,7 @@
 package com.example.archassistant.dto.generation.request
 
-import com.example.archassistant.model.StrategyType
+import com.example.archassistant.model.core.StrategyType
+
 
 /**
  * Запрос на генерацию кода с архитектурным контролем

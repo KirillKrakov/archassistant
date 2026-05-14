@@ -1,6 +1,8 @@
 package com.example.archassistant.service.context
 
-import com.example.archassistant.model.ProjectContextSnapshot
+import com.example.archassistant.model.context.ProjectContextSnapshot
+import com.example.archassistant.service.context.cache.ProjectContextCacheService
+import com.example.archassistant.service.context.classpath.ProjectPathResolver
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
