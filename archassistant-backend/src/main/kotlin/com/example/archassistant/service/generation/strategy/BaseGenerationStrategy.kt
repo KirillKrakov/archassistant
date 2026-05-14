@@ -171,6 +171,22 @@ abstract class BaseGenerationStrategy(
         )
     }
 
+    protected fun violationsForPrompt(
+        violations: List<Violation>,
+        maxErrors: Int = 5
+    ): List<String> {
+        return violations
+            .take(maxErrors)
+            .map { violation ->
+                buildString {
+                    append(violation.description)
+                    if (violation.className.isNotBlank() && violation.className != "*") {
+                        append(" (класс: ${violation.className})")
+                    }
+                }
+            }
+    }
+
     protected fun error(
         code: String,
         message: String,

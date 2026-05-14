@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.io.File
 import java.nio.file.Paths
+import java.time.LocalDateTime
 
 @Service
 class YamlRuleRepository(
@@ -38,11 +39,23 @@ class YamlRuleRepository(
 
     fun save(config: RulesConfig): Boolean {
         return try {
+            val validation = validate(config)
+            if (!validation.passed) {
+                logger.warn(
+                    "Refusing to save invalid rules config for {}: {}",
+                    config.projectId,
+                    validation.violations.joinToString("; ") { it.description }
+                )
+                return false
+            }
+
             val configFile = getConfigFile(config.projectId)
             configFile.parentFile?.mkdirs()
 
+            val persisted = config.touch()
+
             objectMapper.writerWithDefaultPrettyPrinter()
-                .writeValue(configFile, config)
+                .writeValue(configFile, persisted)
 
             logger.info("Saved rules config for ${config.projectId}: ${configFile.absolutePath}")
             true
@@ -53,14 +66,18 @@ class YamlRuleRepository(
     }
 
     fun createDefault(projectId: String, projectType: String = "SPRING_BOOT"): RulesConfig {
-        val resolvedType = runCatching { ProjectType.valueOf(projectType) }
+        val resolvedType = runCatching { ProjectType.valueOf(projectType.uppercase()) }
             .getOrDefault(ProjectType.SPRING_BOOT)
+
+        val now = LocalDateTime.now().toString()
 
         return RulesConfig(
             projectId = projectId,
             projectType = resolvedType,
             rules = emptyList(),
-            settings = RuleSettings()
+            settings = RuleSettings(),
+            createdAt = now,
+            updatedAt = now
         )
     }
 

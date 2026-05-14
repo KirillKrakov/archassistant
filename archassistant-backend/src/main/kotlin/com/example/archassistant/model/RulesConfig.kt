@@ -52,6 +52,24 @@ data class RulesConfig(
         }
         return copy(rules = updatedRules, updatedAt = LocalDateTime.now().toString())
     }
+
+    fun touch(now: String = LocalDateTime.now().toString()): RulesConfig {
+        return copy(
+            createdAt = createdAt ?: now,
+            updatedAt = now
+        )
+    }
+
+    fun withProjectPath(
+        projectPath: String?,
+        now: String = LocalDateTime.now().toString()
+    ): RulesConfig {
+        return copy(
+            projectPath = projectPath,
+            createdAt = createdAt ?: now,
+            updatedAt = now
+        )
+    }
 }
 
 /**

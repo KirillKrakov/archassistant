@@ -73,18 +73,9 @@ class HybridGenerationStrategy(
                 baseSystemPrompt to baseUserPrompt
             } else {
                 val fixInstruction = ErrorFormatter.formatFixInstruction(lastViolations)
-                val previousErrors = lastViolations.take(5).map { violation ->
-                    buildString {
-                        append(violation.description)
-                        if (violation.className.isNotBlank() && violation.className != "*") {
-                            append(" (class: ${violation.className})")
-                        }
-                    }
-                }
-
                 val enhancedUserPrompt = PromptFormatter.formatUserPrompt(
                     originalRequest = request.prompt,
-                    previousErrors = previousErrors,
+                    previousErrors = violationsForPrompt(lastViolations),
                     projectContext = prepared.projectContext.promptContext(
                         requestText = request.prompt,
                         targetPackage = prepared.normalizedTargetPackage,
