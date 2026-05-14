@@ -42,10 +42,7 @@ class LlmOrchestrator(
             )
         }
 
-        val generationTime = measureTimeMillis {
-            // legacy convenience method kept for backward compatibility;
-            // strategies should call generateCodeRaw() directly
-        }
+        var generationTime = 0L
 
         val systemPrompt = PromptFormatter.formatSystemPrompt(rules.orEmpty())
         val userPrompt = PromptFormatter.formatUserPrompt(
@@ -56,7 +53,17 @@ class LlmOrchestrator(
         )
 
         return try {
-            val code = callLlmWithRetry(systemPrompt, userPrompt, maxRetries)
+            val code = run {
+                var generatedCode: String? = null
+                generationTime = measureTimeMillis {
+                    generatedCode = callLlmWithRetry(systemPrompt, userPrompt, maxRetries)
+                }
+                generatedCode ?: throw LlmGenerationException(
+                    "Empty response from LLM",
+                    isRetryable = false
+                )
+            }
+
             GenerationResponseFactory.success(
                 code = code,
                 score = null,

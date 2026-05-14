@@ -56,13 +56,17 @@ class PreGenerationStrategy(
             codeContext = request.context?.codeSnippet
         )
 
-        val generationTime = measureTimeMillis { }
+        var generationTime = 0L
         val rawCode = try {
-            llmOrchestrator.generateCodeRaw(
-                systemPrompt = systemPrompt,
-                userPrompt = userPrompt,
-                maxRetries = request.maxIterations
-            )
+            var generatedRawCode: String? = null
+            generationTime = measureTimeMillis {
+                generatedRawCode = llmOrchestrator.generateCodeRaw(
+                    systemPrompt = systemPrompt,
+                    userPrompt = userPrompt,
+                    maxRetries = request.maxIterations
+                )
+            }
+            generatedRawCode ?: throw IllegalStateException("LLM returned empty response")
         } catch (e: Exception) {
             return error("LLM_ERROR", e.message ?: "Failed to generate code")
         }

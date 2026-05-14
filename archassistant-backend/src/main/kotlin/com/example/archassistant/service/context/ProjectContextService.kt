@@ -29,11 +29,26 @@ class ProjectContextService(
         refresh: Boolean = false,
         projectPathOverride: String? = null
     ): ProjectContextSnapshot? {
+        val config = ruleRepository.load(projectId)
+        val resolvedProjectPath = resolveProjectPath(projectId, config, projectPathOverride)
+
         if (refresh) {
             cacheService.invalidate(projectId)
-        }
+        } else {
+            cacheService.get(projectId)?.let { cached ->
+                if (resolvedProjectPath.isBlank() || cached.projectPath == resolvedProjectPath) {
+                    return cached
+                }
 
-        cacheService.get(projectId)?.let { return it }
+                logger.debug(
+                    "Cached project context is stale for projectId={}, invalidating cache (cachedPath={}, resolvedPath={})",
+                    projectId,
+                    cached.projectPath,
+                    resolvedProjectPath
+                )
+                cacheService.invalidate(projectId)
+            }
+        }
 
         val built = buildProjectContext(projectId, projectPathOverride) ?: return null
         cacheService.put(projectId, built)

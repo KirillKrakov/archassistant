@@ -29,17 +29,27 @@ data class ArchassistantProperties(
 
     data class Llm(
         val provider: String = "mistral",
-        val mistral: Provider = Provider(
-            baseUrl = "https://api.mistral.ai",
-            model = "mistral-medium-latest"
-        )
+        val mistral: Mistral = Mistral(),
+        val gigachat: GigaChat = GigaChat()
     ) {
-        data class Provider(
-            val baseUrl: String,
+        data class Mistral(
+            val baseUrl: String = "https://api.mistral.ai",
             val apiKey: String = "",
-            val model: String = "",
+            val model: String = "mistral-medium-latest",
             val temperature: Double = 0.2,
             val maxTokens: Int = 10_000
+        )
+
+        data class GigaChat(
+            val baseUrl: String = "https://gigachat.devices.sberbank.ru/api/v1",
+            val apiKey: String = "",
+            val scope: String = "GIGACHAT_API_PERS",
+            val model: String = "GigaChat",
+            val temperature: Double = 0.2,
+            val maxTokens: Int = 10_000,
+            val connectTimeout: String = "15s",
+            val readTimeout: String = "30s",
+            val unsafeSsl: Boolean = false
         )
     }
 }
