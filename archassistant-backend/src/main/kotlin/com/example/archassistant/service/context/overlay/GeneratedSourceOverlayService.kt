@@ -14,7 +14,6 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.OutputStreamWriter
 import java.io.PrintStream
 import java.nio.file.Files
 import java.nio.file.Path
@@ -84,32 +83,43 @@ class GeneratedSourceOverlayService(
 
         val sourceRoot = overlaySourceDir(projectId)
         val classesRoot = overlayClassesDir(projectId)
+        val stagingRoot = overlayRoot(projectId).resolve(".staging").resolve(UUID.randomUUID().toString())
+        val stagingSourceRoot = stagingRoot.resolve("sources")
+        val stagingClassesRoot = stagingRoot.resolve("classes")
 
-        Files.createDirectories(sourceRoot)
+        return try {
+            Files.createDirectories(stagingSourceRoot)
+            Files.createDirectories(stagingClassesRoot)
 
-        val writtenFiles = files.map { payload ->
-            writeOverlayFile(sourceRoot, payload)
-        }.distinctBy { it.toAbsolutePath().normalize().toString() }
+            val writtenFiles = files.map { payload ->
+                writeOverlayFile(stagingSourceRoot, payload)
+            }.distinctBy { it.toAbsolutePath().normalize().toString() }
 
-        val compilation = compileOverlaySources(
-            projectId = projectId,
-            projectPath = resolvedProjectPath,
-            classesRoot = classesRoot
-        )
-
-        return if (!compilation.success) {
-            GeneratedFileSyncResponse(
-                success = false,
+            val compilation = compileOverlaySources(
                 projectId = projectId,
                 projectPath = resolvedProjectPath,
-                syncedFiles = files.size,
-                compiledSources = 0,
-                overlaySourceDir = sourceRoot.toString(),
-                overlayClassesDir = classesRoot.toString(),
-                error = compilation.error,
-                warnings = compilation.warnings
+                sourceRoot = stagingSourceRoot,
+                classesRoot = stagingClassesRoot
             )
-        } else {
+
+            if (!compilation.success) {
+                return GeneratedFileSyncResponse(
+                    success = false,
+                    projectId = projectId,
+                    projectPath = resolvedProjectPath,
+                    syncedFiles = files.size,
+                    compiledSources = 0,
+                    overlaySourceDir = sourceRoot.toString(),
+                    overlayClassesDir = classesRoot.toString(),
+                    error = compilation.error,
+                    warnings = compilation.warnings
+                )
+            }
+
+            replaceDirectory(stagingSourceRoot, sourceRoot)
+            replaceDirectory(stagingClassesRoot, classesRoot)
+            deleteRecursively(stagingRoot)
+
             GeneratedFileSyncResponse(
                 success = true,
                 projectId = projectId,
@@ -119,6 +129,15 @@ class GeneratedSourceOverlayService(
                 overlaySourceDir = sourceRoot.toString(),
                 overlayClassesDir = classesRoot.toString(),
                 warnings = compilation.warnings
+            )
+        } catch (e: Exception) {
+            deleteRecursively(stagingRoot)
+            logger.warn("Failed to sync overlay for {}: {}", projectId, e.message, e)
+            GeneratedFileSyncResponse(
+                success = false,
+                projectId = projectId,
+                projectPath = resolvedProjectPath,
+                error = e.message ?: "Overlay sync failed"
             )
         }
     }
@@ -139,9 +158,10 @@ class GeneratedSourceOverlayService(
     private fun compileOverlaySources(
         projectId: String,
         projectPath: String,
+        sourceRoot: Path,
         classesRoot: Path
     ): OverlayCompilationResult {
-        val allSourceFiles = collectOverlaySources(overlaySourceDir(projectId))
+        val allSourceFiles = collectOverlaySources(sourceRoot)
 
         if (allSourceFiles.isEmpty()) {
             return OverlayCompilationResult(
@@ -161,27 +181,18 @@ class GeneratedSourceOverlayService(
             )
         }
 
-        val stagingRoot = overlayRoot(projectId).resolve(".staging").resolve(UUID.randomUUID().toString())
-        val stagingClassesDir = stagingRoot.resolve("classes")
-
         try {
-            Files.createDirectories(stagingClassesDir)
-
             if (hasKotlin) {
-                compileKotlin(allSourceFiles, stagingClassesDir, projectPath)
+                compileKotlin(allSourceFiles, classesRoot, projectPath)
             } else {
-                compileJava(allSourceFiles, stagingClassesDir, projectPath)
+                compileJava(allSourceFiles, classesRoot, projectPath)
             }
-
-            replaceDirectory(stagingClassesDir, classesRoot)
-            deleteRecursively(stagingRoot)
 
             return OverlayCompilationResult(
                 success = true,
                 compiledFiles = allSourceFiles.size
             )
         } catch (e: Exception) {
-            deleteRecursively(stagingRoot)
             logger.warn("Overlay compilation failed for {}: {}", projectId, e.message)
             return OverlayCompilationResult(
                 success = false,
@@ -195,6 +206,8 @@ class GeneratedSourceOverlayService(
         outputDir: Path,
         projectPath: String
     ) {
+        Files.createDirectories(outputDir)
+
         val compiler = K2JVMCompiler()
         val effectiveClasspath = effectiveClasspath(projectPath)
 
@@ -210,17 +223,16 @@ class GeneratedSourceOverlayService(
 
         val errStream = ByteArrayOutputStream()
         val originalErr = System.err
-        System.setErr(PrintStream(errStream))
 
-        val exitCode = try {
-            compiler.exec(System.err, *args.toTypedArray())
+        System.setErr(PrintStream(errStream))
+        try {
+            val exitCode = compiler.exec(System.err, *args.toTypedArray())
+            if (exitCode != ExitCode.OK) {
+                val errorMsg = errStream.toString(Charsets.UTF_8)
+                throw CompilationException("Kotlin overlay compilation failed:\n$errorMsg")
+            }
         } finally {
             System.setErr(originalErr)
-        }
-
-        if (exitCode != ExitCode.OK) {
-            val errorMsg = errStream.toString("UTF-8")
-            throw CompilationException("Kotlin overlay compilation failed:\n$errorMsg")
         }
     }
 
@@ -229,6 +241,8 @@ class GeneratedSourceOverlayService(
         outputDir: Path,
         projectPath: String
     ) {
+        Files.createDirectories(outputDir)
+
         val fileManager = javaCompiler.getStandardFileManager(null, null, null)
         try {
             val compilationUnits = fileManager.getJavaFileObjectsFromFiles(
@@ -243,10 +257,8 @@ class GeneratedSourceOverlayService(
             }
 
             val diagnostics = DiagnosticCollector<JavaFileObject>()
-            val outWriter = OutputStreamWriter(System.out)
-
             val task = javaCompiler.getTask(
-                outWriter,
+                null,
                 fileManager,
                 diagnostics,
                 options,
@@ -348,7 +360,6 @@ class GeneratedSourceOverlayService(
         val config = ruleRepository.load(projectId) ?: return resolveFromEnv(projectId)
 
         val fromConfig = config.projectPath?.trim().orEmpty()
-
         if (fromConfig.isNotBlank()) {
             return fromConfig
         }
