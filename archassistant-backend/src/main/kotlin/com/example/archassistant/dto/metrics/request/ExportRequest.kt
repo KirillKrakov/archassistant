@@ -1,4 +1,4 @@
-package com.example.archassistant.dto
+package com.example.archassistant.dto.metrics.request
 
 import com.fasterxml.jackson.annotation.JsonProperty
 import java.time.LocalDateTime
@@ -25,9 +25,3 @@ data class ExportRequest(
     @JsonProperty("includeViolations")
     val includeViolations: Boolean = false  // Включать детали нарушений в экспорт
 )
-
-enum class ExportFormat {
-    CSV,
-    JSON,
-    JSON_PRETTY
-}

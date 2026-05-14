@@ -1,7 +1,7 @@
 package com.example.archassistant.model
 
-import com.example.archassistant.dto.CodeGenerationRequest
-import com.example.archassistant.dto.CodeGenerationResponse
+import com.example.archassistant.dto.generation.request.CodeGenerationRequest
+import com.example.archassistant.dto.generation.response.CodeGenerationResponse
 
 /**
  * Интерфейс стратегии архитектурного контроля при генерации кода

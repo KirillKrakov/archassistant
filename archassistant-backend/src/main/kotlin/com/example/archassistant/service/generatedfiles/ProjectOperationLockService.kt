@@ -1,4 +1,4 @@
-package com.example.archassistant.service.sync
+package com.example.archassistant.service.generatedfiles
 
 import org.springframework.stereotype.Service
 import java.util.concurrent.ConcurrentHashMap

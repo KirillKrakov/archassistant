@@ -1,7 +1,7 @@
 package com.example.archassistant.service.context.overlay
 
-import com.example.archassistant.dto.GeneratedFilePayload
-import com.example.archassistant.dto.GeneratedFileSyncResponse
+import com.example.archassistant.dto.generatedfiles.request.GeneratedFilePayload
+import com.example.archassistant.dto.generatedfiles.response.GeneratedFileSyncResponse
 import com.example.archassistant.service.rules.repository.YamlRuleRepository
 import com.example.archassistant.util.ClasspathUtils
 import com.example.archassistant.util.CompilationException

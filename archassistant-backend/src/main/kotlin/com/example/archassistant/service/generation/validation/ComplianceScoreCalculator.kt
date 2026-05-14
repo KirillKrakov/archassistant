@@ -1,4 +1,4 @@
-package com.example.archassistant.service.validation
+package com.example.archassistant.service.generation.validation
 
 import com.example.archassistant.model.*
 import com.example.archassistant.util.*

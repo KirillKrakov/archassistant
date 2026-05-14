@@ -1,6 +1,6 @@
 package com.example.archassistant.config
 
-import com.example.archassistant.dto.ExportFormat
+import com.example.archassistant.dto.metrics.request.ExportFormat
 import com.example.archassistant.model.ScoreWeights
 import org.springframework.boot.context.properties.ConfigurationProperties
 

@@ -1,8 +1,8 @@
 package com.example.archassistant.service.metrics
 
-import com.example.archassistant.dto.ComparisonResult
-import com.example.archassistant.dto.Recommendation
-import com.example.archassistant.dto.StrategyComparison
+import com.example.archassistant.dto.metrics.response.ComparisonResult
+import com.example.archassistant.dto.metrics.response.Recommendation
+import com.example.archassistant.dto.metrics.response.StrategyComparison
 import com.example.archassistant.model.GenerationRecord
 import com.example.archassistant.model.StrategyType
 import com.example.archassistant.repository.GenerationRecordRepository

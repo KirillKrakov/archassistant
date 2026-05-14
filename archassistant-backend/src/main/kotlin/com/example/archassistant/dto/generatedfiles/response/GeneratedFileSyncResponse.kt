@@ -1,17 +1,8 @@
-package com.example.archassistant.dto
+package com.example.archassistant.dto.generatedfiles.response
 
-data class GeneratedFileSyncRequest(
-    val projectPath: String? = null,
-    val files: List<GeneratedFilePayload> = emptyList()
-)
+import com.fasterxml.jackson.annotation.JsonInclude
 
-data class GeneratedFilePayload(
-    val packageName: String? = null,
-    val className: String,
-    val code: String,
-    val language: String? = null
-)
-
+@JsonInclude(JsonInclude.Include.NON_NULL)
 data class GeneratedFileSyncResponse(
     val success: Boolean,
     val projectId: String,

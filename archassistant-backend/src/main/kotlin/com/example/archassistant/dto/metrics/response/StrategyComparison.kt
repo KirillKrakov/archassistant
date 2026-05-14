@@ -1,14 +1,7 @@
-package com.example.archassistant.dto
+package com.example.archassistant.dto.metrics.response
 
 import com.example.archassistant.model.StrategyType
-import java.util.Locale
-
-data class ComparisonResult(
-    val projectId: String? = null,
-    val strategies: Map<StrategyType, StrategyComparison>,
-    val recommendation: Recommendation? = null,
-    val comparedAt: String = java.time.LocalDateTime.now().toString()
-)
+import java.util.*
 
 data class StrategyComparison(
     val strategy: StrategyType,
@@ -38,9 +31,3 @@ data class StrategyComparison(
 
     private fun Double.percent2(): Double = String.format(Locale.US, "%.2f", this * 100.0).toDouble()
 }
-
-data class Recommendation(
-    val bestStrategy: StrategyType,
-    val reason: String,
-    val confidence: Double
-)

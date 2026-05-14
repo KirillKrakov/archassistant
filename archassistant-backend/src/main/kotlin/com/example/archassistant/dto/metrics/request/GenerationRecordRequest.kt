@@ -1,9 +1,11 @@
-package com.example.archassistant.dto
+package com.example.archassistant.dto.metrics.request
 
-data class GenerationRecordDto(
+import com.example.archassistant.model.StrategyType
+
+data class GenerationRecordRequest(
     val id: String? = null,
     val projectId: String,
-    val strategy: com.example.archassistant.model.StrategyType,
+    val strategy: StrategyType,
     val prompt: String? = null,
     val generatedCode: String? = null,
     val success: Boolean,

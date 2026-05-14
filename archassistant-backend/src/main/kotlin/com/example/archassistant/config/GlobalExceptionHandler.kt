@@ -1,8 +1,8 @@
-package com.example.archassistant.controller.advice
+package com.example.archassistant.config
 
-import com.example.archassistant.dto.CodeGenerationResponse
-import com.example.archassistant.dto.ErrorDetails
-import com.example.archassistant.dto.ResponseMetadata
+import com.example.archassistant.dto.generation.response.CodeGenerationResponse
+import com.example.archassistant.dto.generation.response.ErrorDetails
+import com.example.archassistant.dto.generation.response.ResponseMetadata
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity

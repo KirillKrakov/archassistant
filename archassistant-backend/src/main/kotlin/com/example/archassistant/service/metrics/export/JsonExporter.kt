@@ -11,21 +11,16 @@ import org.springframework.stereotype.Component
 class JsonExporter(
     private val objectMapper: ObjectMapper
 ) {
+    private val exportMapper: ObjectMapper = objectMapper.copy()
+        .registerModule(JavaTimeModule())
+        .registerModule(KotlinModule.Builder().build())
+        .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
 
-    init {
-        objectMapper.registerModule(JavaTimeModule())
-        objectMapper.registerModule(KotlinModule.Builder().build())
-        objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-    }
-
-    /**
-     * Экспорт записей в JSON-формат
-     */
     fun export(records: List<GenerationRecord>, pretty: Boolean): String {
         return if (pretty) {
-            objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(records)
+            exportMapper.writerWithDefaultPrettyPrinter().writeValueAsString(records)
         } else {
-            objectMapper.writeValueAsString(records)
+            exportMapper.writeValueAsString(records)
         }
     }
 }

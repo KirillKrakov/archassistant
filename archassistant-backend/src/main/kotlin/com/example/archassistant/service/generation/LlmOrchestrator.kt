@@ -1,7 +1,7 @@
 package com.example.archassistant.service.generation
 
-import com.example.archassistant.dto.CodeGenerationResponse
-import com.example.archassistant.dto.GenerationResponseFactory
+import com.example.archassistant.dto.generation.response.CodeGenerationResponse
+import com.example.archassistant.dto.generation.response.GenerationResponseFactory
 import com.example.archassistant.service.generation.client.LlmClientFactory
 import com.example.archassistant.util.PromptFormatter
 import org.slf4j.LoggerFactory

@@ -1,4 +1,4 @@
-package com.example.archassistant.dto
+package com.example.archassistant.dto.metrics.response
 
 import com.example.archassistant.model.StrategyType
 import java.util.Locale
@@ -23,6 +23,5 @@ data class StrategyMetrics(
     )
 
     private fun Double.round2(): Double = String.format(Locale.US, "%.2f", this).toDouble()
-
     private fun Double.percent2(): Double = String.format(Locale.US, "%.2f", this * 100.0).toDouble()
 }

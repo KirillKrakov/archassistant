@@ -1,21 +1,15 @@
 package com.example.archassistant.controller
 
-import com.example.archassistant.dto.ExportFormat
-import com.example.archassistant.dto.ExportRequest
-import com.example.archassistant.dto.GenerationRecordDto
-import com.example.archassistant.dto.metrics.*
-import com.example.archassistant.model.GenerationRecord
-import com.example.archassistant.model.StrategyType
-import com.example.archassistant.repository.GenerationRecordRepository
+import com.example.archassistant.dto.metrics.request.ExportFormat
+import com.example.archassistant.dto.metrics.request.ExportRequest
+import com.example.archassistant.dto.metrics.request.GenerationRecordRequest
+import com.example.archassistant.dto.metrics.response.*
 import com.example.archassistant.service.metrics.MetricsComparisonService
 import com.example.archassistant.service.metrics.MetricsExportService
-import com.example.archassistant.service.metrics.MetricsQueryService
-import org.slf4j.LoggerFactory
-import org.springframework.data.domain.PageRequest
+import com.example.archassistant.service.metrics.MetricsFacadeService
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
-import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.bind.annotation.*
 import java.time.LocalDateTime
 
@@ -23,34 +17,31 @@ import java.time.LocalDateTime
 @RequestMapping("/api/metrics")
 @CrossOrigin(origins = ["*"])
 class MetricsController(
-    private val metricsQueryService: MetricsQueryService,
+    private val metricsFacadeService: MetricsFacadeService,
     private val exportService: MetricsExportService,
     private val comparisonService: MetricsComparisonService
 ) {
 
-    private val logger = LoggerFactory.getLogger(MetricsController::class.java)
-
     @GetMapping("/strategies")
     fun compareStrategies(
         @RequestParam(required = false) projectId: String?
-    ): ResponseEntity<StrategyMetricsOverviewResponse> {
-        return ResponseEntity.ok(metricsQueryService.compareStrategies(projectId))
+    ): ResponseEntity<StrategyMetricsMapResponse> {
+        return ResponseEntity.ok(metricsFacadeService.buildStrategyMetrics(projectId))
     }
 
     @GetMapping("/{projectId}")
     fun getProjectMetrics(@PathVariable projectId: String): ResponseEntity<ProjectMetricsResponse> {
-        return ResponseEntity.ok(metricsQueryService.getProjectMetrics(projectId))
+        return ResponseEntity.ok(metricsFacadeService.buildProjectMetrics(projectId))
     }
 
-    @Transactional
     @DeleteMapping("/{projectId}")
     fun clearProjectMetrics(@PathVariable projectId: String): ResponseEntity<ClearMetricsResponse> {
-        return ResponseEntity.ok(metricsQueryService.clearProjectMetrics(projectId))
+        return ResponseEntity.ok(metricsFacadeService.clearProjectMetrics(projectId))
     }
 
     @PostMapping("/record")
-    fun saveGenerationRecord(@RequestBody record: GenerationRecordDto): ResponseEntity<SaveGenerationRecordResponse> {
-        return ResponseEntity.ok(metricsQueryService.saveGenerationRecord(record))
+    fun saveGenerationRecord(@RequestBody record: GenerationRecordRequest): ResponseEntity<SaveGenerationRecordResponse> {
+        return ResponseEntity.ok(metricsFacadeService.saveManualRecord(record))
     }
 
     @PostMapping("/export")
@@ -78,9 +69,8 @@ class MetricsController(
     @GetMapping("/compare")
     fun compareStrategiesDetailed(
         @RequestParam(required = false) projectId: String?
-    ): ResponseEntity<Any> {
-        val result = comparisonService.compare(projectId)
-        return ResponseEntity.ok(result)
+    ): ResponseEntity<ComparisonResult> {
+        return ResponseEntity.ok(comparisonService.compare(projectId))
     }
 
     @GetMapping("/{projectId}/history")
@@ -92,8 +82,12 @@ class MetricsController(
         @RequestParam(required = false) fromDate: LocalDateTime?,
         @RequestParam(required = false) toDate: LocalDateTime?
     ): ResponseEntity<GenerationHistoryResponse> {
+        if (page < 0 || size <= 0) {
+            return ResponseEntity.badRequest().build()
+        }
+
         return ResponseEntity.ok(
-            metricsQueryService.getGenerationHistory(
+            metricsFacadeService.buildGenerationHistory(
                 projectId = projectId,
                 page = page,
                 size = size,
