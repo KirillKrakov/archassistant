@@ -2,7 +2,7 @@ package com.example.archassistant.service.context.overlay
 
 import com.example.archassistant.dto.generatedfiles.request.GeneratedFilePayload
 import com.example.archassistant.dto.generatedfiles.response.GeneratedFileSyncResponse
-import com.example.archassistant.service.rules.repository.YamlRuleRepository
+import com.example.archassistant.service.context.ProjectPathResolver
 import com.example.archassistant.util.ClasspathUtils
 import com.example.archassistant.util.CompilationException
 import com.example.archassistant.util.ProjectClasspathResolver
@@ -14,8 +14,8 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.OutputStreamWriter
 import java.io.PrintStream
-import java.io.OutputStreamWriter;
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
@@ -28,7 +28,7 @@ import kotlin.io.path.isDirectory
 
 @Service
 class GeneratedSourceOverlayService(
-    private val ruleRepository: YamlRuleRepository,
+    private val projectPathResolver: ProjectPathResolver,
     @Value("\${archassistant.config-root:.archassistant}")
     private val configRootPath: String
 ) {
@@ -50,7 +50,7 @@ class GeneratedSourceOverlayService(
         projectPathOverride: String? = null,
         files: List<GeneratedFilePayload> = emptyList()
     ): GeneratedFileSyncResponse {
-        val resolvedProjectPath = resolveProjectPath(projectId, projectPathOverride)
+        val resolvedProjectPath = projectPathResolver.resolveProjectPath(projectId, projectPathOverride)
 
         if (resolvedProjectPath.isBlank()) {
             return GeneratedFileSyncResponse(
@@ -438,33 +438,6 @@ class GeneratedSourceOverlayService(
             return true
         }
         return isKotlin
-    }
-
-    private fun resolveProjectPath(projectId: String, explicitProjectPath: String?): String {
-        explicitProjectPath?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
-
-        val config = ruleRepository.load(projectId) ?: return resolveFromEnv(projectId)
-
-        val fromConfig = config.projectPath?.trim().orEmpty()
-        if (fromConfig.isNotBlank()) {
-            return fromConfig
-        }
-
-        return resolveFromEnv(projectId)
-    }
-
-    private fun resolveFromEnv(projectId: String): String {
-        val envCandidates = listOf(
-            "ARCHASSISTANT_PROJECT_PATH_${projectId.uppercase()}",
-            "ARCHASSISTANT_PROJECT_PATH",
-            "PROJECT_PATH"
-        )
-
-        return envCandidates
-            .asSequence()
-            .mapNotNull { key -> System.getenv(key)?.trim() }
-            .firstOrNull { it.isNotBlank() }
-            .orEmpty()
     }
 
     private fun overlayRoot(projectId: String): Path {

@@ -4,8 +4,8 @@ import com.example.archassistant.model.ArchitecturalRule
 import com.example.archassistant.model.ProjectProfileDetection
 import com.example.archassistant.service.context.detection.ArchitectureDetector
 import com.example.archassistant.service.context.scanner.ProjectStructureScanner
-import com.example.archassistant.service.rules.template.RuleTemplateEngine
 import com.example.archassistant.service.rules.repository.YamlRuleRepository
+import com.example.archassistant.service.rules.template.RuleTemplateEngine
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.nio.file.Files
@@ -24,7 +24,8 @@ data class WorkspaceModuleSuggestions(
 class WorkspaceProjectScanner(
     private val projectStructureScanner: ProjectStructureScanner,
     private val architectureDetector: ArchitectureDetector,
-    private val ruleTemplateEngine: RuleTemplateEngine
+    private val ruleTemplateEngine: RuleTemplateEngine,
+    private val projectPathResolver: ProjectPathResolver
 ) {
 
     private val logger = LoggerFactory.getLogger(WorkspaceProjectScanner::class.java)
@@ -59,9 +60,11 @@ class WorkspaceProjectScanner(
         }
     }
 
-    fun scanProjectFromConfig(projectId: String, ruleRepository: YamlRuleRepository): List<WorkspaceModuleSuggestions>? {
-        val config = ruleRepository.load(projectId)
-        val projectPath = config?.projectPath ?: return null
+    fun scanProjectFromConfig(projectId: String): List<WorkspaceModuleSuggestions>? {
+        val projectPath = projectPathResolver.resolveProjectPath(projectId)
+        if (projectPath.isBlank()) {
+            return null
+        }
 
         return if (Files.exists(Paths.get(projectPath))) {
             scanWorkspace(projectPath, projectId)
@@ -69,6 +72,14 @@ class WorkspaceProjectScanner(
             logger.warn("Project path not found: {}", projectPath)
             null
         }
+    }
+
+    @Deprecated("Use scanProjectFromConfig(projectId) and centralized path resolution.")
+    fun scanProjectFromConfig(
+        projectId: String,
+        ruleRepository: YamlRuleRepository
+    ): List<WorkspaceModuleSuggestions>? {
+        return scanProjectFromConfig(projectId)
     }
 
     private fun discoverModuleRoots(workspaceRoot: Path): List<Path> {

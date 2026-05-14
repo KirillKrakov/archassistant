@@ -1,6 +1,7 @@
 package com.example.archassistant.service.context.scanner
 
 import com.example.archassistant.model.*
+import com.example.archassistant.service.context.ProjectPathResolver
 import com.example.archassistant.service.context.detection.ArchitectureDetector
 import com.example.archassistant.service.rules.repository.YamlRuleRepository
 import com.example.archassistant.util.ProjectLayerClassifier
@@ -15,7 +16,8 @@ import java.nio.file.Paths
 
 @Service
 class ProjectStructureScanner(
-    private val architectureDetector: ArchitectureDetector
+    private val architectureDetector: ArchitectureDetector,
+    private val projectPathResolver: ProjectPathResolver
 ) {
 
     private data class ImportedClassEntry(
@@ -80,9 +82,11 @@ class ProjectStructureScanner(
         )
     }
 
-    fun scanProjectFromConfig(projectId: String, ruleRepository: YamlRuleRepository): ProjectStructure? {
-        val config = ruleRepository.load(projectId)
-        val projectPath = config?.projectPath ?: return null
+    fun scanProjectFromConfig(projectId: String): ProjectStructure? {
+        val projectPath = projectPathResolver.resolveProjectPath(projectId)
+        if (projectPath.isBlank()) {
+            return null
+        }
 
         return if (Files.exists(Paths.get(projectPath))) {
             scanProject(projectPath, projectId)
@@ -90,6 +94,14 @@ class ProjectStructureScanner(
             logger.warn("Project path not found: {}", projectPath)
             null
         }
+    }
+
+    @Deprecated("Use scanProjectFromConfig(projectId) and centralized path resolution.")
+    fun scanProjectFromConfig(
+        projectId: String,
+        ruleRepository: YamlRuleRepository
+    ): ProjectStructure? {
+        return scanProjectFromConfig(projectId)
     }
 
     private fun findClassesDirectory(projectPath: String): Path? {
