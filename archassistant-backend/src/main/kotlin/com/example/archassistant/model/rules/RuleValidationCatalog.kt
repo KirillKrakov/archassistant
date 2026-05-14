@@ -1,4 +1,4 @@
-package com.example.archassistant.model
+package com.example.archassistant.model.rules
 
 object RuleValidationCatalog {
 

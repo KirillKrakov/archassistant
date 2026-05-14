@@ -1,7 +1,7 @@
 package com.example.archassistant.service.rules
 
 import com.example.archassistant.model.PackageScopeIndex
-import com.example.archassistant.model.ProjectProfileDetection
+import com.example.archassistant.model.context.ProjectProfileDetection
 import com.example.archassistant.model.ProjectStructure
 
 data class RuleGenerationContext(

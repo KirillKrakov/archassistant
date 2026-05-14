@@ -1,6 +1,8 @@
 package com.example.archassistant.service.context.detection
 
 import com.example.archassistant.model.*
+import com.example.archassistant.model.context.ProjectProfile
+import com.example.archassistant.model.context.ProjectProfileDetection
 import org.springframework.stereotype.Service
 
 @Service

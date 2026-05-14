@@ -3,7 +3,7 @@ package com.example.archassistant.service.metrics
 import com.example.archassistant.config.ArchassistantProperties
 import com.example.archassistant.dto.metrics.request.ExportFormat
 import com.example.archassistant.dto.metrics.request.ExportRequest
-import com.example.archassistant.model.GenerationRecord
+import com.example.archassistant.entity.GenerationRecord
 import com.example.archassistant.repository.GenerationRecordRepository
 import com.example.archassistant.service.metrics.export.CsvExporter
 import com.example.archassistant.service.metrics.export.JsonExporter

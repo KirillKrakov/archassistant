@@ -3,8 +3,8 @@ package com.example.archassistant.service.generation.pipeline
 import com.example.archassistant.config.ArchassistantProperties
 import com.example.archassistant.dto.generation.request.CodeGenerationRequest
 import com.example.archassistant.dto.generation.response.CodeGenerationResponse
-import com.example.archassistant.model.GenerationValidationResult
-import com.example.archassistant.model.PreparedGenerationRequest
+import com.example.archassistant.model.generation.GenerationValidationResult
+import com.example.archassistant.model.generation.PreparedGenerationRequest
 import com.example.archassistant.model.StrategyType
 import com.example.archassistant.model.Violation
 import org.springframework.stereotype.Service

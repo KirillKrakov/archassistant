@@ -1,8 +1,8 @@
 package com.example.archassistant.service.generation.pipeline
 
 import com.example.archassistant.dto.generation.request.CodeGenerationRequest
-import com.example.archassistant.model.ArchitecturalRule
-import com.example.archassistant.model.PreparedGenerationRequest
+import com.example.archassistant.model.generation.PreparedGenerationRequest
+import com.example.archassistant.model.rules.ArchitecturalRule
 import com.example.archassistant.service.context.ProjectContextService
 import com.example.archassistant.service.rules.repository.YamlRuleRepository
 import org.springframework.stereotype.Service

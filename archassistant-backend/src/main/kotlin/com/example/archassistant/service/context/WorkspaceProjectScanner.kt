@@ -1,7 +1,7 @@
 package com.example.archassistant.service.context
 
-import com.example.archassistant.model.ArchitecturalRule
-import com.example.archassistant.model.ProjectProfileDetection
+import com.example.archassistant.model.context.ProjectProfileDetection
+import com.example.archassistant.model.rules.ArchitecturalRule
 import com.example.archassistant.service.context.detection.ArchitectureDetector
 import com.example.archassistant.service.context.scanner.ProjectStructureScanner
 import com.example.archassistant.service.rules.repository.YamlRuleRepository

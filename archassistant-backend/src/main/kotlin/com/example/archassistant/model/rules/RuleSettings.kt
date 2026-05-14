@@ -1,10 +1,11 @@
-package com.example.archassistant.dto.rules
+package com.example.archassistant.model.rules
 
-import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonProperty
 
-@JsonInclude(JsonInclude.Include.NON_NULL)
-data class RuleSettingsDto(
+/**
+ * Настройки обработки правил
+ */
+data class RuleSettings(
     @JsonProperty("max_iterations")
     val maxIterations: Int = 3,
 

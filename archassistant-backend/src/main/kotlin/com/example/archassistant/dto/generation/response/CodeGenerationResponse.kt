@@ -1,8 +1,5 @@
 package com.example.archassistant.dto.generation.response
 
-import com.example.archassistant.model.ComplianceScore
-import com.example.archassistant.model.StrategyType
-
 /**
  * Ответ на запрос генерации кода
  */

@@ -1,6 +1,6 @@
 package com.example.archassistant.service.metrics.export
 
-import com.example.archassistant.model.GenerationRecord
+import com.example.archassistant.entity.GenerationRecord
 import org.springframework.stereotype.Component
 import java.time.format.DateTimeFormatter
 

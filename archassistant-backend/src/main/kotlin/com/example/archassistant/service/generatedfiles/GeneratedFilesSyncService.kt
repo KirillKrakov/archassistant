@@ -3,7 +3,7 @@ package com.example.archassistant.service.generatedfiles
 import com.example.archassistant.dto.generatedfiles.request.GeneratedFileSyncRequest
 import com.example.archassistant.dto.generatedfiles.response.GeneratedFileSyncResponse
 import com.example.archassistant.dto.generatedfiles.response.GeneratedFilesClearResponse
-import com.example.archassistant.model.RulesConfig
+import com.example.archassistant.model.rules.RulesConfig
 import com.example.archassistant.service.context.ProjectContextService
 import com.example.archassistant.service.context.overlay.GeneratedSourceOverlayService
 import com.example.archassistant.service.rules.repository.YamlRuleRepository

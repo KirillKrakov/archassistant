@@ -1,8 +1,8 @@
 package com.example.archassistant.service.generation.pipeline
 
 import com.example.archassistant.dto.generation.request.CodeGenerationRequest
-import com.example.archassistant.model.GenerationPrompt
-import com.example.archassistant.model.PreparedGenerationRequest
+import com.example.archassistant.model.generation.GenerationPrompt
+import com.example.archassistant.model.generation.PreparedGenerationRequest
 import com.example.archassistant.model.StrategyType
 import com.example.archassistant.model.Violation
 import com.example.archassistant.util.ErrorFormatter

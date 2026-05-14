@@ -1,4 +1,4 @@
-package com.example.archassistant.model
+package com.example.archassistant.model.rules
 
 import com.fasterxml.jackson.annotation.JsonProperty
 import java.time.LocalDateTime
@@ -71,35 +71,3 @@ data class RulesConfig(
         )
     }
 }
-
-/**
- * Тип проекта для предзаполнения шаблонов правил
- */
-enum class ProjectType {
-    SPRING_BOOT,
-    ANDROID_MVVM,
-    KTOR,
-    MICRONAUT,
-    QUARKUS,
-    CUSTOM
-}
-
-/**
- * Настройки обработки правил
- */
-data class RuleSettings(
-    @JsonProperty("max_iterations")
-    val maxIterations: Int = 3,
-
-    @JsonProperty("timeout_seconds")
-    val timeoutSeconds: Int = 30,
-
-    @JsonProperty("default_strategy")
-    val defaultStrategy: String = "HYBRID",
-
-    @JsonProperty("fail_on_critical")
-    val failOnCritical: Boolean = true,
-
-    @JsonProperty("auto_fix_naming")
-    val autoFixNaming: Boolean = false
-)

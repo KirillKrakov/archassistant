@@ -1,6 +1,12 @@
 package com.example.archassistant.service.generation.validation
 
-import com.example.archassistant.model.*
+import com.example.archassistant.model.ProjectContextSnapshot
+import com.example.archassistant.model.Severity
+import com.example.archassistant.model.Violation
+import com.example.archassistant.model.core.ComplianceScore
+import com.example.archassistant.model.core.ScoreWeights
+import com.example.archassistant.model.rules.ArchitecturalRule
+import com.example.archassistant.model.rules.RuleType
 import com.example.archassistant.util.*
 import com.tngtech.archunit.core.domain.JavaClasses
 import com.tngtech.archunit.core.importer.ClassFileImporter

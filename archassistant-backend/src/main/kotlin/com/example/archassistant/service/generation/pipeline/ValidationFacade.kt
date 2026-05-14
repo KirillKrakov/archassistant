@@ -1,10 +1,10 @@
 package com.example.archassistant.service.generation.pipeline
 
 import com.example.archassistant.dto.generation.request.CodeGenerationRequest
-import com.example.archassistant.model.ComplianceScore
-import com.example.archassistant.model.GenerationValidationResult
-import com.example.archassistant.model.PreparedGenerationRequest
+import com.example.archassistant.model.generation.GenerationValidationResult
+import com.example.archassistant.model.generation.PreparedGenerationRequest
 import com.example.archassistant.model.Violation
+import com.example.archassistant.model.core.ComplianceScore
 import com.example.archassistant.service.generation.validation.ComplianceScoreCalculator
 import com.example.archassistant.util.CodeCleaner
 import com.example.archassistant.util.GeneratedTypeNameExtractor
@@ -40,8 +40,8 @@ class ValidationFacade(
             )
         }
 
-        var score: ComplianceScore? = null
-        var violations: List<Violation> = emptyList()
+        var score: ComplianceScore?
+        var violations: List<Violation>
 
         val validationTimeMs = measureTimeMillis {
             score = scoreCalculator.calculate(

@@ -1,6 +1,10 @@
 package com.example.archassistant.service.rules.template
 
-import com.example.archassistant.model.*
+import com.example.archassistant.model.PackageScopeIndex
+import com.example.archassistant.model.ProjectStructure
+import com.example.archassistant.model.Severity
+import com.example.archassistant.model.context.ProjectProfile
+import com.example.archassistant.model.rules.ArchitecturalRule
 import com.example.archassistant.service.context.detection.ArchitectureDetector
 import com.example.archassistant.service.rules.*
 import org.slf4j.LoggerFactory

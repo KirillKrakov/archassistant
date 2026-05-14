@@ -2,7 +2,7 @@ package com.example.archassistant.service.generation
 
 import com.example.archassistant.dto.generation.request.CodeGenerationRequest
 import com.example.archassistant.dto.generation.response.CodeGenerationResponse
-import com.example.archassistant.model.GenerationRecord
+import com.example.archassistant.entity.GenerationRecord
 import com.example.archassistant.model.StrategyType
 import com.example.archassistant.repository.GenerationRecordRepository
 import com.fasterxml.jackson.databind.ObjectMapper

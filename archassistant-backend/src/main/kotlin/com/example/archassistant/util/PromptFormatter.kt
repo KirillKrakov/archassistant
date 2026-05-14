@@ -1,8 +1,8 @@
 package com.example.archassistant.util
 
-import com.example.archassistant.model.ArchitecturalRule
-import com.example.archassistant.model.ConstraintType
-import com.example.archassistant.model.RuleType
+import com.example.archassistant.model.rules.ArchitecturalRule
+import com.example.archassistant.model.rules.ConstraintType
+import com.example.archassistant.model.rules.RuleType
 import com.example.archassistant.model.Severity
 
 object PromptFormatter {

@@ -1,6 +1,8 @@
-package com.example.archassistant.model
+package com.example.archassistant.model.generation
 
 import com.example.archassistant.dto.generation.request.CodeGenerationRequest
+import com.example.archassistant.model.ProjectContextSnapshot
+import com.example.archassistant.model.rules.ArchitecturalRule
 
 data class PreparedGenerationRequest(
     val projectContext: ProjectContextSnapshot,
@@ -20,21 +22,3 @@ data class PreparedGenerationRequest(
 
     fun languageHint(): String? = projectContext.preferredLanguageHint()
 }
-
-data class GenerationPrompt(
-    val systemPrompt: String,
-    val userPrompt: String
-)
-
-data class GenerationAttemptResult(
-    val rawCode: String,
-    val generationTimeMs: Long
-)
-
-data class GenerationValidationResult(
-    val generatedCode: String,
-    val primaryTypeName: String?,
-    val score: ComplianceScore?,
-    val violations: List<Violation>,
-    val validationTimeMs: Long
-)

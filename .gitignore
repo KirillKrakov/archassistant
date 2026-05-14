@@ -36,3 +36,6 @@ out/
 
 # Test
 test-results/
+
+# Certificates For GigaChat
+certs/

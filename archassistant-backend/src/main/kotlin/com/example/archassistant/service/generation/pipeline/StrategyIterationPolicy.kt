@@ -1,7 +1,7 @@
 package com.example.archassistant.service.generation.pipeline
 
 import com.example.archassistant.config.ArchassistantProperties
-import com.example.archassistant.model.GenerationValidationResult
+import com.example.archassistant.model.generation.GenerationValidationResult
 import com.example.archassistant.model.StrategyType
 import org.springframework.stereotype.Service
 

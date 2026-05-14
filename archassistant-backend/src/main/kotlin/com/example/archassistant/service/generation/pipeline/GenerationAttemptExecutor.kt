@@ -1,7 +1,7 @@
 package com.example.archassistant.service.generation.pipeline
 
-import com.example.archassistant.model.GenerationAttemptResult
-import com.example.archassistant.model.GenerationPrompt
+import com.example.archassistant.model.generation.GenerationAttemptResult
+import com.example.archassistant.model.generation.GenerationPrompt
 import com.example.archassistant.service.generation.LlmOrchestrator
 import org.springframework.stereotype.Service
 import kotlin.system.measureTimeMillis
@@ -14,7 +14,7 @@ class GenerationAttemptExecutor(
     fun execute(prompt: GenerationPrompt, maxRetries: Int): GenerationAttemptResult {
         val effectiveRetries = maxRetries.coerceAtLeast(1)
 
-        var generatedRawCode: String? = null
+        var generatedRawCode: String?
         val generationTimeMs = measureTimeMillis {
             generatedRawCode = llmOrchestrator.generateCodeRaw(
                 systemPrompt = prompt.systemPrompt,

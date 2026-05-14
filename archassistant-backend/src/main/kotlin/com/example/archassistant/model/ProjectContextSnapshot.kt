@@ -1,5 +1,6 @@
 package com.example.archassistant.model
 
+import com.example.archassistant.model.context.ProjectProfileDetection
 import com.example.archassistant.util.ClasspathUtils
 import com.example.archassistant.util.ProjectTypeNameResolver
 import java.nio.file.Files

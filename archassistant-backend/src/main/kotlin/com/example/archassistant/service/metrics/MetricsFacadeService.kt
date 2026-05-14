@@ -2,7 +2,7 @@ package com.example.archassistant.service.metrics
 
 import com.example.archassistant.dto.metrics.request.GenerationRecordRequest
 import com.example.archassistant.dto.metrics.response.*
-import com.example.archassistant.model.GenerationRecord
+import com.example.archassistant.entity.GenerationRecord
 import com.example.archassistant.model.StrategyType
 import com.example.archassistant.repository.GenerationRecordRepository
 import org.slf4j.LoggerFactory

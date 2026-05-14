@@ -1,7 +1,7 @@
 package com.example.archassistant.util
 
-import com.example.archassistant.model.ArchitecturalRule
-import com.example.archassistant.model.RuleType
+import com.example.archassistant.model.rules.ArchitecturalRule
+import com.example.archassistant.model.rules.RuleType
 import com.example.archassistant.model.Severity
 import com.example.archassistant.model.Violation
 import com.tngtech.archunit.core.domain.JavaClasses

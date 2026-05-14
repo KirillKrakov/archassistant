@@ -1,6 +1,9 @@
 package com.example.archassistant.service.rules.profile.common
 
-import com.example.archassistant.model.*
+import com.example.archassistant.model.ClassType
+import com.example.archassistant.model.Severity
+import com.example.archassistant.model.rules.ArchitecturalRule
+import com.example.archassistant.model.rules.ConstraintType
 import com.example.archassistant.service.rules.RuleFactory
 import com.example.archassistant.service.rules.RuleGenerationContext
 

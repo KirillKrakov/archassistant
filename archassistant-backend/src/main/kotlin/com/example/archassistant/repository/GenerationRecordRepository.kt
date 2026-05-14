@@ -1,7 +1,7 @@
 package com.example.archassistant.repository
 
 import com.example.archassistant.dto.metrics.response.StrategyMetrics
-import com.example.archassistant.model.GenerationRecord
+import com.example.archassistant.entity.GenerationRecord
 import com.example.archassistant.model.StrategyType
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable

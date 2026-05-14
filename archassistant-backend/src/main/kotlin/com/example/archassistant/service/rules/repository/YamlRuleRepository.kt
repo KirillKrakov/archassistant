@@ -1,6 +1,7 @@
 package com.example.archassistant.service.rules.repository
 
 import com.example.archassistant.model.*
+import com.example.archassistant.model.rules.*
 import com.example.archassistant.util.PackagePatternBuilder
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory

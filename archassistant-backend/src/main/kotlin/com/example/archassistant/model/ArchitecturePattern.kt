@@ -1,5 +1,7 @@
 package com.example.archassistant.model
 
+import com.example.archassistant.model.context.ProjectProfile
+
 enum class ArchitecturePattern(
     val description: String,
     val keyLayers: List<String>,
@@ -37,7 +39,7 @@ enum class ArchitecturePattern(
     )
 }
 
-fun ProjectProfile.toArchitecturePattern(): ArchitecturePattern? {
+fun ProjectProfile.toArchitecturePattern(): ArchitecturePattern {
     return when (this) {
         ProjectProfile.SPRING_LAYERED,
         ProjectProfile.SPRING_FEATURED -> ArchitecturePattern.LAYERED

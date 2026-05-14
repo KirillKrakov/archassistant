@@ -1,8 +1,7 @@
 package com.example.archassistant.dto.rules
 
-import com.example.archassistant.model.ArchitecturalRule
-import com.example.archassistant.model.ProjectType
-import com.example.archassistant.model.RulesConfig
+import com.example.archassistant.model.rules.ArchitecturalRule
+import com.example.archassistant.model.rules.ProjectType
 import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonProperty
 import java.time.LocalDateTime
@@ -32,32 +31,4 @@ data class RulesConfigDto(
 
     @JsonProperty("updated_at")
     val updatedAt: String? = LocalDateTime.now().toString()
-) {
-    fun toModel(): RulesConfig {
-        return RulesConfig(
-            version = version,
-            projectId = projectId,
-            projectType = projectType,
-            rules = rules,
-            settings = settings?.toModel(),
-            projectPath = projectPath,
-            createdAt = createdAt,
-            updatedAt = updatedAt
-        )
-    }
-
-    companion object {
-        fun fromModel(model: RulesConfig): RulesConfigDto {
-            return RulesConfigDto(
-                version = model.version,
-                projectId = model.projectId,
-                projectType = model.projectType,
-                rules = model.rules,
-                settings = model.settings?.let { RuleSettingsDto.fromModel(it) },
-                projectPath = model.projectPath,
-                createdAt = model.createdAt,
-                updatedAt = model.updatedAt
-            )
-        }
-    }
-}
+)

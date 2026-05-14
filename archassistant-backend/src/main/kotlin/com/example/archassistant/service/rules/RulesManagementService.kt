@@ -1,9 +1,10 @@
 package com.example.archassistant.service.rules
 
 import com.example.archassistant.dto.rules.*
-import com.example.archassistant.model.RulesConfig
+import com.example.archassistant.model.rules.RulesConfig
 import com.example.archassistant.service.context.WorkspaceModuleSuggestions
 import com.example.archassistant.service.context.WorkspaceProjectScanner
+import com.example.archassistant.service.rules.mapper.RulesConfigMapper
 import com.example.archassistant.service.rules.repository.YamlRuleRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -11,7 +12,8 @@ import org.springframework.stereotype.Service
 @Service
 class RulesManagementService(
     private val ruleRepository: YamlRuleRepository,
-    private val projectScanner: WorkspaceProjectScanner
+    private val projectScanner: WorkspaceProjectScanner,
+    private val rulesConfigMapper: RulesConfigMapper
 ) {
     private val logger = LoggerFactory.getLogger(RulesManagementService::class.java)
 
@@ -19,7 +21,7 @@ class RulesManagementService(
         val config = ruleRepository.load(projectId)
             ?: RulesConfig(projectId = projectId, rules = emptyList())
 
-        return RulesConfigDto.fromModel(config)
+        return rulesConfigMapper.toDto(config)
     }
 
     fun saveRules(projectId: String, dto: RulesConfigDto): RulesSaveResponse {
@@ -33,7 +35,7 @@ class RulesManagementService(
         }
 
         val existingConfig = ruleRepository.load(projectId)
-        val incoming = dto.toModel()
+        val incoming = rulesConfigMapper.toModel(dto)
 
         val mergedConfig = if (existingConfig != null) {
             incoming.copy(
@@ -69,7 +71,7 @@ class RulesManagementService(
         return if (!projectPath.isNullOrBlank()) {
             projectScanner.scanWorkspace(projectPath, projectId)
         } else {
-            projectScanner.scanProjectFromConfig(projectId, ruleRepository)
+            projectScanner.scanProjectFromConfig(projectId)
         }
     }
 

@@ -1,5 +1,6 @@
 package com.example.archassistant.model
 
+import com.example.archassistant.model.context.ProjectProfileDetection
 import java.time.LocalDateTime
 
 data class ProjectStructure(

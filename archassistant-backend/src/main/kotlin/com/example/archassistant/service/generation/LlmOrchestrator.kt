@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.ai.chat.client.ChatClient
 import org.springframework.stereotype.Service
 import kotlin.system.measureTimeMillis
+import com.example.archassistant.model.rules.ArchitecturalRule
 
 @Service
 class LlmOrchestrator(
@@ -30,7 +31,7 @@ class LlmOrchestrator(
     fun generateCode(
         prompt: String,
         projectId: String,
-        rules: List<com.example.archassistant.model.ArchitecturalRule>? = null,
+        rules: List<ArchitecturalRule>? = null,
         codeContext: String? = null,
         maxRetries: Int = 3
     ): CodeGenerationResponse {
@@ -54,7 +55,7 @@ class LlmOrchestrator(
 
         return try {
             val code = run {
-                var generatedCode: String? = null
+                var generatedCode: String?
                 generationTime = measureTimeMillis {
                     generatedCode = callLlmWithRetry(systemPrompt, userPrompt, maxRetries)
                 }

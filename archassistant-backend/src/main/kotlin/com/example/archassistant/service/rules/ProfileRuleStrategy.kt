@@ -1,7 +1,7 @@
 package com.example.archassistant.service.rules
 
-import com.example.archassistant.model.ArchitecturalRule
-import com.example.archassistant.model.ProjectProfile
+import com.example.archassistant.model.context.ProjectProfile
+import com.example.archassistant.model.rules.ArchitecturalRule
 
 interface ProfileRuleStrategy {
     val profile: ProjectProfile

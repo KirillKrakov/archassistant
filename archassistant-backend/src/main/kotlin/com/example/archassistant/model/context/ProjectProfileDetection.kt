@@ -1,14 +1,4 @@
-package com.example.archassistant.model
-
-enum class ProjectProfile {
-    SPRING_LAYERED,
-    SPRING_FEATURED,
-    CLEAN,
-    HEXAGONAL,
-    MVVM,
-    MODULAR,
-    UNKNOWN
-}
+package com.example.archassistant.model.context
 
 data class ProjectProfileDetection(
     val primaryProfile: ProjectProfile,

@@ -1,6 +1,11 @@
 package com.example.archassistant.util
 
-import com.example.archassistant.model.*
+import com.example.archassistant.model.ClassType
+import com.example.archassistant.model.LayerType
+import com.example.archassistant.model.rules.ArchitecturalRule
+import com.example.archassistant.model.rules.RuleType
+import com.example.archassistant.model.rules.ConstraintType
+import com.example.archassistant.model.rules.SelectorMode
 import com.tngtech.archunit.base.DescribedPredicate
 import com.tngtech.archunit.core.domain.*
 import com.tngtech.archunit.lang.*
