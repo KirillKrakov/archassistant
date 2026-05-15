@@ -55,15 +55,4 @@ object RulesConfigMapper {
             autoFixNaming = model.autoFixNaming
         )
     }
-
-    fun merge(existing: RulesConfig?, incoming: RulesConfig): RulesConfig {
-        if (existing == null) return incoming
-
-        return incoming.copy(
-            projectPath = incoming.projectPath ?: existing.projectPath,
-            projectType = incoming.projectType ?: existing.projectType,
-            settings = incoming.settings ?: existing.settings,
-            version = incoming.version ?: existing.version
-        )
-    }
 }

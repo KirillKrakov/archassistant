@@ -3,7 +3,6 @@ package com.example.archassistant.service.context.workspace
 import com.example.archassistant.service.context.classpath.ProjectPathResolver
 import com.example.archassistant.service.context.detection.ArchitectureDetector
 import com.example.archassistant.service.context.scanner.ProjectStructureScanner
-import com.example.archassistant.service.rules.repository.YamlRuleRepository
 import com.example.archassistant.service.rules.template.RuleTemplateEngine
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -64,14 +63,6 @@ class WorkspaceProjectScanner(
             logger.warn("Project path not found: {}", projectPath)
             null
         }
-    }
-
-    @Deprecated("Use scanProjectFromConfig(projectId) and centralized path resolution.")
-    fun scanProjectFromConfig(
-        projectId: String,
-        ruleRepository: YamlRuleRepository
-    ): List<WorkspaceModuleSuggestions>? {
-        return scanProjectFromConfig(projectId)
     }
 
     private fun discoverModuleRoots(workspaceRoot: Path): List<Path> {
