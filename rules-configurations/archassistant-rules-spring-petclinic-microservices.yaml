@@ -1,0 +1,702 @@
+version: "2.0"
+project_id: spring-petclinic-microservices
+project_type: "CUSTOM"
+settings:
+  max_iterations: 3
+  timeout_seconds: 30
+  default_strategy: "HYBRID"
+  fail_on_critical: true
+  auto_fix_naming: false
+
+rules:
+  # =====================
+  # Global architecture
+  # =====================
+  - id: package-cycle-free
+    name: Package slices should be free of cycles
+    description: Microservice slices should not contain cyclic dependencies
+    type: CYCLE_CHECK
+    from_package: "org.springframework.samples.petclinic"
+    constraint: "NO_CYCLE"
+    from_selector_mode: "PACKAGE"
+    to_selector_mode: "PACKAGE"
+    slice_pattern: "org.springframework.samples.petclinic.(*)..*"
+    max_cycle_length: 3
+    severity: "CRITICAL"
+    weight: 2.0
+    enabled: true
+    suggested: false
+
+  - id: application-classes-name
+    name: Application classes should have Application suffix
+    description: Spring Boot application classes should use the Application suffix
+    type: NAMING_CONVENTION
+    from_package: "org.springframework.samples.petclinic..*"
+    from_name_pattern: "*Application"
+    constraint: "NAMING_SUFFIX"
+    pattern: "Application"
+    from_selector_mode: "PACKAGE"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.5
+    enabled: true
+    suggested: false
+
+  - id: application-classes-public
+    name: Application classes should be public
+    description: Spring Boot application classes should be public
+    type: MODIFIER_CHECK
+    from_package: "org.springframework.samples.petclinic..*"
+    from_name_pattern: "*Application"
+    constraint: "SHOULD_BE_PUBLIC"
+    from_selector_mode: "PACKAGE"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.4
+    enabled: true
+    suggested: false
+
+  - id: application-classes-annotation
+    name: Application classes should be annotated with @SpringBootApplication
+    description: Spring Boot application classes should carry @SpringBootApplication
+    type: ANNOTATION_CHECK
+    from_package: "org.springframework.samples.petclinic..*"
+    from_name_pattern: "*Application"
+    constraint: "HAS_ANNOTATION"
+    annotation: "org.springframework.boot.autoconfigure.SpringBootApplication"
+    from_selector_mode: "PACKAGE"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.6
+    enabled: true
+    suggested: false
+
+  - id: config-classes-annotation
+    name: Config classes should be annotated with @Configuration
+    description: Configuration classes should carry @Configuration
+    type: ANNOTATION_CHECK
+    from_package: "org.springframework.samples.petclinic..config..*"
+    from_name_pattern: "*Config"
+    constraint: "HAS_ANNOTATION"
+    annotation: "org.springframework.context.annotation.Configuration"
+    from_selector_mode: "PACKAGE"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.6
+    enabled: true
+    suggested: false
+
+  # =====================
+  # API Gateway
+  # =====================
+  - id: api-gateway-controller-name
+    name: API gateway controllers should have Controller suffix
+    description: API gateway controllers should use the Controller suffix
+    type: NAMING_CONVENTION
+    from_package: "org.springframework.samples.petclinic.api.boundary.web..*"
+    constraint: "NAMING_SUFFIX"
+    pattern: "Controller"
+    from_selector_mode: "CLASS_TYPE"
+    to_selector_mode: "PACKAGE"
+    from_class_type: "CONTROLLER"
+    severity: "INFO"
+    weight: 0.5
+    enabled: true
+    suggested: false
+
+  - id: api-gateway-controller-public
+    name: API gateway controllers should be public
+    description: API gateway controller classes should be public
+    type: MODIFIER_CHECK
+    from_package: "org.springframework.samples.petclinic.api.boundary.web..*"
+    constraint: "SHOULD_BE_PUBLIC"
+    from_selector_mode: "CLASS_TYPE"
+    to_selector_mode: "PACKAGE"
+    from_class_type: "CONTROLLER"
+    severity: "INFO"
+    weight: 0.4
+    enabled: true
+    suggested: false
+
+  - id: api-gateway-controller-rest-annotation
+    name: API gateway controllers should be annotated with @RestController
+    description: API gateway controllers should carry @RestController
+    type: ANNOTATION_CHECK
+    from_package: "org.springframework.samples.petclinic.api.boundary.web..*"
+    constraint: "HAS_ANNOTATION"
+    annotation: "org.springframework.web.bind.annotation.RestController"
+    from_selector_mode: "CLASS_TYPE"
+    to_selector_mode: "PACKAGE"
+    from_class_type: "CONTROLLER"
+    severity: "INFO"
+    weight: 0.6
+    enabled: true
+    suggested: false
+
+  - id: api-gateway-controller-no-model-dependency
+    name: API gateway controllers should not depend on domain models
+    description: API gateway controllers should not depend directly on model packages
+    type: DEPENDENCY
+    from_package: "org.springframework.samples.petclinic.api.boundary.web..*"
+    to_packages:
+      - "org.springframework.samples.petclinic.customers.model..*"
+      - "org.springframework.samples.petclinic.vets.model..*"
+      - "org.springframework.samples.petclinic.visits.model..*"
+    constraint: "NO_DEPENDENCY"
+    from_selector_mode: "PACKAGE"
+    to_selector_mode: "PACKAGE"
+    severity: "ERROR"
+    weight: 1.5
+    enabled: true
+    suggested: false
+
+  # =====================
+  # API Application clients
+  # =====================
+  - id: api-application-client-name
+    name: API application clients should have Client suffix
+    description: API application client classes should use the Client suffix
+    type: NAMING_CONVENTION
+    from_package: "org.springframework.samples.petclinic.api.application..*"
+    from_name_pattern: "*Client"
+    constraint: "NAMING_SUFFIX"
+    pattern: "Client"
+    from_selector_mode: "PACKAGE"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.5
+    enabled: true
+    suggested: false
+
+  - id: api-application-client-public
+    name: API application clients should be public
+    description: API application client classes should be public
+    type: MODIFIER_CHECK
+    from_package: "org.springframework.samples.petclinic.api.application..*"
+    from_name_pattern: "*Client"
+    constraint: "SHOULD_BE_PUBLIC"
+    from_selector_mode: "PACKAGE"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.4
+    enabled: true
+    suggested: false
+
+  - id: api-application-client-no-boundary-dependency
+    name: API application clients should not depend on boundary web
+    description: API application clients should remain independent from boundary web classes
+    type: DEPENDENCY
+    from_package: "org.springframework.samples.petclinic.api.application..*"
+    from_name_pattern: "*Client"
+    to_package: "org.springframework.samples.petclinic.api.boundary.web..*"
+    constraint: "NO_DEPENDENCY"
+    from_selector_mode: "PACKAGE"
+    to_selector_mode: "PACKAGE"
+    severity: "ERROR"
+    weight: 1.5
+    enabled: true
+    suggested: false
+
+  # =====================
+  # Customers Service
+  # =====================
+  - id: customers-web-resource-name
+    name: Customer web resources should have Resource suffix
+    description: Customer web boundary classes should use the Resource suffix
+    type: NAMING_CONVENTION
+    from_package: "org.springframework.samples.petclinic.customers.web..*"
+    from_name_pattern: "*Resource"
+    constraint: "NAMING_SUFFIX"
+    pattern: "Resource"
+    from_selector_mode: "PACKAGE"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.5
+    enabled: true
+    suggested: false
+
+  - id: customers-web-resource-public
+    name: Customer web resources should be public
+    description: Customer web boundary classes should be public
+    type: MODIFIER_CHECK
+    from_package: "org.springframework.samples.petclinic.customers.web..*"
+    from_name_pattern: "*Resource"
+    constraint: "SHOULD_BE_PUBLIC"
+    from_selector_mode: "PACKAGE"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.4
+    enabled: true
+    suggested: false
+
+  - id: customers-web-resource-rest-annotation
+    name: Customer web resources should be REST controllers
+    description: Customer web boundary classes should carry @RestController
+    type: ANNOTATION_CHECK
+    from_package: "org.springframework.samples.petclinic.customers.web..*"
+    from_name_pattern: "*Resource"
+    constraint: "HAS_ANNOTATION"
+    annotation: "org.springframework.web.bind.annotation.RestController"
+    from_selector_mode: "PACKAGE"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.6
+    enabled: true
+    suggested: false
+
+  - id: customers-web-resource-no-repository-dependency
+    name: Customer web resources should not depend on repositories
+    description: Customer REST resources should not access repository classes directly
+    type: DEPENDENCY
+    from_package: "org.springframework.samples.petclinic.customers.web..*"
+    to_package: "org.springframework.samples.petclinic.customers.model..*"
+    constraint: "NO_DEPENDENCY"
+    from_selector_mode: "CLASS_TYPE"
+    to_selector_mode: "CLASS_TYPE"
+    from_class_type: "CONTROLLER"
+    to_class_type: "REPOSITORY"
+    severity: "ERROR"
+    weight: 1.5
+    enabled: true
+    suggested: false
+
+  - id: customers-model-entity-annotation
+    name: Customer model entities should be annotated with Entity
+    description: Customer domain model classes should carry @Entity
+    type: ANNOTATION_CHECK
+    from_package: "org.springframework.samples.petclinic.customers.model..*"
+    constraint: "HAS_ANNOTATION"
+    annotation: "jakarta.persistence.Entity"
+    from_selector_mode: "CLASS_TYPE"
+    from_class_type: "ENTITY"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.6
+    enabled: true
+    suggested: false
+
+  - id: customers-model-repository-name
+    name: Customer repositories should have Repository suffix
+    description: Customer repositories should use the Repository suffix
+    type: NAMING_CONVENTION
+    from_package: "org.springframework.samples.petclinic.customers.model..*"
+    constraint: "NAMING_SUFFIX"
+    pattern: "Repository"
+    from_selector_mode: "CLASS_TYPE"
+    from_class_type: "REPOSITORY"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.5
+    enabled: true
+    suggested: false
+
+  - id: customers-model-repository-public
+    name: Customer repositories should be public
+    description: Customer repository interfaces should be public
+    type: MODIFIER_CHECK
+    from_package: "org.springframework.samples.petclinic.customers.model..*"
+    constraint: "SHOULD_BE_PUBLIC"
+    from_selector_mode: "CLASS_TYPE"
+    from_class_type: "REPOSITORY"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.4
+    enabled: true
+    suggested: false
+
+  - id: customers-model-repository-extends-jpa
+    name: Customer repositories should extend JpaRepository
+    description: Customer repository interfaces should implement JpaRepository
+    type: INTERFACE_CHECK
+    from_package: "org.springframework.samples.petclinic.customers.model..*"
+    to_package: "org.springframework.data.jpa.repository.JpaRepository"
+    constraint: "SHOULD_IMPLEMENT"
+    from_selector_mode: "CLASS_TYPE"
+    from_class_type: "REPOSITORY"
+    to_selector_mode: "PACKAGE"
+    severity: "ERROR"
+    weight: 1.0
+    enabled: true
+    suggested: false
+
+  # =====================
+  # Vets Service
+  # =====================
+  - id: vets-web-resource-name
+    name: Vet web resources should have Resource suffix
+    description: Vet web boundary classes should use the Resource suffix
+    type: NAMING_CONVENTION
+    from_package: "org.springframework.samples.petclinic.vets.web..*"
+    from_name_pattern: "*Resource"
+    constraint: "NAMING_SUFFIX"
+    pattern: "Resource"
+    from_selector_mode: "PACKAGE"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.5
+    enabled: true
+    suggested: false
+
+  - id: vets-web-resource-public
+    name: Vet web resources should be public
+    description: Vet web boundary classes should be public
+    type: MODIFIER_CHECK
+    from_package: "org.springframework.samples.petclinic.vets.web..*"
+    from_name_pattern: "*Resource"
+    constraint: "SHOULD_BE_PUBLIC"
+    from_selector_mode: "PACKAGE"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.4
+    enabled: true
+    suggested: false
+
+  - id: vets-web-resource-rest-annotation
+    name: Vet web resources should be REST controllers
+    description: Vet web boundary classes should carry @RestController
+    type: ANNOTATION_CHECK
+    from_package: "org.springframework.samples.petclinic.vets.web..*"
+    from_name_pattern: "*Resource"
+    constraint: "HAS_ANNOTATION"
+    annotation: "org.springframework.web.bind.annotation.RestController"
+    from_selector_mode: "PACKAGE"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.6
+    enabled: true
+    suggested: false
+
+  - id: vets-web-resource-no-repository-dependency
+    name: Vet web resources should not depend on repositories
+    description: Vet REST resources should not access repository classes directly
+    type: DEPENDENCY
+    from_package: "org.springframework.samples.petclinic.vets.web..*"
+    to_package: "org.springframework.samples.petclinic.vets.model..*"
+    constraint: "NO_DEPENDENCY"
+    from_selector_mode: "CLASS_TYPE"
+    to_selector_mode: "CLASS_TYPE"
+    from_class_type: "CONTROLLER"
+    to_class_type: "REPOSITORY"
+    severity: "ERROR"
+    weight: 1.5
+    enabled: true
+    suggested: false
+
+  - id: vets-model-entity-annotation
+    name: Vet model entities should be annotated with Entity
+    description: Vet domain model classes should carry @Entity
+    type: ANNOTATION_CHECK
+    from_package: "org.springframework.samples.petclinic.vets.model..*"
+    constraint: "HAS_ANNOTATION"
+    annotation: "jakarta.persistence.Entity"
+    from_selector_mode: "CLASS_TYPE"
+    from_class_type: "ENTITY"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.6
+    enabled: true
+    suggested: false
+
+  - id: vets-model-repository-name
+    name: Vet repositories should have Repository suffix
+    description: Vet repositories should use the Repository suffix
+    type: NAMING_CONVENTION
+    from_package: "org.springframework.samples.petclinic.vets.model..*"
+    constraint: "NAMING_SUFFIX"
+    pattern: "Repository"
+    from_selector_mode: "CLASS_TYPE"
+    from_class_type: "REPOSITORY"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.5
+    enabled: true
+    suggested: false
+
+  - id: vets-model-repository-public
+    name: Vet repositories should be public
+    description: Vet repository interfaces should be public
+    type: MODIFIER_CHECK
+    from_package: "org.springframework.samples.petclinic.vets.model..*"
+    constraint: "SHOULD_BE_PUBLIC"
+    from_selector_mode: "CLASS_TYPE"
+    from_class_type: "REPOSITORY"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.4
+    enabled: true
+    suggested: false
+
+  - id: vets-model-repository-extends-jpa
+    name: Vet repositories should extend JpaRepository
+    description: Vet repository interfaces should implement JpaRepository
+    type: INTERFACE_CHECK
+    from_package: "org.springframework.samples.petclinic.vets.model..*"
+    to_package: "org.springframework.data.jpa.repository.JpaRepository"
+    constraint: "SHOULD_IMPLEMENT"
+    from_selector_mode: "CLASS_TYPE"
+    from_class_type: "REPOSITORY"
+    to_selector_mode: "PACKAGE"
+    severity: "ERROR"
+    weight: 1.0
+    enabled: true
+    suggested: false
+
+  # =====================
+  # Visits Service
+  # =====================
+  - id: visits-web-resource-name
+    name: Visit web resources should have Resource suffix
+    description: Visit web boundary classes should use the Resource suffix
+    type: NAMING_CONVENTION
+    from_package: "org.springframework.samples.petclinic.visits.web..*"
+    from_name_pattern: "*Resource"
+    constraint: "NAMING_SUFFIX"
+    pattern: "Resource"
+    from_selector_mode: "PACKAGE"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.5
+    enabled: true
+    suggested: false
+
+  - id: visits-web-resource-public
+    name: Visit web resources should be public
+    description: Visit web boundary classes should be public
+    type: MODIFIER_CHECK
+    from_package: "org.springframework.samples.petclinic.visits.web..*"
+    from_name_pattern: "*Resource"
+    constraint: "SHOULD_BE_PUBLIC"
+    from_selector_mode: "PACKAGE"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.4
+    enabled: true
+    suggested: false
+
+  - id: visits-web-resource-rest-annotation
+    name: Visit web resources should be REST controllers
+    description: Visit web boundary classes should carry @RestController
+    type: ANNOTATION_CHECK
+    from_package: "org.springframework.samples.petclinic.visits.web..*"
+    from_name_pattern: "*Resource"
+    constraint: "HAS_ANNOTATION"
+    annotation: "org.springframework.web.bind.annotation.RestController"
+    from_selector_mode: "PACKAGE"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.6
+    enabled: true
+    suggested: false
+
+  - id: visits-web-resource-no-repository-dependency
+    name: Visit web resources should not depend on repositories
+    description: Visit REST resources should not access repository classes directly
+    type: DEPENDENCY
+    from_package: "org.springframework.samples.petclinic.visits.web..*"
+    to_package: "org.springframework.samples.petclinic.visits.model..*"
+    constraint: "NO_DEPENDENCY"
+    from_selector_mode: "CLASS_TYPE"
+    to_selector_mode: "CLASS_TYPE"
+    from_class_type: "CONTROLLER"
+    to_class_type: "REPOSITORY"
+    severity: "ERROR"
+    weight: 1.5
+    enabled: true
+    suggested: false
+
+  - id: visits-model-entity-annotation
+    name: Visit model entities should be annotated with Entity
+    description: Visit domain model classes should carry @Entity
+    type: ANNOTATION_CHECK
+    from_package: "org.springframework.samples.petclinic.visits.model..*"
+    constraint: "HAS_ANNOTATION"
+    annotation: "jakarta.persistence.Entity"
+    from_selector_mode: "CLASS_TYPE"
+    from_class_type: "ENTITY"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.6
+    enabled: true
+    suggested: false
+
+  - id: visits-model-repository-name
+    name: Visit repositories should have Repository suffix
+    description: Visit repositories should use the Repository suffix
+    type: NAMING_CONVENTION
+    from_package: "org.springframework.samples.petclinic.visits.model..*"
+    constraint: "NAMING_SUFFIX"
+    pattern: "Repository"
+    from_selector_mode: "CLASS_TYPE"
+    from_class_type: "REPOSITORY"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.5
+    enabled: true
+    suggested: false
+
+  - id: visits-model-repository-public
+    name: Visit repositories should be public
+    description: Visit repository interfaces should be public
+    type: MODIFIER_CHECK
+    from_package: "org.springframework.samples.petclinic.visits.model..*"
+    constraint: "SHOULD_BE_PUBLIC"
+    from_selector_mode: "CLASS_TYPE"
+    from_class_type: "REPOSITORY"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.4
+    enabled: true
+    suggested: false
+
+  - id: visits-model-repository-extends-jpa
+    name: Visit repositories should extend JpaRepository
+    description: Visit repository interfaces should implement JpaRepository
+    type: INTERFACE_CHECK
+    from_package: "org.springframework.samples.petclinic.visits.model..*"
+    to_package: "org.springframework.data.jpa.repository.JpaRepository"
+    constraint: "SHOULD_IMPLEMENT"
+    from_selector_mode: "CLASS_TYPE"
+    from_class_type: "REPOSITORY"
+    to_selector_mode: "PACKAGE"
+    severity: "ERROR"
+    weight: 1.0
+    enabled: true
+    suggested: false
+
+  # =====================
+  # GenAI Service
+  # =====================
+  - id: genai-controller-name
+    name: GenAI controllers should have Controller suffix
+    description: GenAI controllers should use the Controller suffix
+    type: NAMING_CONVENTION
+    from_package: "org.springframework.samples.petclinic.genai..*"
+    constraint: "NAMING_SUFFIX"
+    pattern: "Controller"
+    from_selector_mode: "CLASS_TYPE"
+    to_selector_mode: "PACKAGE"
+    from_class_type: "CONTROLLER"
+    severity: "INFO"
+    weight: 0.5
+    enabled: true
+    suggested: false
+
+  - id: genai-controller-public
+    name: GenAI controllers should be public
+    description: GenAI controller classes should be public
+    type: MODIFIER_CHECK
+    from_package: "org.springframework.samples.petclinic.genai..*"
+    constraint: "SHOULD_BE_PUBLIC"
+    from_selector_mode: "CLASS_TYPE"
+    to_selector_mode: "PACKAGE"
+    from_class_type: "CONTROLLER"
+    severity: "INFO"
+    weight: 0.4
+    enabled: true
+    suggested: false
+
+  - id: genai-controller-rest-annotation
+    name: GenAI controllers should be annotated with @RestController
+    description: GenAI controllers should carry @RestController
+    type: ANNOTATION_CHECK
+    from_package: "org.springframework.samples.petclinic.genai..*"
+    constraint: "HAS_ANNOTATION"
+    annotation: "org.springframework.web.bind.annotation.RestController"
+    from_selector_mode: "CLASS_TYPE"
+    to_selector_mode: "PACKAGE"
+    from_class_type: "CONTROLLER"
+    severity: "INFO"
+    weight: 0.6
+    enabled: true
+    suggested: false
+
+  - id: genai-controller-depend-on-services
+    name: GenAI controllers should depend on services
+    description: GenAI controllers should call services rather than contain business logic
+    type: DEPENDENCY
+    from_package: "org.springframework.samples.petclinic.genai..*"
+    to_package: "org.springframework.samples.petclinic.genai..*"
+    constraint: "MUST_DEPEND"
+    from_selector_mode: "CLASS_TYPE"
+    to_selector_mode: "CLASS_TYPE"
+    from_class_type: "CONTROLLER"
+    to_class_type: "SERVICE"
+    severity: "INFO"
+    weight: 1.0
+    enabled: true
+    suggested: false
+
+  - id: genai-service-name
+    name: GenAI services should have Service suffix
+    description: GenAI services should use the Service suffix
+    type: NAMING_CONVENTION
+    from_package: "org.springframework.samples.petclinic.genai..*"
+    constraint: "NAMING_SUFFIX"
+    pattern: "Service"
+    from_selector_mode: "CLASS_TYPE"
+    to_selector_mode: "PACKAGE"
+    from_class_type: "SERVICE"
+    severity: "INFO"
+    weight: 0.5
+    enabled: true
+    suggested: false
+
+  - id: genai-service-public
+    name: GenAI services should be public
+    description: GenAI service classes should be public
+    type: MODIFIER_CHECK
+    from_package: "org.springframework.samples.petclinic.genai..*"
+    constraint: "SHOULD_BE_PUBLIC"
+    from_selector_mode: "CLASS_TYPE"
+    to_selector_mode: "PACKAGE"
+    from_class_type: "SERVICE"
+    severity: "INFO"
+    weight: 0.4
+    enabled: true
+    suggested: false
+
+  - id: genai-service-annotation
+    name: GenAI services should be annotated with @Service
+    description: GenAI service classes should carry @Service
+    type: ANNOTATION_CHECK
+    from_package: "org.springframework.samples.petclinic.genai..*"
+    constraint: "HAS_ANNOTATION"
+    annotation: "org.springframework.stereotype.Service"
+    from_selector_mode: "CLASS_TYPE"
+    to_selector_mode: "PACKAGE"
+    from_class_type: "SERVICE"
+    severity: "INFO"
+    weight: 0.6
+    enabled: true
+    suggested: false
+
+  - id: genai-service-no-controller-dependency
+    name: GenAI services should not depend on controllers
+    description: GenAI service layer should remain independent from presentation
+    type: DEPENDENCY
+    from_package: "org.springframework.samples.petclinic.genai..*"
+    to_package: "org.springframework.samples.petclinic.genai..*"
+    constraint: "NO_DEPENDENCY"
+    from_selector_mode: "CLASS_TYPE"
+    to_selector_mode: "CLASS_TYPE"
+    from_class_type: "SERVICE"
+    to_class_type: "CONTROLLER"
+    severity: "CRITICAL"
+    weight: 2.0
+    enabled: true
+    suggested: false
+
+  - id: genai-service-no-generic-exception
+    name: GenAI services should not throw generic Exception
+    description: GenAI service layer should avoid declaring generic Exception in throws clauses
+    type: EXCEPTION_CHECK
+    from_package: "org.springframework.samples.petclinic.genai..*"
+    constraint: "SHOULD_NOT_THROW"
+    from_selector_mode: "PACKAGE"
+    to_selector_mode: "PACKAGE"
+    from_throws_types:
+      - "java.lang.Exception"
+    severity: "WARNING"
+    weight: 0.8
+    enabled: true
+    suggested: false
