@@ -1,5 +1,6 @@
 package com.example.archassistant.controller
 
+import com.example.archassistant.dto.health.ApplicationHealthResponse
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
@@ -11,19 +12,13 @@ import java.time.LocalDateTime
 class HealthController {
 
     @GetMapping("/health")
-    fun health(): ResponseEntity<HealthResponse> {
+    fun health(): ResponseEntity<ApplicationHealthResponse> {
         return ResponseEntity.ok(
-            HealthResponse(
+            ApplicationHealthResponse(
                 status = "UP",
                 version = "0.0.1-SNAPSHOT",
-                timestamp = LocalDateTime.now()
+                timestamp = LocalDateTime.now().toString()
             )
         )
     }
-
-    data class HealthResponse(
-        val status: String,
-        val version: String,
-        val timestamp: LocalDateTime
-    )
 }

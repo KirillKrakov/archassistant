@@ -283,17 +283,32 @@ export interface CodeGenerationResponse {
 export interface ProjectMetrics {
   projectId: string;
   totalGenerations: number;
+  successfulGenerations?: number;
+  failedGenerations?: number;
   avgScore: number | null;
+  avgIterations?: number | null;
+  avgGenerationTimeMs?: number | null;
+  avgValidationTimeMs?: number | null;
+  avgTotalTimeMs?: number | null;
+  successRate?: number | null;
+  successRatePercent?: number | null;
   lastGeneration: string | null;
   recentHistory: GenerationHistoryItem[];
 }
 
 export interface GenerationHistoryItem {
+  id?: string;
   strategy: string;
   score: number | null;
   iterations: number;
   success: boolean;
   timestamp: string;
+  generationTimeMs?: number;
+  validationTimeMs?: number;
+  totalTimeMs?: number;
+  violationsCount?: number;
+  prompt?: string | null;
+  generatedCode?: string | null;
 }
 
 export interface ComparisonResult {
@@ -311,7 +326,14 @@ export interface StrategyComparison {
   avgIterations: number;
   avgGenerationTimeMs: number;
   avgValidationTimeMs: number;
+  avgTotalTimeMs?: number | null;
   avgViolations: number;
+}
+
+export interface ClearMetricsResponse {
+  success: boolean;
+  projectId: string;
+  deletedCount: number;
 }
 
 export interface Recommendation {

@@ -1,0 +1,321 @@
+version: "1.0"
+project_id: scaffolding-java-spring-boot
+project_type: SPRING_BOOT
+settings:
+  max_iterations: 3
+  timeout_seconds: 30
+  default_strategy: HYBRID
+  fail_on_critical: true
+  auto_fix_naming: false
+rules:
+  - id: clean_scaffolding-java-spring-boot_domain_no_infrastructure_extensions
+    name: Domain should not extend infrastructure types
+    description: Domain layer should not inherit from infrastructure classes
+    type: INHERITANCE_CHECK
+    from_package: "com.example.cleanarchitecture.domain..*"
+    to_package: "com.example.cleanarchitecture.infrastructure..*"
+    constraint: SHOULD_NOT_EXTEND
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: CRITICAL
+    weight: 1.5
+    enabled: true
+    suggested: false
+  - id: clean_scaffolding-java-spring-boot_cycle_free_architecture
+    name: Architecture should be free of package cycles
+    description: Clean architecture layers should not form cyclic package dependencies
+    type: CYCLE_CHECK
+    from_package: "com.example.cleanarchitecture.(*)..*"
+    constraint: NO_CYCLE
+    slice_pattern: "com.example.cleanarchitecture.(*)..*"
+    max_cycle_length: 3
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: CRITICAL
+    weight: 2.0
+    enabled: true
+    suggested: false
+  - id: clean_scaffolding-java-spring-boot_application_layer_no_infrastructure_dependencies
+    name: Application layer should not depend on infrastructure packages
+    description: Application code must not depend on controllers, entities, repositories, config or exception infrastructure
+    type: LAYER_ISOLATION
+    from_package: "com.example.cleanarchitecture.application..*"
+    to_packages:
+      - "com.example.cleanarchitecture.infrastructure.controller..*"
+      - "com.example.cleanarchitecture.infrastructure.entity..*"
+      - "com.example.cleanarchitecture.infrastructure.repository..*"
+      - "com.example.cleanarchitecture.infrastructure.config..*"
+      - "com.example.cleanarchitecture.infrastructure.exception..*"
+    constraint: NO_DEPENDENCY
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: ERROR
+    weight: 2.0
+    enabled: true
+    suggested: false
+  - id: clean_scaffolding-java-spring-boot_controller_suffix
+    name: Controllers should have Controller suffix
+    description: Infrastructure controllers should follow the Controller naming convention
+    type: NAMING_CONVENTION
+    from_package: "com.example.cleanarchitecture.infrastructure.controller..*"
+    constraint: NAMING_SUFFIX
+    pattern: "Controller"
+    from_selector_mode: CLASS_TYPE
+    to_selector_mode: PACKAGE
+    from_class_type: CONTROLLER
+    severity: INFO
+    weight: 0.5
+    enabled: true
+    suggested: false
+  - id: clean_scaffolding-java-spring-boot_controller_public
+    name: Controllers should be public
+    description: Infrastructure controllers should be public classes
+    type: MODIFIER_CHECK
+    from_package: "com.example.cleanarchitecture.infrastructure.controller..*"
+    constraint: SHOULD_BE_PUBLIC
+    from_selector_mode: CLASS_TYPE
+    to_selector_mode: PACKAGE
+    from_class_type: CONTROLLER
+    severity: INFO
+    weight: 0.4
+    enabled: true
+    suggested: false
+  - id: clean_scaffolding-java-spring-boot_controller_responseentity
+    name: Controller methods should return ResponseEntity
+    description: REST-style controller methods should expose ResponseEntity contracts
+    type: METHOD_SIGNATURE_CHECK
+    from_package: "com.example.cleanarchitecture.infrastructure.controller..*"
+    constraint: RETURN_TYPE
+    from_selector_mode: CLASS_TYPE
+    to_selector_mode: PACKAGE
+    from_class_type: CONTROLLER
+    from_method_name_pattern: "*"
+    from_return_type: "org.springframework.http.ResponseEntity"
+    severity: WARNING
+    weight: 0.8
+    enabled: true
+    suggested: false
+  - id: clean_scaffolding-java-spring-boot_controller_no_direct_repository_dependency
+    name: Controllers should not depend on repositories
+    description: Controllers should depend on application services only, not directly on repositories
+    type: DEPENDENCY
+    from_package: "com.example.cleanarchitecture.infrastructure.controller..*"
+    to_package: "com.example.cleanarchitecture.infrastructure.repository..*"
+    constraint: NO_DEPENDENCY
+    from_selector_mode: CLASS_TYPE
+    to_selector_mode: CLASS_TYPE
+    from_class_type: CONTROLLER
+    to_class_type: REPOSITORY
+    severity: ERROR
+    weight: 1.5
+    enabled: true
+    suggested: false
+  - id: clean_scaffolding-java-spring-boot_service_suffix
+    name: Services should have Service suffix
+    description: Application and domain service classes should follow the Service naming convention
+    type: NAMING_CONVENTION
+    from_package: "com.example.cleanarchitecture..service..*"
+    constraint: NAMING_SUFFIX
+    pattern: "Service"
+    from_selector_mode: CLASS_TYPE
+    to_selector_mode: PACKAGE
+    from_class_type: SERVICE
+    severity: INFO
+    weight: 0.5
+    enabled: true
+    suggested: false
+  - id: clean_scaffolding-java-spring-boot_service_public
+    name: Services should be public
+    description: Service classes should be public
+    type: MODIFIER_CHECK
+    from_package: "com.example.cleanarchitecture..service..*"
+    constraint: SHOULD_BE_PUBLIC
+    from_selector_mode: CLASS_TYPE
+    to_selector_mode: PACKAGE
+    from_class_type: SERVICE
+    severity: INFO
+    weight: 0.4
+    enabled: true
+    suggested: false
+  - id: clean_scaffolding-java-spring-boot_service_no_infrastructure_dependency
+    name: Services should not depend on infrastructure packages
+    description: Service layer must stay isolated from infrastructure implementations
+    type: DEPENDENCY
+    from_package: "com.example.cleanarchitecture..service..*"
+    to_packages:
+      - "com.example.cleanarchitecture.infrastructure.controller..*"
+      - "com.example.cleanarchitecture.infrastructure.entity..*"
+      - "com.example.cleanarchitecture.infrastructure.repository..*"
+      - "com.example.cleanarchitecture.infrastructure.config..*"
+      - "com.example.cleanarchitecture.infrastructure.exception..*"
+    constraint: NO_DEPENDENCY
+    from_selector_mode: CLASS_TYPE
+    to_selector_mode: PACKAGE
+    from_class_type: SERVICE
+    severity: ERROR
+    weight: 1.5
+    enabled: true
+    suggested: false
+  - id: clean_scaffolding-java-spring-boot_usecase_no_infrastructure_dependency
+    name: Use cases should not depend on infrastructure packages
+    description: Domain use cases should remain technology-agnostic
+    type: DEPENDENCY
+    from_package: "com.example.cleanarchitecture.domain.usecase..*"
+    from_name_pattern: "*UseCase"
+    to_packages:
+      - "com.example.cleanarchitecture.infrastructure.controller..*"
+      - "com.example.cleanarchitecture.infrastructure.entity..*"
+      - "com.example.cleanarchitecture.infrastructure.repository..*"
+      - "com.example.cleanarchitecture.infrastructure.config..*"
+      - "com.example.cleanarchitecture.infrastructure.exception..*"
+    constraint: NO_DEPENDENCY
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: ERROR
+    weight: 1.5
+    enabled: true
+    suggested: false
+  - id: clean_scaffolding-java-spring-boot_create_user_usecase_signature
+    name: CreateUserUseCase should return User
+    description: CreateUserUseCase execute method should return the domain User entity
+    type: METHOD_SIGNATURE_CHECK
+    from_package: "com.example.cleanarchitecture.domain.usecase..*"
+    from_name_pattern: "CreateUserUseCase"
+    constraint: RETURN_TYPE
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    from_method_name_pattern: "execute"
+    from_return_type: "com.example.cleanarchitecture.domain.entity.User"
+    severity: WARNING
+    weight: 0.8
+    enabled: true
+    suggested: false
+  - id: clean_scaffolding-java-spring-boot_get_user_usecase_signature
+    name: GetUserUseCase should return Optional
+    description: GetUserUseCase execute method should return Optional
+    type: METHOD_SIGNATURE_CHECK
+    from_package: "com.example.cleanarchitecture.domain.usecase..*"
+    from_name_pattern: "GetUserUseCase"
+    constraint: RETURN_TYPE
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    from_method_name_pattern: "execute"
+    from_return_type: "java.util.Optional"
+    severity: WARNING
+    weight: 0.8
+    enabled: true
+    suggested: false
+  - id: clean_scaffolding-java-spring-boot_domain_repository_no_spring_data_dependency
+    name: Domain repositories should not depend on Spring Data types
+    description: Domain repository abstractions must remain free from Spring Data dependencies
+    type: DEPENDENCY
+    from_package: "com.example.cleanarchitecture.domain.repository..*"
+    from_name_pattern: "*Repository"
+    to_package: "org.springframework.data..*"
+    constraint: NO_DEPENDENCY
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: ERROR
+    weight: 1.5
+    enabled: true
+    suggested: false
+  - id: clean_scaffolding-java-spring-boot_infrastructure_repository_implements_domain_repository
+    name: Infrastructure repository implementation should implement domain repository
+    description: Repository implementation classes should implement the domain repository contract
+    type: INTERFACE_CHECK
+    from_package: "com.example.cleanarchitecture.infrastructure.repository..*"
+    from_name_pattern: "*RepositoryImpl"
+    to_package: "com.example.cleanarchitecture.domain.repository..*"
+    to_name_pattern: "*Repository"
+    constraint: SHOULD_IMPLEMENT
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: ERROR
+    weight: 1.0
+    enabled: true
+    suggested: false
+  - id: clean_scaffolding-java-spring-boot_repository_public
+    name: Repositories should be public
+    description: Repository types should be public
+    type: MODIFIER_CHECK
+    from_package: "com.example.cleanarchitecture..repository..*"
+    constraint: SHOULD_BE_PUBLIC
+    from_selector_mode: CLASS_TYPE
+    to_selector_mode: PACKAGE
+    from_class_type: REPOSITORY
+    severity: INFO
+    weight: 0.4
+    enabled: true
+    suggested: false
+  - id: clean_scaffolding-java-spring-boot_infrastructure_entity_entity_annotation
+    name: Infrastructure entities should be annotated with Entity
+    description: JPA entity classes in infrastructure.entity should carry the Entity annotation
+    type: ANNOTATION_CHECK
+    from_package: "com.example.cleanarchitecture.infrastructure.entity..*"
+    constraint: HAS_ANNOTATION
+    annotation: "jakarta.persistence.Entity"
+    from_selector_mode: CLASS_TYPE
+    to_selector_mode: PACKAGE
+    from_class_type: ENTITY
+    severity: INFO
+    weight: 0.6
+    enabled: true
+    suggested: false
+  - id: clean_scaffolding-java-spring-boot_dto_fields_private
+    name: DTO fields should be private
+    description: DTO classes should keep their state encapsulated
+    type: FIELD_CHECK
+    from_package: "com.example.cleanarchitecture.application.dto..*"
+    constraint: FIELD_VISIBILITY
+    from_selector_mode: CLASS_TYPE
+    to_selector_mode: PACKAGE
+    from_class_type: DTO
+    from_modifiers:
+      - PRIVATE
+    severity: INFO
+    weight: 0.7
+    enabled: true
+    suggested: false
+  - id: clean_scaffolding-java-spring-boot_custom_exceptions_extend_runtimeexception
+    name: Custom exceptions should extend RuntimeException
+    description: Custom business exceptions should be unchecked
+    type: INHERITANCE_CHECK
+    from_package: "com.example.cleanarchitecture.infrastructure.exception..*"
+    from_name_pattern: "*Exception"
+    to_package: "java.lang.RuntimeException"
+    constraint: SHOULD_EXTEND
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: ERROR
+    weight: 1.0
+    enabled: true
+    suggested: false
+  - id: clean_scaffolding-java-spring-boot_global_exception_handler_responseentity
+    name: Global exception handler methods should return ResponseEntity
+    description: Exception handler methods should return ResponseEntity for consistent HTTP error handling
+    type: METHOD_SIGNATURE_CHECK
+    from_package: "com.example.cleanarchitecture.infrastructure.exception..*"
+    from_name_pattern: "GlobalExceptionHandler"
+    constraint: RETURN_TYPE
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    from_method_name_pattern: "handle*"
+    from_return_type: "org.springframework.http.ResponseEntity"
+    severity: WARNING
+    weight: 0.8
+    enabled: true
+    suggested: false
+  - id: clean_scaffolding-java-spring-boot_service_annotation
+    name: Services should be annotated with @Service
+    description: Service classes should carry the @Service annotation
+    type: ANNOTATION_CHECK
+    from_package: "com.example.cleanarchitecture..service..*"
+    constraint: HAS_ANNOTATION
+    annotation: "org.springframework.stereotype.Service"
+    from_selector_mode: CLASS_TYPE
+    to_selector_mode: PACKAGE
+    from_class_type: SERVICE
+    severity: INFO
+    weight: 0.6
+    enabled: true
+    suggested: false

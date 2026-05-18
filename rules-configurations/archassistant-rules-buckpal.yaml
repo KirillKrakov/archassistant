@@ -1,0 +1,288 @@
+version: "1.0"
+project_id: buckpal
+project_type: SPRING_BOOT
+settings:
+  max_iterations: 3
+  timeout_seconds: 30
+  default_strategy: HYBRID
+  fail_on_critical: true
+  auto_fix_naming: false
+rules:
+  - id: hexagonal_domain_no_adapters
+    name: Domain should not depend on adapters
+    description: Domain layer must stay independent from adapters
+    type: DEPENDENCY
+    from_package: io.reflectoring.buckpal.application.domain..*
+    to_package: io.reflectoring.buckpal.adapter..*
+    constraint: NO_DEPENDENCY
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: CRITICAL
+    weight: 2
+    enabled: true
+    suggested: false
+  - id: hexagonal_cycles
+    name: Hexagonal modules should be free of cycles
+    description: Hexagonal architecture should avoid cyclic dependencies between package slices
+    type: CYCLE_CHECK
+    from_package: io.reflectoring.buckpal.(*)..*
+    constraint: NO_CYCLE
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    slice_pattern: io.reflectoring.buckpal.(*)..*
+    severity: CRITICAL
+    weight: 2
+    enabled: true
+    suggested: false
+  - id: hexagonal_outbound_adapters_implement_ports
+    name: Outbound adapters should implement output port interfaces
+    description: Persistence adapters must implement the output port contracts
+    type: INTERFACE_CHECK
+    from_package: io.reflectoring.buckpal.adapter.out.persistence..*
+    to_package: io.reflectoring.buckpal.application.port.out..*
+    constraint: SHOULD_IMPLEMENT
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: INFO
+    weight: 1
+    enabled: true
+    suggested: false
+  - id: hexagonal_inbound_adapters_depend_on_ports
+    name: Inbound adapters should depend on input port interfaces
+    description: Web adapters must call application through input ports
+    type: DEPENDENCY
+    from_package: io.reflectoring.buckpal.adapter.in.web..*
+    to_package: io.reflectoring.buckpal.application.port.in..*
+    constraint: MUST_DEPEND
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: ERROR
+    weight: 1.5
+    enabled: true
+    suggested: false
+  - id: hexagonal_application_depend_on_ports
+    name: Application should depend on ports
+    description: Application layer should communicate through ports
+    type: DEPENDENCY
+    from_package: io.reflectoring.buckpal.application.domain.service..*
+    to_package: io.reflectoring.buckpal.application.port..*
+    constraint: MUST_DEPEND
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: WARNING
+    weight: 1
+    enabled: true
+    suggested: false
+  - id: hexagonal_adapters_no_domain_inheritance
+    name: Adapters should not extend domain types
+    description: Adapters should not inherit from domain classes
+    type: INHERITANCE_CHECK
+    from_package: io.reflectoring.buckpal.adapter..*
+    to_package: io.reflectoring.buckpal.application.domain..*
+    constraint: SHOULD_NOT_EXTEND
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: ERROR
+    weight: 1.2
+    enabled: true
+    suggested: false
+  - id: hexagonal_application_no_adapters
+    name: Application should not depend on adapters
+    description: Application layer must not depend on adapter implementations
+    type: DEPENDENCY
+    from_package: io.reflectoring.buckpal.application..*
+    to_package: io.reflectoring.buckpal.adapter..*
+    constraint: NO_DEPENDENCY
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: ERROR
+    weight: 1.5
+    enabled: true
+    suggested: false
+  - id: hexagonal_domain_no_ports
+    name: Domain models should not depend on ports
+    description: Domain model classes should not depend on port definitions
+    type: DEPENDENCY
+    from_package: io.reflectoring.buckpal.application.domain.model..*
+    to_package: io.reflectoring.buckpal.application.port..*
+    constraint: NO_DEPENDENCY
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: ERROR
+    weight: 1.5
+    enabled: true
+    suggested: false
+  - id: hexagonal_application_implements_ports
+    name: Application should implement port interfaces
+    description: Application layer should implement the input port contracts
+    type: INTERFACE_CHECK
+    from_package: io.reflectoring.buckpal.application.domain.service..*
+    to_package: io.reflectoring.buckpal.application.port..*
+    constraint: SHOULD_IMPLEMENT
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: INFO
+    weight: 1
+    enabled: true
+    suggested: false
+  - id: hexagonal_domain_model_final
+    name: Domain model classes should be final
+    description: Domain model classes should be immutable and final
+    type: MODIFIER_CHECK
+    from_package: io.reflectoring.buckpal.application.domain.model..*
+    constraint: SHOULD_BE_FINAL
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: INFO
+    weight: 0.7
+    enabled: true
+    suggested: false
+  - id: hexagonal_usecase_services_public
+    name: Use case services should be public
+    description: Use case service classes should be public
+    type: MODIFIER_CHECK
+    from_package: io.reflectoring.buckpal.application.domain.service..*
+    constraint: SHOULD_BE_PUBLIC
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: INFO
+    weight: 0.5
+    enabled: true
+    suggested: false
+  - id: hexagonal_usecase_services_usecase_annotation
+    name: Use case services should be annotated as UseCase
+    description: Application services should carry the UseCase annotation
+    type: ANNOTATION_CHECK
+    from_package: io.reflectoring.buckpal.application.domain.service..*
+    constraint: HAS_ANNOTATION
+    annotation: io.reflectoring.buckpal.common.UseCase
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: INFO
+    weight: 0.6
+    enabled: true
+    suggested: false
+  - id: hexagonal_web_adapters_annotation
+    name: Web adapters should be annotated as WebAdapter
+    description: Web adapter classes should carry the WebAdapter annotation
+    type: ANNOTATION_CHECK
+    from_package: io.reflectoring.buckpal.adapter.in.web..*
+    constraint: HAS_ANNOTATION
+    annotation: io.reflectoring.buckpal.common.WebAdapter
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: INFO
+    weight: 0.6
+    enabled: true
+    suggested: false
+  - id: hexagonal_persistence_adapters_annotation
+    name: Persistence adapters should be annotated as PersistenceAdapter
+    description: Persistence adapter classes should carry the PersistenceAdapter annotation
+    type: ANNOTATION_CHECK
+    from_package: io.reflectoring.buckpal.adapter.out.persistence..*
+    constraint: HAS_ANNOTATION
+    annotation: io.reflectoring.buckpal.common.PersistenceAdapter
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: INFO
+    weight: 0.6
+    enabled: true
+    suggested: false
+  - id: hexagonal_port_in_public
+    name: Input ports should be public
+    description: Input port interfaces should be public
+    type: MODIFIER_CHECK
+    from_package: io.reflectoring.buckpal.application.port.in..*
+    constraint: SHOULD_BE_PUBLIC
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: INFO
+    weight: 0.4
+    enabled: true
+    suggested: false
+  - id: hexagonal_port_out_public
+    name: Output ports should be public
+    description: Output port interfaces should be public
+    type: MODIFIER_CHECK
+    from_package: io.reflectoring.buckpal.application.port.out..*
+    constraint: SHOULD_BE_PUBLIC
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: INFO
+    weight: 0.4
+    enabled: true
+    suggested: false
+  - id: hexagonal_send_money_signature
+    name: SendMoneyUseCase should expose sendMoney signature
+    description: SendMoneyUseCase should declare the canonical sendMoney command method
+    type: METHOD_SIGNATURE_CHECK
+    from_package: io.reflectoring.buckpal.application.port.in..*
+    from_name_pattern: "SendMoneyUseCase"
+    constraint: RETURN_TYPE
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    from_method_name_pattern: sendMoney
+    from_return_type: boolean
+    from_parameter_types:
+      - io.reflectoring.buckpal.application.port.in.SendMoneyCommand
+    severity: INFO
+    weight: 1
+    enabled: true
+    suggested: false
+  - id: hexagonal_get_account_balance_signature
+    name: GetAccountBalanceUseCase should expose getAccountBalance signature
+    description: GetAccountBalanceUseCase should declare the canonical balance query method
+    type: METHOD_SIGNATURE_CHECK
+    from_package: io.reflectoring.buckpal.application.port.in..*
+    constraint: RETURN_TYPE
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    from_method_name_pattern: getAccountBalance
+    from_return_type: io.reflectoring.buckpal.application.domain.model.Money
+    from_parameter_types:
+      - io.reflectoring.buckpal.application.port.in.GetAccountBalanceUseCase$GetAccountBalanceQuery
+    severity: INFO
+    weight: 1
+    enabled: true
+    suggested: false
+  - id: hexagonal_domain_services_no_generic_exceptions
+    name: Domain services should not throw generic exceptions
+    description: Domain service methods should not declare generic Exception or RuntimeException
+    type: EXCEPTION_CHECK
+    from_package: io.reflectoring.buckpal.application.domain.service..*
+    constraint: SHOULD_NOT_THROW
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    from_throws_types:
+      - java.lang.Exception
+      - java.lang.RuntimeException
+    severity: ERROR
+    weight: 0.8
+    enabled: true
+    suggested: false
+  - id: hexagonal_web_adapters_no_persistence
+    name: Web adapters should not depend on persistence adapters
+    description: Web layer must not bypass application ports to access persistence directly
+    type: DEPENDENCY
+    from_package: io.reflectoring.buckpal.adapter.in.web..*
+    to_package: io.reflectoring.buckpal.adapter.out.persistence..*
+    constraint: NO_DEPENDENCY
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: ERROR
+    weight: 1.5
+    enabled: true
+    suggested: false
+  - id: hexagonal_adapters_no_service
+    name: Adapters should not depend on application services
+    description: Adapters should communicate only through ports, not directly with service implementations
+    type: DEPENDENCY
+    from_package: io.reflectoring.buckpal.adapter..*
+    to_package: io.reflectoring.buckpal.application.domain.service..*
+    constraint: NO_DEPENDENCY
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: ERROR
+    weight: 1.5
+    enabled: true
+    suggested: false

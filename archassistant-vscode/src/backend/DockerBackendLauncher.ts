@@ -11,6 +11,7 @@ export interface DockerBackendLaunchOptions {
   composeDirectory: string;
   serviceName: string;
   backendUrl: string;
+  llmProvider?: string;
   dockerBinary?: string;
 }
 
@@ -29,7 +30,8 @@ export class DockerBackendLauncher {
 
     const env = {
       ...process.env,
-      PROJECT_PATH: options.projectPath
+      PROJECT_PATH: options.projectPath,
+      LLM_PROVIDER: options.llmProvider?.trim() || 'mistral'
     };
 
     await execFile(

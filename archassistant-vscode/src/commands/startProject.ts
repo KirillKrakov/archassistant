@@ -38,6 +38,25 @@ export async function startProjectCommand(
   await state.resetSessionState();
   await registry.setCurrentProject(projectId, projectPath);
 
+  type LlmProvider = 'mistral' | 'gigachat';
+
+  const providerPick = await vscode.window.showQuickPick(
+    [
+      { label: 'Mistral', description: 'Default provider', value: 'mistral' as LlmProvider },
+      { label: 'GigaChat', description: 'Sber provider', value: 'gigachat' as LlmProvider }
+    ],
+    {
+      title: 'Select LLM provider',
+      placeHolder: 'Choose the provider for the backend'
+    }
+  );
+
+  if (!providerPick) {
+    return;
+  }
+
+  const llmProvider = providerPick.value  as 'mistral' | 'gigachat';
+
   if (autoStart) {
     if (!composeDirectory) {
       const composeFolder = await vscode.window.showOpenDialog({
@@ -68,7 +87,8 @@ export async function startProjectCommand(
           projectPath,
           composeDirectory,
           serviceName,
-          backendUrl
+          backendUrl,
+          llmProvider
         });
       }
     );
@@ -78,7 +98,8 @@ export async function startProjectCommand(
       projectPath,
       composeDirectory,
       serviceName,
-      backendUrl
+      backendUrl,
+      llmProvider
     });
   }
 
@@ -94,5 +115,5 @@ export async function startProjectCommand(
   rulesProvider.refresh();
 
   vscode.window.showInformationMessage(`ArchAssistant started for project ${projectId}`);
-  logger.info('Started project {} at {}', projectId, backendProjectPath);
+  logger.info('Started project {} at {} using provider {}', projectId, backendProjectPath, llmProvider);
 }

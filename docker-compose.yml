@@ -25,8 +25,24 @@ services:
       DB_USERNAME: ${POSTGRES_USER:-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-archassistant}
+      LLM_PROVIDER: ${LLM_PROVIDER:-mistral}
+
+      MISTRAL_BASE_URL: ${MISTRAL_BASE_URL:-https://api.mistral.ai}
       MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
-      MISTRAL_MODEL: ${MISTRAL_MODEL:-}
+      MISTRAL_MODEL: ${MISTRAL_MODEL:-mistral-medium-latest}
+      MISTRAL_TEMPERATURE: ${MISTRAL_TEMPERATURE:-0.2}
+      MISTRAL_MAX_TOKENS: ${MISTRAL_MAX_TOKENS:-10000}
+
+      GIGACHAT_BASE_URL: ${GIGACHAT_BASE_URL:-https://gigachat.devices.sberbank.ru/api/v1}
+      GIGACHAT_API_KEY: ${GIGACHAT_API_KEY:-}
+      GIGACHAT_SCOPE: ${GIGACHAT_SCOPE:-GIGACHAT_API_PERS}
+      GIGACHAT_MODEL: ${GIGACHAT_MODEL:-GigaChat}
+      GIGACHAT_TEMPERATURE: ${GIGACHAT_TEMPERATURE:-0.2}
+      GIGACHAT_MAX_TOKENS: ${GIGACHAT_MAX_TOKENS:-10000}
+      GIGACHAT_CONNECT_TIMEOUT: ${GIGACHAT_CONNECT_TIMEOUT:-15s}
+      GIGACHAT_READ_TIMEOUT: ${GIGACHAT_READ_TIMEOUT:-30s}
+      GIGACHAT_UNSAFE_SSL: ${GIGACHAT_UNSAFE_SSL:-false}
+
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
       PROJECTS_ROOT: /workspace/project
       ARCHASSISTANT_CONFIG_ROOT: /data/archassistant
@@ -43,6 +59,7 @@ services:
     volumes:
       - "${PROJECT_PATH:?Set PROJECT_PATH before starting backend}:/workspace/project:ro"
       - archassistant_config:/data/archassistant
+      - ./certs:/certs:ro
 
 volumes:
   postgres_data:

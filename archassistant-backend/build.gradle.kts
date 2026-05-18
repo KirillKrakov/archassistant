@@ -4,7 +4,7 @@ import org.springframework.boot.gradle.tasks.bundling.BootJar
 plugins {
     kotlin("jvm") version "1.9.20"
     kotlin("plugin.spring") version "1.9.20"
-    id("org.springframework.boot") version "3.3.0"
+    id("org.springframework.boot") version "3.5.14"
     id("io.spring.dependency-management") version "1.1.5"
 }
 
@@ -17,8 +17,6 @@ java {
 
 repositories {
     mavenCentral()
-    maven { url = uri("https://repo.spring.io/milestone") }
-    maven { url = uri("https://repo.spring.io/snapshot") }
 }
 
 dependencies {
@@ -37,8 +35,9 @@ dependencies {
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.15.3")
 
-    implementation(platform("org.springframework.ai:spring-ai-bom:1.0.0-M4"))
-    implementation("org.springframework.ai:spring-ai-openai-spring-boot-starter")
+    implementation(platform("org.springframework.ai:spring-ai-bom:1.1.6"))
+    implementation("org.springframework.ai:spring-ai-openai")
+    implementation("chat.giga:spring-ai-starter-model-gigachat:1.1.4")
 
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0")
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.15.3")

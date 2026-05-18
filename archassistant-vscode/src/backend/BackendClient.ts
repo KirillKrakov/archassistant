@@ -99,6 +99,12 @@ export class BackendClient {
     }
   }
 
+  async clearProjectMetrics(projectId: string): Promise<types.ClearMetricsResponse> {
+    return this.request<types.ClearMetricsResponse>(`/api/metrics/${encodeURIComponent(projectId)}`, {
+      method: 'DELETE'
+    });
+  }
+
   async getGenerationHistory(
     projectId: string,
     page = 0,
@@ -132,8 +138,14 @@ export class BackendClient {
     if (anyError?.response) {
       const status = anyError.response.status as number | undefined;
       const data = anyError.response.data;
-      const message = data?.error || data?.message || anyError.message || 'Request failed';
-      return new BackendError(message, data?.code, status);
+
+      const code =
+        typeof data?.error === 'object' && data?.error?.code
+          ? data.error.code
+          : data?.code;
+
+      const message = this.extractErrorMessage(data, anyError.message || 'Request failed');
+      return new BackendError(message, code, status);
     }
 
     if (anyError?.code === 'ECONNREFUSED' || anyError?.code === 'ENOTFOUND') {
@@ -141,5 +153,25 @@ export class BackendClient {
     }
 
     return new BackendError(anyError?.message || 'Unknown backend error');
+  }
+
+  private extractErrorMessage(data: any, fallback: string): string {
+    if (!data) return fallback;
+
+    if (typeof data === 'string') {
+      return data;
+    }
+
+    const nestedError = data.error;
+
+    if (typeof nestedError === 'string') {
+      return nestedError;
+    }
+
+    if (nestedError && typeof nestedError === 'object') {
+      return nestedError.message || nestedError.error || data.message || fallback;
+    }
+
+    return data.message || fallback;
   }
 }

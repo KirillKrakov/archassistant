@@ -1,175 +1,80 @@
 package com.example.archassistant.controller
 
-import com.example.archassistant.model.RulesConfig
-import com.example.archassistant.service.*
+import com.example.archassistant.dto.rules.ProjectPathRequest
+import com.example.archassistant.dto.rules.RulesConfigDto
+import com.example.archassistant.dto.rules.RulesDeleteResponse
+import com.example.archassistant.dto.rules.RulesSaveResponse
+import com.example.archassistant.service.context.workspace.WorkspaceModuleSuggestions
+import com.example.archassistant.service.rules.RulesManagementService
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
-/**
- * Контроллер для управления архитектурными правилами
- *
- * Endpoints:
- * GET    /api/rules/{projectId}           - Получить конфигурацию правил
- * POST   /api/rules/{projectId}           - Сохранить конфигурацию правил
- * GET    /api/rules/{projectId}/suggest   - Получить предложения правил на основе структуры
- * DELETE /api/rules/{projectId}           - Удалить конфигурацию правил
- */
 @RestController
 @RequestMapping("/api/rules")
 @CrossOrigin(origins = ["*"])
 class RulesController(
-    private val ruleRepository: YamlRuleRepository,
-    private val templateEngine: RuleTemplateEngine,
-    private val projectScanner: WorkspaceProjectScanner
+    private val rulesManagementService: RulesManagementService
 ) {
-
     private val logger = LoggerFactory.getLogger(RulesController::class.java)
 
-    /**
-     * Получить конфигурацию правил для проекта
-     */
     @GetMapping("/{projectId}")
-    fun getRules(@PathVariable projectId: String): ResponseEntity<Any> {
-        val config = ruleRepository.load(projectId)
-
-        return if (config != null) {
-            ResponseEntity.ok(config)
-        } else {
-            ResponseEntity.ok(
-                RulesConfig(
-                    projectId = projectId,
-                    rules = emptyList()
-                )
-            )
-        }
+    fun getRules(@PathVariable projectId: String): ResponseEntity<RulesConfigDto> {
+        return ResponseEntity.ok(rulesManagementService.getRules(projectId))
     }
 
-    /**
-     * Сохранить конфигурацию правил для проекта
-     */
     @PostMapping("/{projectId}")
     fun saveRules(
         @PathVariable projectId: String,
-        @RequestBody config: RulesConfig
-    ): ResponseEntity<Map<String, Any>> {
+        @RequestBody config: RulesConfigDto
+    ): ResponseEntity<RulesSaveResponse> {
         logger.info("Saving rules config for project: {}", projectId)
 
-        if (config.projectId != projectId) {
-            return ResponseEntity.badRequest()
-                .body(mapOf("success" to false, "error" to "projectId mismatch"))
-        }
-
-        // ← ДОБАВИТЬ: Загружаем существующий конфиг для merge
-        val existingConfig = ruleRepository.load(projectId)
-
-        // ← ДОБАВИТЬ: Merge полей — сохраняем старые значения, если новые не переданы
-        val mergedConfig = if (existingConfig != null) {
-            config.copy(
-                projectPath = config.projectPath ?: existingConfig.projectPath,
-                projectType = config.projectType ?: existingConfig.projectType,
-                settings = config.settings ?: existingConfig.settings,
-                version = config.version ?: existingConfig.version
-            )
-        } else {
-            config
-        }
-
-        // Валидируем mergedConfig, а не исходный config
-        val validationResult = ruleRepository.validate(mergedConfig)
-        if (!validationResult.passed) {
-            return ResponseEntity.badRequest()
-                .body(
-                    mapOf(
-                        "success" to false,
-                        "error" to "Invalid configuration",
-                        "violations" to validationResult.violations
-                    )
-                )
-        }
-
-        // Сохраняем mergedConfig
-        val success = ruleRepository.save(mergedConfig)
-
-        return if (success) {
-            logger.info("Rules config saved successfully for {}", projectId)
-            ResponseEntity.ok(mapOf("success" to true, "projectId" to projectId))
-        } else {
-            logger.error("Failed to save rules config for {}", projectId)
-            ResponseEntity.internalServerError()
-                .body(mapOf("success" to false, "error" to "Failed to save configuration"))
+        val result = rulesManagementService.saveRules(projectId, config)
+        return when {
+            result.success -> ResponseEntity.ok(result)
+            result.error == "Invalid configuration" -> ResponseEntity.badRequest().body(result)
+            result.error == "projectId mismatch" -> ResponseEntity.badRequest().body(result)
+            else -> ResponseEntity.internalServerError().body(result)
         }
     }
 
-    /**
-     * Получить предложения правил на основе АНАЛИЗА РЕАЛЬНОЙ структуры проекта
-     */
     @GetMapping("/{projectId}/suggest")
     fun suggestRules(
         @PathVariable projectId: String,
         @RequestParam projectPath: String? = null
     ): ResponseEntity<List<WorkspaceModuleSuggestions>> {
-        logger.info("Generating workspace rule suggestions for project: {}, path: {}", projectId, projectPath)
-
         return try {
-            if (!projectPath.isNullOrBlank()) {
-                ResponseEntity.ok(
-                    projectScanner.scanWorkspace(projectPath, projectId)
-                )
-            } else {
-                ResponseEntity.ok(
-                    projectScanner.scanProjectFromConfig(projectId, ruleRepository)
-                )
-            }
+            ResponseEntity.ok(rulesManagementService.suggestRules(projectId, projectPath))
         } catch (e: IllegalArgumentException) {
-            logger.error("Invalid workspace path: ${e.message}")
+            logger.error("Invalid workspace path: {}", e.message)
             ResponseEntity.badRequest().body(emptyList())
         } catch (e: Exception) {
-            logger.error("Failed to generate workspace rule suggestions: ${e.message}", e)
+            logger.error("Failed to generate workspace rule suggestions: {}", e.message, e)
             ResponseEntity.internalServerError().body(emptyList())
         }
     }
 
-    /**
-     * Сохранить путь к проекту в конфигурацию
-     */
     @PostMapping("/{projectId}/path")
     fun saveProjectPath(
         @PathVariable projectId: String,
-        @RequestBody request: Map<String, String>
-    ): ResponseEntity<Map<String, Any>> {
-        val projectPath = request["projectPath"]
-            ?: return ResponseEntity.badRequest()
-                .body(mapOf("success" to false, "error" to "projectPath required"))
-
-        val config = ruleRepository.load(projectId)
-            ?: RulesConfig(projectId = projectId, rules = emptyList())
-
-        val updatedConfig = config.copy(projectPath = projectPath)
-        val success = ruleRepository.save(updatedConfig)
-
-        return if (success) {
-            ResponseEntity.ok(mapOf("success" to true, "projectId" to projectId, "projectPath" to projectPath))
+        @RequestBody request: ProjectPathRequest
+    ): ResponseEntity<com.example.archassistant.dto.rules.ProjectPathResponse> {
+        val result = rulesManagementService.saveProjectPath(projectId, request.projectPath)
+        return if (result.success) {
+            ResponseEntity.ok(result)
         } else {
-            ResponseEntity.internalServerError()
-                .body(mapOf("success" to false, "error" to "Failed to save project path"))
+            ResponseEntity.internalServerError().body(result)
         }
     }
 
-    /**
-     * Удалить конфигурацию правил для проекта
-     */
     @DeleteMapping("/{projectId}")
-    fun deleteRules(@PathVariable projectId: String): ResponseEntity<Map<String, Any>> {
-        logger.info("Deleting rules config for project: {}", projectId)
-
-        val success = ruleRepository.delete(projectId)
-
-        return if (success) {
-            ResponseEntity.ok(mapOf("success" to true, "projectId" to projectId))
+    fun deleteRules(@PathVariable projectId: String): ResponseEntity<RulesDeleteResponse> {
+        val result = rulesManagementService.deleteRules(projectId)
+        return if (result.success) {
+            ResponseEntity.ok(result)
         } else {
-            ResponseEntity.badRequest()
-                .body(mapOf("success" to false, "error" to "Failed to delete configuration"))
+            ResponseEntity.badRequest().body(result)
         }
     }
 }

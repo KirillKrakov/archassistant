@@ -1,0 +1,386 @@
+version: "2.0"
+project_id: "petclinic-stage13"
+project_type: "SPRING_BOOT"
+settings:
+  max_iterations: 3
+  timeout_seconds: 30
+  default_strategy: "HYBRID"
+  fail_on_critical: true
+  auto_fix_naming: false
+rules:
+  - id: "petclinic-owner-controller-name"
+    name: "Owner controllers should have Controller suffix"
+    description: "Owner controllers should use the Controller suffix"
+    type: "NAMING_CONVENTION"
+    from_package: "org.springframework.samples.petclinic.owner..*"
+    constraint: "NAMING_SUFFIX"
+    pattern: "Controller"
+    from_selector_mode: "CLASS_TYPE"
+    from_class_type: "CONTROLLER"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.5
+    enabled: true
+    suggested: false
+
+  - id: "petclinic-vet-controller-name"
+    name: "Vet controllers should have Controller suffix"
+    description: "Vet controllers should use the Controller suffix"
+    type: "NAMING_CONVENTION"
+    from_package: "org.springframework.samples.petclinic.vet..*"
+    constraint: "NAMING_SUFFIX"
+    pattern: "Controller"
+    from_selector_mode: "CLASS_TYPE"
+    from_class_type: "CONTROLLER"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.5
+    enabled: true
+    suggested: false
+
+  - id: "petclinic-system-controller-name"
+    name: "System controllers should have Controller suffix"
+    description: "System controllers should use the Controller suffix"
+    type: "NAMING_CONVENTION"
+    from_package: "org.springframework.samples.petclinic.system..*"
+    constraint: "NAMING_SUFFIX"
+    pattern: "Controller"
+    from_selector_mode: "CLASS_TYPE"
+    from_class_type: "CONTROLLER"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.5
+    enabled: true
+    suggested: false
+
+  - id: "petclinic-owner-controller-public"
+    name: "Owner controllers should be public"
+    description: "Owner controller classes should be public"
+    type: "MODIFIER_CHECK"
+    from_package: "org.springframework.samples.petclinic.owner..*"
+    constraint: "SHOULD_BE_PUBLIC"
+    from_selector_mode: "CLASS_TYPE"
+    from_class_type: "CONTROLLER"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.4
+    enabled: true
+    suggested: false
+
+  - id: "petclinic-vet-controller-public"
+    name: "Vet controllers should be public"
+    description: "Vet controller classes should be public"
+    type: "MODIFIER_CHECK"
+    from_package: "org.springframework.samples.petclinic.vet..*"
+    constraint: "SHOULD_BE_PUBLIC"
+    from_selector_mode: "CLASS_TYPE"
+    from_class_type: "CONTROLLER"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.4
+    enabled: true
+    suggested: false
+
+  - id: "petclinic-system-controller-public"
+    name: "System controllers should be public"
+    description: "System controller classes should be public"
+    type: "MODIFIER_CHECK"
+    from_package: "org.springframework.samples.petclinic.system..*"
+    constraint: "SHOULD_BE_PUBLIC"
+    from_selector_mode: "CLASS_TYPE"
+    from_class_type: "CONTROLLER"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.4
+    enabled: true
+    suggested: false
+
+  - id: "petclinic-owner-controller-annotation"
+    name: "Owner controllers should be annotated as Controller"
+    description: "Owner controller classes should carry @Controller"
+    type: "ANNOTATION_CHECK"
+    from_package: "org.springframework.samples.petclinic.owner..*"
+    constraint: "HAS_ANNOTATION"
+    annotation: "org.springframework.stereotype.Controller"
+    from_selector_mode: "CLASS_TYPE"
+    from_class_type: "CONTROLLER"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.6
+    enabled: true
+    suggested: false
+
+  - id: "petclinic-vet-controller-annotation"
+    name: "Vet controllers should be annotated as Controller"
+    description: "Vet controller classes should carry @Controller"
+    type: "ANNOTATION_CHECK"
+    from_package: "org.springframework.samples.petclinic.vet..*"
+    constraint: "HAS_ANNOTATION"
+    annotation: "org.springframework.stereotype.Controller"
+    from_selector_mode: "CLASS_TYPE"
+    from_class_type: "CONTROLLER"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.6
+    enabled: true
+    suggested: false
+
+  - id: "petclinic-system-controller-annotation"
+    name: "System controllers should be annotated as Controller"
+    description: "System controller classes should carry @Controller"
+    type: "ANNOTATION_CHECK"
+    from_package: "org.springframework.samples.petclinic.system..*"
+    constraint: "HAS_ANNOTATION"
+    annotation: "org.springframework.stereotype.Controller"
+    from_selector_mode: "CLASS_TYPE"
+    from_class_type: "CONTROLLER"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.6
+    enabled: true
+    suggested: false
+
+  - id: "petclinic-owner-controller-no-repository"
+    name: "Owner controllers should not depend on repositories"
+    description: "Owner controller classes should not access repositories directly"
+    type: "DEPENDENCY"
+    from_package: "org.springframework.samples.petclinic.owner..*"
+    to_package: "org.springframework.samples.petclinic.owner..*"
+    constraint: "NO_DEPENDENCY"
+    from_selector_mode: "CLASS_TYPE"
+    to_selector_mode: "CLASS_TYPE"
+    from_class_type: "CONTROLLER"
+    to_class_type: "REPOSITORY"
+    severity: "ERROR"
+    weight: 1.5
+    enabled: true
+    suggested: false
+
+  - id: "petclinic-vet-controller-no-repository"
+    name: "Vet controllers should not depend on repositories"
+    description: "Vet controller classes should not access repositories directly"
+    type: "DEPENDENCY"
+    from_package: "org.springframework.samples.petclinic.vet..*"
+    to_package: "org.springframework.samples.petclinic.vet..*"
+    constraint: "NO_DEPENDENCY"
+    from_selector_mode: "CLASS_TYPE"
+    to_selector_mode: "CLASS_TYPE"
+    from_class_type: "CONTROLLER"
+    to_class_type: "REPOSITORY"
+    severity: "ERROR"
+    weight: 1.5
+    enabled: true
+    suggested: false
+
+  - id: "petclinic-owner-repository-name"
+    name: "Owner repositories should have Repository suffix"
+    description: "Owner repositories should use the Repository suffix"
+    type: "NAMING_CONVENTION"
+    from_package: "org.springframework.samples.petclinic.owner..*"
+    constraint: "NAMING_SUFFIX"
+    pattern: "Repository"
+    from_selector_mode: "CLASS_TYPE"
+    from_class_type: "REPOSITORY"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.5
+    enabled: true
+    suggested: false
+
+  - id: "petclinic-vet-repository-name"
+    name: "Vet repositories should have Repository suffix"
+    description: "Vet repositories should use the Repository suffix"
+    type: "NAMING_CONVENTION"
+    from_package: "org.springframework.samples.petclinic.vet..*"
+    constraint: "NAMING_SUFFIX"
+    pattern: "Repository"
+    from_selector_mode: "CLASS_TYPE"
+    from_class_type: "REPOSITORY"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.5
+    enabled: true
+    suggested: false
+
+  - id: "petclinic-owner-repository-public"
+    name: "Owner repositories should be public"
+    description: "Owner repository classes should be public"
+    type: "MODIFIER_CHECK"
+    from_package: "org.springframework.samples.petclinic.owner..*"
+    constraint: "SHOULD_BE_PUBLIC"
+    from_selector_mode: "CLASS_TYPE"
+    from_class_type: "REPOSITORY"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.4
+    enabled: true
+    suggested: false
+
+  - id: "petclinic-vet-repository-public"
+    name: "Vet repositories should be public"
+    description: "Vet repository classes should be public"
+    type: "MODIFIER_CHECK"
+    from_package: "org.springframework.samples.petclinic.vet..*"
+    constraint: "SHOULD_BE_PUBLIC"
+    from_selector_mode: "CLASS_TYPE"
+    from_class_type: "REPOSITORY"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.4
+    enabled: true
+    suggested: false
+
+  - id: "petclinic-owner-repository-annotation"
+    name: "Owner repositories should be annotated as Repository"
+    description: "Owner repository classes should carry @Repository"
+    type: "ANNOTATION_CHECK"
+    from_package: "org.springframework.samples.petclinic.owner..*"
+    constraint: "HAS_ANNOTATION"
+    annotation: "org.springframework.stereotype.Repository"
+    from_selector_mode: "CLASS_TYPE"
+    from_class_type: "REPOSITORY"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.6
+    enabled: true
+    suggested: false
+
+  - id: "petclinic-vet-repository-annotation"
+    name: "Vet repositories should be annotated as Repository"
+    description: "Vet repository classes should carry @Repository"
+    type: "ANNOTATION_CHECK"
+    from_package: "org.springframework.samples.petclinic.vet..*"
+    constraint: "HAS_ANNOTATION"
+    annotation: "org.springframework.stereotype.Repository"
+    from_selector_mode: "CLASS_TYPE"
+    from_class_type: "REPOSITORY"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.6
+    enabled: true
+    suggested: false
+
+  - id: "petclinic-service-name"
+    name: "Services should have Service suffix"
+    description: "Service classes should use the Service suffix"
+    type: "NAMING_CONVENTION"
+    from_package: "org.springframework.samples.petclinic..service..*"
+    constraint: "NAMING_SUFFIX"
+    pattern: "Service"
+    from_selector_mode: "CLASS_TYPE"
+    from_class_type: "SERVICE"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.5
+    enabled: true
+    suggested: false
+
+  - id: "petclinic-service-public"
+    name: "Services should be public"
+    description: "Service classes should be public"
+    type: "MODIFIER_CHECK"
+    from_package: "org.springframework.samples.petclinic..service..*"
+    constraint: "SHOULD_BE_PUBLIC"
+    from_selector_mode: "CLASS_TYPE"
+    from_class_type: "SERVICE"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.4
+    enabled: true
+    suggested: false
+
+  - id: "petclinic-service-annotation"
+    name: "Services should be annotated as Service"
+    description: "Service classes should carry @Service"
+    type: "ANNOTATION_CHECK"
+    from_package: "org.springframework.samples.petclinic..service..*"
+    constraint: "HAS_ANNOTATION"
+    annotation: "org.springframework.stereotype.Service"
+    from_selector_mode: "CLASS_TYPE"
+    from_class_type: "SERVICE"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.6
+    enabled: true
+    suggested: false
+
+  - id: "petclinic-service-no-generic-exception"
+    name: "Services should not throw generic exceptions"
+    description: "Service methods should not declare generic Exception or RuntimeException"
+    type: "EXCEPTION_CHECK"
+    from_package: "org.springframework.samples.petclinic..service..*"
+    constraint: "SHOULD_NOT_THROW"
+    from_selector_mode: "CLASS_TYPE"
+    from_class_type: "SERVICE"
+    to_selector_mode: "PACKAGE"
+    from_throws_types:
+      - "java.lang.Exception"
+      - "java.lang.RuntimeException"
+    severity: "ERROR"
+    weight: 0.8
+    enabled: true
+    suggested: false
+
+  - id: "petclinic-package-cycle-free"
+    name: "Package slices should be free of cycles"
+    description: "PetClinic feature slices should not contain cyclic dependencies"
+    type: "CYCLE_CHECK"
+    from_package: "org.springframework.samples.petclinic"
+    constraint: "NO_CYCLE"
+    slice_pattern: "org.springframework.samples.petclinic.(*)..*"
+    max_cycle_length: 3
+    from_selector_mode: "PACKAGE"
+    to_selector_mode: "PACKAGE"
+    severity: "CRITICAL"
+    weight: 2.0
+    enabled: true
+    suggested: false
+
+  - id: "petclinic-system-layer-isolation"
+    name: "System layer should not depend on owner or vet packages"
+    description: "System package should stay isolated from feature packages"
+    type: "LAYER_ISOLATION"
+    from_package: "org.springframework.samples.petclinic.system..*"
+    to_packages:
+      - "org.springframework.samples.petclinic.owner..*"
+      - "org.springframework.samples.petclinic.vet..*"
+    constraint: "NO_DEPENDENCY"
+    from_selector_mode: "PACKAGE"
+    to_selector_mode: "PACKAGE"
+    severity: "ERROR"
+    weight: 2.0
+    enabled: true
+    suggested: false
+
+  - id: "petclinic-validator-signature"
+    name: "Validator classes should expose validate(Object, Errors)"
+    description: "Validator classes in owner should implement the standard Spring Validator signature"
+    type: "METHOD_SIGNATURE_CHECK"
+    from_package: "org.springframework.samples.petclinic.owner..*"
+    from_name_pattern: "*Validator"
+    constraint: "RETURN_TYPE"
+    from_selector_mode: "PACKAGE"
+    to_selector_mode: "PACKAGE"
+    from_method_name_pattern: "validate"
+    from_return_type: "void"
+    from_parameter_types:
+      - "java.lang.Object"
+      - "org.springframework.validation.Errors"
+    severity: "WARNING"
+    weight: 0.8
+    enabled: true
+    suggested: false
+
+  - id: "petclinic-dto-fields-final"
+    name: "DTO fields should be immutable"
+    description: "DTO classes should be final"
+    type: "MODIFIER_CHECK"
+    from_package: "org.springframework.samples.petclinic..dto..*"
+    constraint: "SHOULD_BE_FINAL"
+    from_selector_mode: "CLASS_TYPE"
+    from_class_type: "DTO"
+    to_selector_mode: "PACKAGE"
+    severity: "INFO"
+    weight: 0.7
+    enabled: true
+    suggested: false

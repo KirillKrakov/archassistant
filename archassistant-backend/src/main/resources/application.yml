@@ -6,7 +6,6 @@ spring:
     exclude:
       - org.springframework.ai.autoconfigure.openai.OpenAiAutoConfiguration
 
-  # Database Configuration (можно закомментировать для этапа 1)
   datasource:
     url: jdbc:postgresql://postgres:5432/${POSTGRES_DB:archassistant}
     username: ${DB_USERNAME:postgres}
@@ -28,13 +27,22 @@ spring:
       allowed-headers: "*"
       allow-credentials: false
 
-  # Отключаем JPA автоконфигурацию если БД не нужна на этапе 1
-  # autoconfigure:
-  #   exclude:
-  #     - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
-  #     - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+  ai:
+    gigachat:
+      auth:
+        bearer:
+          api-key: ${GIGACHAT_API_KEY:}
+        scope: ${GIGACHAT_SCOPE:GIGACHAT_API_PERS}
+        unsafe-ssl: ${GIGACHAT_UNSAFE_SSL:false}
+      chat:
+        options:
+          model: ${GIGACHAT_MODEL:GigaChat}
+          temperature: ${GIGACHAT_TEMPERATURE:0.2}
+          max-tokens: ${GIGACHAT_MAX_TOKENS:10000}
+      internal:
+        connect-timeout: ${GIGACHAT_CONNECT_TIMEOUT:15s}
+        read-timeout: ${GIGACHAT_READ_TIMEOUT:30s}
 
-# ← ИСПРАВЛЕНО: Actuator использует префикс management, а не spring
 management:
   endpoints:
     web:
@@ -44,13 +52,11 @@ management:
     health:
       show-details: always
 
-# Application Configuration
 server:
   port: 8080
 
-# Logging Configuration
 logging:
-  format: ${LOG_FORMAT:TEXT}  # TEXT или JSON
+  format: ${LOG_FORMAT:TEXT}
   level:
     root: INFO
     com.example.archassistant: DEBUG
@@ -65,11 +71,45 @@ logging:
     max-size: 10MB
     max-history: 30
 
-# Export configuration
 export:
-  max-records: 10000  # Лимит записей на один экспорт
+  max-records: 10000
   default-format: CSV
 
-# Корреляция запросов
 correlation:
   header-name: X-Correlation-Id
+
+archassistant:
+  config-root: ${ARCHASSISTANT_CONFIG_ROOT:.archassistant}
+
+  compliance:
+    threshold: ${ARCHASSISTANT_COMPLIANCE_THRESHOLD:70.0}
+    weights:
+      rules-pass: ${ARCHASSISTANT_WEIGHT_RULES_PASS:1.0}
+      pattern-match: ${ARCHASSISTANT_WEIGHT_PATTERN_MATCH:0.5}
+      dependency-correct: ${ARCHASSISTANT_WEIGHT_DEPENDENCY_CORRECT:0.5}
+
+  export:
+    max-records: ${ARCHASSISTANT_EXPORT_MAX_RECORDS:10000}
+    default-format: ${ARCHASSISTANT_EXPORT_DEFAULT_FORMAT:CSV}
+
+  cache:
+    project-context-ttl-minutes: ${ARCHASSISTANT_CONTEXT_TTL_MINUTES:30}
+    max-entries: ${ARCHASSISTANT_CONTEXT_CACHE_MAX_ENTRIES:32}
+
+  llm:
+    provider: ${LLM_PROVIDER:mistral}
+
+    mistral:
+      base-url: ${MISTRAL_BASE_URL:https://api.mistral.ai}
+      api-key: ${MISTRAL_API_KEY:}
+      model: ${MISTRAL_MODEL:mistral-medium-latest}
+      temperature: ${MISTRAL_TEMPERATURE:0.2}
+      max-tokens: ${MISTRAL_MAX_TOKENS:10000}
+
+    gigachat:
+      api-key: ${GIGACHAT_API_KEY:}
+      scope: ${GIGACHAT_SCOPE:GIGACHAT_API_PERS}
+      base-url: ${GIGACHAT_BASE_URL:https://gigachat.devices.sberbank.ru/api/v1}
+      model: ${GIGACHAT_MODEL:GigaChat}
+      temperature: ${GIGACHAT_TEMPERATURE:0.2}
+      max-tokens: ${GIGACHAT_MAX_TOKENS:10000}

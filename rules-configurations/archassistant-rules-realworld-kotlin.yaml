@@ -1,0 +1,370 @@
+version: "2.0"
+project_id: realworld-springboot-kotlin
+project_type: SPRING_BOOT
+settings:
+  max_iterations: 3
+  timeout_seconds: 30
+  default_strategy: HYBRID
+  fail_on_critical: true
+  auto_fix_naming: false
+
+rules:
+  # --- Слои и изоляция ---
+  - id: realworld-domain-no-infrastructure-dependency
+    name: Domain should not depend on infrastructure
+    description: Domain layer must remain isolated from infrastructure implementations
+    type: DEPENDENCY
+    from_package: "io.github.raeperd.realworldspringbootkotlin.domain..*"
+    to_package: "io.github.raeperd.realworldspringbootkotlin.infrastructure..*"
+    constraint: NO_DEPENDENCY
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: CRITICAL
+    weight: 2.0
+    enabled: true
+    suggested: false
+
+  - id: realworld-domain-no-web-dependency
+    name: Domain should not depend on web
+    description: Domain layer must not depend on presentation/web layer
+    type: DEPENDENCY
+    from_package: "io.github.raeperd.realworldspringbootkotlin.domain..*"
+    to_package: "io.github.raeperd.realworldspringbootkotlin.web..*"
+    constraint: NO_DEPENDENCY
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: CRITICAL
+    weight: 2.0
+    enabled: true
+    suggested: false
+
+  - id: realworld-domain-no-spring-data-dependency
+    name: Domain repositories should not depend on Spring Data
+    description: Domain repository abstractions must remain free from Spring Data dependencies
+    type: DEPENDENCY
+    from_package: "io.github.raeperd.realworldspringbootkotlin.domain..*"
+    to_package: "org.springframework.data..*"
+    constraint: NO_DEPENDENCY
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: ERROR
+    weight: 1.5
+    enabled: true
+    suggested: false
+
+  - id: realworld-infrastructure-no-web-dependency
+    name: Infrastructure should not depend on web
+    description: Infrastructure layer must not depend on web controllers
+    type: DEPENDENCY
+    from_package: "io.github.raeperd.realworldspringbootkotlin.infrastructure..*"
+    to_package: "io.github.raeperd.realworldspringbootkotlin.web..*"
+    constraint: NO_DEPENDENCY
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: ERROR
+    weight: 1.5
+    enabled: true
+    suggested: false
+
+  - id: realworld-cycle-free
+    name: Architecture should be free of package cycles
+    description: Clean architecture layers should not form cyclic package dependencies
+    type: CYCLE_CHECK
+    from_package: "io.github.raeperd.realworldspringbootkotlin"
+    constraint: NO_CYCLE
+    slice_pattern: "io.github.raeperd.realworldspringbootkotlin.(*)..*"
+    max_cycle_length: 3
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: CRITICAL
+    weight: 2.0
+    enabled: true
+    suggested: false
+
+  # --- Контроллеры (web) ---
+  - id: realworld-controller-suffix
+    name: Controllers should have Controller suffix
+    description: Web controllers should follow the Controller naming convention
+    type: NAMING_CONVENTION
+    from_package: "io.github.raeperd.realworldspringbootkotlin.web..*"
+    from_name_pattern: "*Controller"
+    constraint: NAMING_SUFFIX
+    pattern: "Controller"
+    from_selector_mode: CLASS_TYPE
+    to_selector_mode: PACKAGE
+    from_class_type: CONTROLLER
+    severity: INFO
+    weight: 0.5
+    enabled: true
+    suggested: false
+
+  - id: realworld-controller-public
+    name: Controllers should be public
+    description: Web controller classes should be public
+    type: MODIFIER_CHECK
+    from_package: "io.github.raeperd.realworldspringbootkotlin.web..*"
+    from_name_pattern: "*Controller"
+    constraint: SHOULD_BE_PUBLIC
+    from_selector_mode: CLASS_TYPE
+    to_selector_mode: PACKAGE
+    from_class_type: CONTROLLER
+    severity: INFO
+    weight: 0.4
+    enabled: true
+    suggested: false
+
+  - id: realworld-controller-rest-annotation
+    name: Controllers should be annotated with @RestController
+    description: Web controllers should carry @RestController
+    type: ANNOTATION_CHECK
+    from_package: "io.github.raeperd.realworldspringbootkotlin.web..*"
+    from_name_pattern: "*Controller"
+    constraint: HAS_ANNOTATION
+    annotation: "org.springframework.web.bind.annotation.RestController"
+    from_selector_mode: CLASS_TYPE
+    to_selector_mode: PACKAGE
+    from_class_type: CONTROLLER
+    severity: INFO
+    weight: 0.6
+    enabled: true
+    suggested: false
+
+  - id: realworld-controller-no-repository-dependency
+    name: Controllers should not depend on infrastructure repositories
+    description: Controllers should depend on domain services only, not directly on repositories
+    type: DEPENDENCY
+    from_package: "io.github.raeperd.realworldspringbootkotlin.web..*"
+    from_name_pattern: "*Controller"
+    to_package: "io.github.raeperd.realworldspringbootkotlin.infrastructure..*"
+    constraint: NO_DEPENDENCY
+    from_selector_mode: CLASS_TYPE
+    to_selector_mode: PACKAGE
+    from_class_type: CONTROLLER
+    severity: ERROR
+    weight: 1.5
+    enabled: true
+    suggested: false
+
+  # --- Сервисы (domain) ---
+  - id: realworld-service-suffix
+    name: Services should have Service suffix
+    description: Domain service classes should follow the Service naming convention
+    type: NAMING_CONVENTION
+    from_package: "io.github.raeperd.realworldspringbootkotlin.domain..*"
+    from_name_pattern: "*Service"
+    constraint: NAMING_SUFFIX
+    pattern: "Service"
+    from_selector_mode: CLASS_TYPE
+    to_selector_mode: PACKAGE
+    from_class_type: SERVICE
+    severity: INFO
+    weight: 0.5
+    enabled: true
+    suggested: false
+
+  - id: realworld-service-public
+    name: Services should be public
+    description: Domain service classes should be public
+    type: MODIFIER_CHECK
+    from_package: "io.github.raeperd.realworldspringbootkotlin.domain..*"
+    from_name_pattern: "*Service"
+    constraint: SHOULD_BE_PUBLIC
+    from_selector_mode: CLASS_TYPE
+    to_selector_mode: PACKAGE
+    from_class_type: SERVICE
+    severity: INFO
+    weight: 0.4
+    enabled: true
+    suggested: false
+
+  - id: realworld-service-annotation
+    name: Services should be annotated with @Service
+    description: Domain service classes should carry @Service
+    type: ANNOTATION_CHECK
+    from_package: "io.github.raeperd.realworldspringbootkotlin.domain..*"
+    from_name_pattern: "*Service"
+    constraint: HAS_ANNOTATION
+    annotation: "org.springframework.stereotype.Service"
+    from_selector_mode: CLASS_TYPE
+    to_selector_mode: PACKAGE
+    from_class_type: SERVICE
+    severity: INFO
+    weight: 0.6
+    enabled: true
+    suggested: false
+
+  # --- Репозитории (domain + infrastructure) ---
+  - id: realworld-repository-suffix
+    name: Repositories should have Repository suffix
+    description: Repository interfaces should follow the Repository naming convention
+    type: NAMING_CONVENTION
+    from_package: "io.github.raeperd.realworldspringbootkotlin.domain..*"
+    from_name_pattern: "*Repository"
+    constraint: NAMING_SUFFIX
+    pattern: "Repository"
+    from_selector_mode: CLASS_TYPE
+    to_selector_mode: PACKAGE
+    from_class_type: REPOSITORY
+    severity: INFO
+    weight: 0.5
+    enabled: true
+    suggested: false
+
+  - id: realworld-repository-public
+    name: Repositories should be public
+    description: Repository interfaces should be public
+    type: MODIFIER_CHECK
+    from_package: "io.github.raeperd.realworldspringbootkotlin.domain..*"
+    from_name_pattern: "*Repository"
+    constraint: SHOULD_BE_PUBLIC
+    from_selector_mode: CLASS_TYPE
+    to_selector_mode: PACKAGE
+    from_class_type: REPOSITORY
+    severity: INFO
+    weight: 0.4
+    enabled: true
+    suggested: false
+
+  - id: realworld-infrastructure-repository-annotation
+    name: Infrastructure repositories should be annotated with @Repository
+    description: JPA repository implementations should carry @Repository
+    type: ANNOTATION_CHECK
+    from_package: "io.github.raeperd.realworldspringbootkotlin.infrastructure..*"
+    from_name_pattern: "*JpaRepository"
+    constraint: HAS_ANNOTATION
+    annotation: "org.springframework.stereotype.Repository"
+    from_selector_mode: CLASS_TYPE
+    to_selector_mode: PACKAGE
+    from_class_type: REPOSITORY
+    severity: INFO
+    weight: 0.6
+    enabled: true
+    suggested: false
+
+  - id: realworld-infrastructure-repository-implements-domain
+    name: Infrastructure repositories should implement domain repository contracts
+    description: JPA repository classes should implement corresponding domain repository interfaces
+    type: INTERFACE_CHECK
+    from_package: "io.github.raeperd.realworldspringbootkotlin.infrastructure..*"
+    from_name_pattern: "*JpaRepository"
+    to_package: "io.github.raeperd.realworldspringbootkotlin.domain..*"
+    to_name_pattern: "*Repository"
+    constraint: SHOULD_IMPLEMENT
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: ERROR
+    weight: 1.0
+    enabled: true
+    suggested: false
+
+  # --- JPA сущности (infrastructure) ---
+  - id: realworld-entity-annotation
+    name: JPA entities should be annotated with @Entity
+    description: Infrastructure JPA entity classes should carry @Entity
+    type: ANNOTATION_CHECK
+    from_package: "io.github.raeperd.realworldspringbootkotlin.infrastructure..*"
+    from_name_pattern: "*Entity"
+    constraint: HAS_ANNOTATION
+    annotation: "jakarta.persistence.Entity"
+    from_selector_mode: CLASS_TYPE
+    to_selector_mode: PACKAGE
+    from_class_type: ENTITY
+    severity: INFO
+    weight: 0.6
+    enabled: true
+    suggested: false
+
+  # --- Исключения (domain) ---
+  - id: realworld-domain-exception-extends-runtime
+    name: Domain exceptions should extend RuntimeException
+    description: Custom domain exceptions should be unchecked
+    type: INHERITANCE_CHECK
+    from_package: "io.github.raeperd.realworldspringbootkotlin.domain..*"
+    from_name_pattern: "*Exception"
+    to_package: "java.lang.RuntimeException"
+    constraint: SHOULD_EXTEND
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: ERROR
+    weight: 1.0
+    enabled: true
+    suggested: false
+
+  # --- Глобальный обработчик исключений (web) ---
+  - id: realworld-advice-rest-annotation
+    name: Global exception handler should be annotated with @RestControllerAdvice
+    description: Global exception handler should carry @RestControllerAdvice
+    type: ANNOTATION_CHECK
+    from_package: "io.github.raeperd.realworldspringbootkotlin.web..*"
+    from_name_pattern: "*RestControllerAdvice"
+    constraint: HAS_ANNOTATION
+    annotation: "org.springframework.web.bind.annotation.RestControllerAdvice"
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: INFO
+    weight: 0.6
+    enabled: true
+    suggested: false
+
+  - id: realworld-advice-response-entity
+    name: Exception handler methods should return ResponseEntity
+    description: Global exception handler methods should return ResponseEntity
+    type: METHOD_SIGNATURE_CHECK
+    from_package: "io.github.raeperd.realworldspringbootkotlin.web..*"
+    from_name_pattern: "*RestControllerAdvice"
+    constraint: RETURN_TYPE
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    from_method_name_pattern: "handle*"
+    from_return_type: "org.springframework.http.ResponseEntity"
+    severity: WARNING
+    weight: 0.8
+    enabled: true
+    suggested: false
+
+  # --- Конфигурация ---
+  - id: realworld-configuration-annotation
+    name: Configuration classes should be annotated with @Configuration
+    description: Spring configuration classes should carry @Configuration
+    type: ANNOTATION_CHECK
+    from_package: "io.github.raeperd.realworldspringbootkotlin.infrastructure..*"
+    from_name_pattern: "*Configuration"
+    constraint: HAS_ANNOTATION
+    annotation: "org.springframework.context.annotation.Configuration"
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: INFO
+    weight: 0.6
+    enabled: true
+    suggested: false
+
+  - id: realworld-web-configuration-annotation
+    name: Web configuration classes should be annotated with @Configuration
+    description: Web configuration classes should carry @Configuration
+    type: ANNOTATION_CHECK
+    from_package: "io.github.raeperd.realworldspringbootkotlin.web..*"
+    from_name_pattern: "*Configuration"
+    constraint: HAS_ANNOTATION
+    annotation: "org.springframework.context.annotation.Configuration"
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: INFO
+    weight: 0.6
+    enabled: true
+    suggested: false
+
+  # --- Основной класс приложения ---
+  - id: realworld-application-annotation
+    name: Application class should be annotated with @SpringBootApplication
+    description: Main application class should carry @SpringBootApplication
+    type: ANNOTATION_CHECK
+    from_package: "io.github.raeperd.realworldspringbootkotlin"
+    from_name_pattern: "*Application"
+    constraint: HAS_ANNOTATION
+    annotation: "org.springframework.boot.autoconfigure.SpringBootApplication"
+    from_selector_mode: PACKAGE
+    to_selector_mode: PACKAGE
+    severity: INFO
+    weight: 0.6
+    enabled: true
+    suggested: false
