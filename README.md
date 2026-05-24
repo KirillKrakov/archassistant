@@ -1,6 +1,7 @@
 # Демонстрационное видео работы ArchAssistant
 
 **Полное видео (с комментариями):** https://disk.yandex.ru/i/lz8k_GoI58Rykg
+
 **Сокращенное видео (без комментариев):** https://disk.yandex.ru/i/efwfyNQPS6B7tA
 
 # Инструкция по развёртыванию и использованию ArchAssistant
